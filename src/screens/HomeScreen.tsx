@@ -9,10 +9,12 @@ import {
   Modal,
 } from 'react-native';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
+import { CategoryDropdown } from '../components/CategoryDropdown';
 import { SubmitTakeScreen } from './SubmitTakeScreen';
 import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
+import { useInvisibleAISeeding } from '../services/invisibleAISeeding';
 import { colors, dimensions } from '../constants';
 
 export const HomeScreen: React.FC = () => {
@@ -20,9 +22,15 @@ export const HomeScreen: React.FC = () => {
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [showMyTakesModal, setShowMyTakesModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const { user, loading: authLoading, signIn } = useAuth();
-  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake } = useFirebaseTakes();
+  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake } = useFirebaseTakes({
+    category: selectedCategory
+  });
   const { stats } = useUserStats();
+  
+  // Invisible AI seeding - completely behind the scenes!
+  useInvisibleAISeeding();
   
   const theme = isDarkMode ? colors.dark : colors.light;
 
@@ -100,6 +108,15 @@ export const HomeScreen: React.FC = () => {
             Votes: {stats.totalVotes}
           </Text>
         </View>
+      </View>
+
+      {/* Category Dropdown */}
+      <View style={styles.categoryContainer}>
+        <CategoryDropdown
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          isDarkMode={isDarkMode}
+        />
       </View>
 
       <View style={styles.deckContainer}>
@@ -221,6 +238,7 @@ export const HomeScreen: React.FC = () => {
           />
         </View>
       )}
+
     </SafeAreaView>
   );
 };
@@ -256,6 +274,10 @@ const styles = StyleSheet.create({
   statsText: {
     fontSize: dimensions.fontSize.medium,
     fontWeight: '600',
+  },
+  categoryContainer: {
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingTop: dimensions.spacing.sm,
   },
   headerButton: {
     width: 40,

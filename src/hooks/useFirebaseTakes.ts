@@ -28,17 +28,29 @@ interface UseFirebaseTakesResult {
   refreshTakes: () => Promise<void>;
 }
 
-export const useFirebaseTakes = (): UseFirebaseTakesResult => {
+interface UseFirebaseTakesOptions {
+  category?: string;
+}
+
+export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFirebaseTakesResult => {
   const { user } = useAuth();
+  const { category } = options;
   const [takes, setTakes] = useState<Take[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [interactedTakeIds, setInteractedTakeIds] = useState<string[]>([]);
 
-  // Helper function to filter out interacted takes
+  // Helper function to filter out interacted takes and apply category filter
   const filterTakes = useCallback((allTakes: Take[]) => {
-    return allTakes.filter(take => !interactedTakeIds.includes(take.id));
-  }, [interactedTakeIds]);
+    let filteredTakes = allTakes.filter(take => !interactedTakeIds.includes(take.id));
+    
+    // Apply category filter if specified (skip 'all' category)
+    if (category && category !== 'all') {
+      filteredTakes = filteredTakes.filter(take => take.category === category);
+    }
+    
+    return filteredTakes;
+  }, [interactedTakeIds, category]);
 
   // Load user's interaction history
   useEffect(() => {
@@ -98,7 +110,7 @@ export const useFirebaseTakes = (): UseFirebaseTakesResult => {
         unsubscribe();
       }
     };
-  }, [user, filterTakes]);
+  }, [user, filterTakes, category]); // Add category as dependency
 
   // Submit a vote
   const handleSubmitVote = useCallback(async (

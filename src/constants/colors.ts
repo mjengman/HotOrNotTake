@@ -1,6 +1,7 @@
 export const colors = {
   light: {
     primary: '#FF4757',      // Hot red
+    primaryLight: '#FFE8EA', // Light red background
     secondary: '#3742FA',    // Cool blue
     background: '#FFFFFF',
     surface: '#F8F9FA',
@@ -16,6 +17,7 @@ export const colors = {
   },
   dark: {
     primary: '#FF4757',      // Hot red (same)
+    primaryLight: '#2A1F20', // Dark red background
     secondary: '#5352ED',    // Bright blue
     background: '#1A1A1A',
     surface: '#2C2C2C',
