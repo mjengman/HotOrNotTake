@@ -8,18 +8,31 @@ import {
   Text,
 } from 'react-native';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
-import { useTakes } from '../hooks/useTakes';
+import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
 import { colors, dimensions } from '../constants';
 
 export const HomeScreen: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const { takes, submitVote, getUserStats } = useTakes();
+  const { user, loading: authLoading, signIn } = useAuth();
+  const { takes, loading: takesLoading, error: takesError, submitVote } = useFirebaseTakes();
+  const { stats } = useUserStats();
   
   const theme = isDarkMode ? colors.dark : colors.light;
-  const stats = getUserStats();
 
-  const handleVote = (takeId: string, vote: 'hot' | 'not') => {
-    submitVote(takeId, vote);
+  // Auto sign-in on first load
+  React.useEffect(() => {
+    if (!user && !authLoading) {
+      signIn().catch(console.error);
+    }
+  }, [user, authLoading, signIn]);
+
+  const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
+    try {
+      await submitVote(takeId, vote);
+    } catch (error) {
+      console.error('Error submitting vote:', error);
+      // Could show a toast notification here
+    }
   };
 
   const toggleTheme = () => {
@@ -59,7 +72,27 @@ export const HomeScreen: React.FC = () => {
       </View>
 
       <View style={styles.deckContainer}>
-        {takes && takes.length > 0 ? (
+        {takesLoading || authLoading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={[styles.loadingText, { color: theme.text }]}>
+              {authLoading ? 'Signing in...' : 'Loading hot takes...'}
+            </Text>
+          </View>
+        ) : takesError ? (
+          <View style={styles.loadingContainer}>
+            <Text style={[styles.errorText, { color: theme.error }]}>
+              {takesError}
+            </Text>
+            <TouchableOpacity
+              style={[styles.retryButton, { backgroundColor: theme.primary }]}
+              onPress={() => window.location.reload()}
+            >
+              <Text style={[styles.retryButtonText, { color: '#FFFFFF' }]}>
+                Retry
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : takes && takes.length > 0 ? (
           <CustomSwipeableCardDeck
             takes={takes}
             onVote={handleVote}
@@ -68,7 +101,7 @@ export const HomeScreen: React.FC = () => {
         ) : (
           <View style={styles.loadingContainer}>
             <Text style={[styles.loadingText, { color: theme.text }]}>
-              Loading hot takes...
+              No takes available yet!
             </Text>
           </View>
         )}
@@ -144,6 +177,21 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: dimensions.fontSize.large,
     fontWeight: '500',
+  },
+  errorText: {
+    fontSize: dimensions.fontSize.medium,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: dimensions.spacing.md,
+  },
+  retryButton: {
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontSize: dimensions.fontSize.medium,
+    fontWeight: '600',
   },
   footer: {
     paddingHorizontal: dimensions.spacing.lg,
