@@ -1,3 +1,6 @@
+// Submission status type
+export type TakeStatus = 'pending' | 'approved' | 'rejected';
+
 // Firestore document interfaces
 export interface Take {
   id: string;
@@ -8,7 +11,12 @@ export interface Take {
   totalVotes: number;
   createdAt: Date;
   userId: string;
-  isApproved: boolean;
+  isApproved: boolean; // Keep for backward compatibility
+  status: TakeStatus; // New approval workflow
+  submittedAt: Date;
+  approvedAt?: Date;
+  rejectedAt?: Date;
+  rejectionReason?: string;
   reportCount: number;
   isUserSubmitted?: boolean; // For UI display purposes
 }
@@ -31,7 +39,12 @@ export interface TakeFirestore {
   totalVotes: number;
   createdAt: Date;
   userId: string;
-  isApproved: boolean;
+  isApproved: boolean; // Keep for backward compatibility
+  status: TakeStatus; // New approval workflow
+  submittedAt: Date;
+  approvedAt?: Date;
+  rejectedAt?: Date;
+  rejectionReason?: string;
   reportCount: number;
 }
 

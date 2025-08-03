@@ -4,6 +4,8 @@ import {
   getApprovedTakes,
   subscribeToApprovedTakes,
   submitTake,
+  getUserInteractedTakeIds,
+  skipTake,
 } from '../services/takeService';
 import {
   submitVote,
@@ -20,6 +22,7 @@ interface UseFirebaseTakesResult {
   loading: boolean;
   error: string | null;
   submitVote: (takeId: string, vote: 'hot' | 'not') => Promise<void>;
+  skipTake: (takeId: string) => Promise<void>;
   submitNewTake: (takeData: TakeSubmission) => Promise<void>;
   getUserVoteForTake: (takeId: string) => Promise<'hot' | 'not' | null>;
   refreshTakes: () => Promise<void>;
@@ -30,6 +33,33 @@ export const useFirebaseTakes = (): UseFirebaseTakesResult => {
   const [takes, setTakes] = useState<Take[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [interactedTakeIds, setInteractedTakeIds] = useState<string[]>([]);
+
+  // Helper function to filter out interacted takes
+  const filterTakes = useCallback((allTakes: Take[]) => {
+    return allTakes.filter(take => !interactedTakeIds.includes(take.id));
+  }, [interactedTakeIds]);
+
+  // Load user's interaction history
+  useEffect(() => {
+    const loadUserInteractions = async () => {
+      if (!user) {
+        setInteractedTakeIds([]);
+        return;
+      }
+
+      try {
+        const interactedIds = await getUserInteractedTakeIds(user.uid);
+        setInteractedTakeIds(interactedIds);
+      } catch (err) {
+        console.error('Error loading user interactions:', err);
+        // Don't set error for this, just continue with empty array
+        setInteractedTakeIds([]);
+      }
+    };
+
+    loadUserInteractions();
+  }, [user]);
 
   // Load initial takes and set up real-time subscription
   useEffect(() => {
@@ -42,11 +72,13 @@ export const useFirebaseTakes = (): UseFirebaseTakesResult => {
 
         // First, load takes immediately
         const initialTakes = await getApprovedTakes();
-        setTakes(initialTakes);
+        const filteredTakes = filterTakes(initialTakes);
+        setTakes(filteredTakes);
 
         // Then set up real-time subscription
         unsubscribe = subscribeToApprovedTakes((updatedTakes) => {
-          setTakes(updatedTakes);
+          const filteredUpdatedTakes = filterTakes(updatedTakes);
+          setTakes(filteredUpdatedTakes);
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load takes');
@@ -56,14 +88,17 @@ export const useFirebaseTakes = (): UseFirebaseTakesResult => {
       }
     };
 
-    initializeTakes();
+    // Only initialize takes if we have the interaction data or user is null
+    if (user === null || interactedTakeIds !== null) {
+      initializeTakes();
+    }
 
     return () => {
       if (unsubscribe) {
         unsubscribe();
       }
     };
-  }, []);
+  }, [user, filterTakes]);
 
   // Submit a vote
   const handleSubmitVote = useCallback(async (
@@ -81,22 +116,29 @@ export const useFirebaseTakes = (): UseFirebaseTakesResult => {
       // Update user's vote count
       await incrementUserVoteCount(user.uid);
       
-      // Update local state optimistically
-      setTakes(prevTakes => 
-        prevTakes.map(take => {
-          if (take.id === takeId) {
-            return {
-              ...take,
-              hotVotes: vote === 'hot' ? take.hotVotes + 1 : take.hotVotes,
-              notVotes: vote === 'not' ? take.notVotes + 1 : take.notVotes,
-              totalVotes: take.totalVotes + 1,
-            };
-          }
-          return take;
-        })
-      );
+      // Add take to interacted list and remove from current takes
+      setInteractedTakeIds(prev => [...prev, takeId]);
+      setTakes(prevTakes => prevTakes.filter(take => take.id !== takeId));
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to submit vote');
+    }
+  }, [user]);
+
+  // Skip a take
+  const handleSkipTake = useCallback(async (takeId: string): Promise<void> => {
+    if (!user) {
+      throw new Error('User must be signed in to skip takes');
+    }
+
+    try {
+      // Record the skip in Firebase
+      await skipTake(takeId, user.uid);
+      
+      // Add take to interacted list and remove from current takes
+      setInteractedTakeIds(prev => [...prev, takeId]);
+      setTakes(prevTakes => prevTakes.filter(take => take.id !== takeId));
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Failed to skip take');
     }
   }, [user]);
 
@@ -141,19 +183,21 @@ export const useFirebaseTakes = (): UseFirebaseTakesResult => {
     try {
       setLoading(true);
       const freshTakes = await getApprovedTakes();
-      setTakes(freshTakes);
+      const filteredFreshTakes = filterTakes(freshTakes);
+      setTakes(filteredFreshTakes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh takes');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterTakes]);
 
   return {
     takes,
     loading,
     error,
     submitVote: handleSubmitVote,
+    skipTake: handleSkipTake,
     submitNewTake: handleSubmitNewTake,
     getUserVoteForTake: handleGetUserVoteForTake,
     refreshTakes,

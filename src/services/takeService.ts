@@ -37,7 +37,12 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   totalVotes: data.totalVotes || 0,
   createdAt: convertTimestampToDate(data.createdAt),
   userId: data.userId,
-  isApproved: data.isApproved || false,
+  isApproved: data.isApproved || false, // Backward compatibility
+  status: data.status || (data.isApproved ? 'approved' : 'pending'), // Migrate old data
+  submittedAt: convertTimestampToDate(data.submittedAt || data.createdAt),
+  approvedAt: data.approvedAt ? convertTimestampToDate(data.approvedAt) : undefined,
+  rejectedAt: data.rejectedAt ? convertTimestampToDate(data.rejectedAt) : undefined,
+  rejectionReason: data.rejectionReason,
   reportCount: data.reportCount || 0,
 });
 
@@ -88,21 +93,27 @@ export const submitTake = async (
   userId: string
 ): Promise<string> => {
   try {
+    const now = new Date();
     const takeFirestore: TakeFirestore = {
       text: takeData.text.trim(),
       category: takeData.category.toLowerCase(),
       hotVotes: 0,
       notVotes: 0,
       totalVotes: 0,
-      createdAt: new Date(),
+      createdAt: now,
+      submittedAt: now,
       userId,
-      isApproved: false, // Requires approval
+      isApproved: true, // Auto-approve for development
+      status: 'approved', // Auto-approve for development
+      approvedAt: now, // Set approval timestamp
       reportCount: 0,
     };
 
     const docRef = await addDoc(collection(db, TAKES_COLLECTION), {
       ...takeFirestore,
       createdAt: Timestamp.fromDate(takeFirestore.createdAt),
+      submittedAt: Timestamp.fromDate(takeFirestore.submittedAt),
+      approvedAt: Timestamp.fromDate(takeFirestore.approvedAt!),
     });
 
     return docRef.id;
@@ -177,5 +188,202 @@ export const getTakesByCategory = async (category: string): Promise<Take[]> => {
   } catch (error) {
     console.error('Error fetching takes by category:', error);
     throw new Error('Failed to load takes by category');
+  }
+};
+
+// Get user's submitted takes
+export const getUserSubmittedTakes = async (userId: string): Promise<Take[]> => {
+  try {
+    const takesQuery = query(
+      collection(db, TAKES_COLLECTION),
+      where('userId', '==', userId),
+      orderBy('submittedAt', 'desc'),
+      limit(50) // Limit to 50 most recent submissions
+    );
+    
+    const snapshot = await getDocs(takesQuery);
+    return snapshot.docs.map(doc => convertFirestoreTake(doc.id, doc.data()));
+  } catch (error) {
+    console.error('Error fetching user takes:', error);
+    throw new Error('Failed to load your takes');
+  }
+};
+
+// Skip a take (record the skip for analytics)
+export const skipTake = async (takeId: string, userId: string): Promise<void> => {
+  try {
+    const now = new Date();
+    await addDoc(collection(db, 'skips'), {
+      takeId,
+      userId,
+      skippedAt: Timestamp.fromDate(now),
+    });
+  } catch (error) {
+    console.error('Error recording skip:', error);
+    throw new Error('Failed to record skip');
+  }
+};
+
+// Get takes user has already interacted with (voted or skipped)
+export const getUserInteractedTakeIds = async (userId: string): Promise<string[]> => {
+  try {
+    const [votesSnapshot, skipsSnapshot] = await Promise.all([
+      getDocs(query(collection(db, 'votes'), where('userId', '==', userId))),
+      getDocs(query(collection(db, 'skips'), where('userId', '==', userId))),
+    ]);
+
+    const votedTakeIds = votesSnapshot.docs.map(doc => doc.data().takeId);
+    const skippedTakeIds = skipsSnapshot.docs.map(doc => doc.data().takeId);
+
+    // Return unique take IDs
+    return [...new Set([...votedTakeIds, ...skippedTakeIds])];
+  } catch (error) {
+    console.error('Error fetching user interactions:', error);
+    throw new Error('Failed to load user interactions');
+  }
+};
+
+// Leaderboard: Get hottest takes (most HOT votes) by category
+export const getHottestTakesByCategory = async (): Promise<Record<string, Take[]>> => {
+  try {
+    const takesQuery = query(
+      collection(db, TAKES_COLLECTION),
+      where('isApproved', '==', true),
+      where('hotVotes', '>', 0),
+      orderBy('hotVotes', 'desc'),
+      limit(100) // Get top 100 to group by category
+    );
+    
+    const snapshot = await getDocs(takesQuery);
+    const takes = snapshot.docs.map(doc => convertFirestoreTake(doc.id, doc.data()));
+    
+    // Group by category and take top 3 from each
+    const byCategory: Record<string, Take[]> = {};
+    takes.forEach(take => {
+      if (!byCategory[take.category]) {
+        byCategory[take.category] = [];
+      }
+      if (byCategory[take.category].length < 3) {
+        byCategory[take.category].push(take);
+      }
+    });
+    
+    return byCategory;
+  } catch (error) {
+    console.error('Error fetching hottest takes:', error);
+    throw new Error('Failed to load hottest takes');
+  }
+};
+
+// Leaderboard: Get "nottest" takes (most NOT votes) by category
+export const getNottestTakesByCategory = async (): Promise<Record<string, Take[]>> => {
+  try {
+    const takesQuery = query(
+      collection(db, TAKES_COLLECTION),
+      where('isApproved', '==', true),
+      where('notVotes', '>', 0),
+      orderBy('notVotes', 'desc'),
+      limit(100) // Get top 100 to group by category
+    );
+    
+    const snapshot = await getDocs(takesQuery);
+    const takes = snapshot.docs.map(doc => convertFirestoreTake(doc.id, doc.data()));
+    
+    // Group by category and take top 3 from each
+    const byCategory: Record<string, Take[]> = {};
+    takes.forEach(take => {
+      if (!byCategory[take.category]) {
+        byCategory[take.category] = [];
+      }
+      if (byCategory[take.category].length < 3) {
+        byCategory[take.category].push(take);
+      }
+    });
+    
+    return byCategory;
+  } catch (error) {
+    console.error('Error fetching nottest takes:', error);
+    throw new Error('Failed to load nottest takes');
+  }
+};
+
+// Leaderboard: Get most skipped takes by category
+export const getMostSkippedTakesByCategory = async (): Promise<Record<string, { take: Take; skipCount: number }[]>> => {
+  try {
+    // Get all skips (this should work now with updated permissions)
+    const skipsSnapshot = await getDocs(collection(db, 'skips'));
+    
+    if (skipsSnapshot.empty) {
+      return {};
+    }
+    
+    const skips = skipsSnapshot.docs.map(doc => doc.data());
+    
+    // Count skips per take
+    const skipCounts: Record<string, number> = {};
+    skips.forEach(skip => {
+      skipCounts[skip.takeId] = (skipCounts[skip.takeId] || 0) + 1;
+    });
+    
+    // Get the most skipped take IDs
+    const sortedTakeIds = Object.entries(skipCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 30) // Reduced to 30 for efficiency
+      .map(([takeId]) => takeId);
+    
+    if (sortedTakeIds.length === 0) {
+      return {};
+    }
+    
+    // Get approved takes in batches (Firestore 'in' queries limited to 10)
+    const batchSize = 10;
+    const batches = [];
+    for (let i = 0; i < sortedTakeIds.length; i += batchSize) {
+      const batch = sortedTakeIds.slice(i, i + batchSize);
+      batches.push(batch);
+    }
+    
+    const allTakesWithSkips: { take: Take; skipCount: number }[] = [];
+    
+    for (const batch of batches) {
+      try {
+        const takesQuery = query(
+          collection(db, TAKES_COLLECTION),
+          where('__name__', 'in', batch),
+          where('isApproved', '==', true)
+        );
+        
+        const snapshot = await getDocs(takesQuery);
+        const batchTakes = snapshot.docs.map(doc => ({
+          take: convertFirestoreTake(doc.id, doc.data()),
+          skipCount: skipCounts[doc.id]
+        }));
+        
+        allTakesWithSkips.push(...batchTakes);
+      } catch (error) {
+        console.error('Error fetching batch of takes:', error);
+        // Continue with other batches
+      }
+    }
+    
+    // Sort by skip count again (since batches might be out of order)
+    allTakesWithSkips.sort((a, b) => b.skipCount - a.skipCount);
+    
+    // Group by category and take top 3 from each
+    const byCategory: Record<string, { take: Take; skipCount: number }[]> = {};
+    allTakesWithSkips.forEach(item => {
+      const category = item.take.category;
+      if (!byCategory[category]) {
+        byCategory[category] = [];
+      }
+      if (byCategory[category].length < 3) {
+        byCategory[category].push(item);
+      }
+    });
+    
+    return byCategory;
+  } catch (error) {
+    console.error('Error fetching most skipped takes:', error);
+    throw new Error('Failed to load most skipped takes');
   }
 };

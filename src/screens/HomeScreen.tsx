@@ -6,15 +6,22 @@ import {
   StatusBar,
   TouchableOpacity,
   Text,
+  Modal,
 } from 'react-native';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
+import { SubmitTakeScreen } from './SubmitTakeScreen';
+import { MyTakesScreen } from './MyTakesScreen';
+import { LeaderboardScreen } from './LeaderboardScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
 import { colors, dimensions } from '../constants';
 
 export const HomeScreen: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showMyTakesModal, setShowMyTakesModal] = useState(false);
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const { user, loading: authLoading, signIn } = useAuth();
-  const { takes, loading: takesLoading, error: takesError, submitVote } = useFirebaseTakes();
+  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake } = useFirebaseTakes();
   const { stats } = useUserStats();
   
   const theme = isDarkMode ? colors.dark : colors.light;
@@ -26,11 +33,21 @@ export const HomeScreen: React.FC = () => {
     }
   }, [user, authLoading, signIn]);
 
+
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
       await submitVote(takeId, vote);
     } catch (error) {
       console.error('Error submitting vote:', error);
+      // Could show a toast notification here
+    }
+  };
+
+  const handleSkip = async (takeId: string) => {
+    try {
+      await skipTake(takeId);
+    } catch (error) {
+      console.error('Error skipping take:', error);
       // Could show a toast notification here
     }
   };
@@ -47,12 +64,26 @@ export const HomeScreen: React.FC = () => {
       />
       
       <View style={styles.header}>
-        <View style={styles.themeToggleRow}>
+        <View style={styles.headerRow}>
           <TouchableOpacity 
-            style={[styles.themeButton, { backgroundColor: theme.surface }]}
+            style={[styles.headerButton, { backgroundColor: theme.surface }]}
+            onPress={() => setShowMyTakesModal(true)}
+          >
+            <Text style={styles.headerButtonIcon}>📋</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.headerButton, { backgroundColor: theme.surface }]}
+            onPress={() => setShowLeaderboardModal(true)}
+          >
+            <Text style={styles.headerButtonIcon}>📊</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.headerButton, { backgroundColor: theme.surface }]}
             onPress={toggleTheme}
           >
-            <Text style={styles.themeIcon}>
+            <Text style={styles.headerButtonIcon}>
               {isDarkMode ? '☀️' : '🌙'}
             </Text>
           </TouchableOpacity>
@@ -96,6 +127,7 @@ export const HomeScreen: React.FC = () => {
           <CustomSwipeableCardDeck
             takes={takes}
             onVote={handleVote}
+            onSkip={handleSkip}
             isDarkMode={isDarkMode}
           />
         ) : (
@@ -103,6 +135,16 @@ export const HomeScreen: React.FC = () => {
             <Text style={[styles.loadingText, { color: theme.text }]}>
               No takes available yet!
             </Text>
+            <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>
+              Be the first to submit a hot take!
+            </Text>
+            <TouchableOpacity
+              style={[styles.emptySubmitButton, { backgroundColor: theme.primary }]}
+              onPress={() => setShowSubmitModal(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.emptySubmitButtonText}>✏️ Submit Take</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -120,6 +162,65 @@ export const HomeScreen: React.FC = () => {
           </Text>
         </View>
       </View>
+
+
+      {/* Submit Take Modal - Conditional Rendering */}
+      {showSubmitModal && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          zIndex: 2000, // Higher than MyTakes modal
+          paddingTop: StatusBar.currentHeight || 44, // Safe area for status bar
+        }}>
+          <SubmitTakeScreen
+            onClose={() => setShowSubmitModal(false)}
+            isDarkMode={isDarkMode}
+          />
+        </View>
+      )}
+
+      {/* My Takes Modal - Conditional Rendering */}
+      {showMyTakesModal && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          zIndex: 1000,
+          paddingTop: StatusBar.currentHeight || 44, // Safe area for status bar
+        }}>
+          <MyTakesScreen
+            onClose={() => setShowMyTakesModal(false)}
+            onOpenSubmit={() => setShowSubmitModal(true)}
+            isDarkMode={isDarkMode}
+          />
+        </View>
+      )}
+
+      {/* Leaderboard Modal - Conditional Rendering */}
+      {showLeaderboardModal && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          zIndex: 1500, // Higher than other modals
+          paddingTop: StatusBar.currentHeight || 44, // Safe area for status bar
+        }}>
+          <LeaderboardScreen
+            onClose={() => setShowLeaderboardModal(false)}
+            isDarkMode={isDarkMode}
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -133,8 +234,9 @@ const styles = StyleSheet.create({
     paddingTop: dimensions.spacing.lg + 10,
     paddingBottom: dimensions.spacing.xs,
   },
-  themeToggleRow: {
-    alignItems: 'flex-end',
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: dimensions.spacing.xs,
   },
   titleContainer: {
@@ -155,14 +257,14 @@ const styles = StyleSheet.create({
     fontSize: dimensions.fontSize.medium,
     fontWeight: '600',
   },
-  themeButton: {
+  headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  themeIcon: {
+  headerButtonIcon: {
     fontSize: dimensions.fontSize.large,
   },
   deckContainer: {
@@ -221,5 +323,24 @@ const styles = StyleSheet.create({
     fontSize: dimensions.fontSize.small,
     fontStyle: 'italic',
     opacity: 0.6,
+  },
+  emptySubtext: {
+    fontSize: dimensions.fontSize.medium,
+    textAlign: 'center',
+    marginTop: dimensions.spacing.sm,
+    marginBottom: dimensions.spacing.lg,
+  },
+  emptySubmitButton: {
+    paddingHorizontal: dimensions.spacing.xl,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptySubmitButtonText: {
+    fontSize: dimensions.fontSize.large,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });

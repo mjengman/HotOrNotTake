@@ -5,6 +5,7 @@ import {
   Dimensions,
   Alert,
   Text,
+  TouchableOpacity,
 } from 'react-native';
 import {
   PanGestureHandler,
@@ -22,11 +23,12 @@ import Animated, {
 import { Take } from '../types';
 import { TakeCard } from './TakeCard';
 import { VoteIndicator } from './VoteIndicator';
-import { dimensions } from '../constants';
+import { dimensions, colors } from '../constants';
 
 interface CustomSwipeableCardDeckProps {
   takes: Take[];
   onVote: (takeId: string, vote: 'hot' | 'not') => void;
+  onSkip: (takeId: string) => void;
   onEndReached?: () => void;
   isDarkMode?: boolean;
 }
@@ -37,6 +39,7 @@ const SWIPE_THRESHOLD = width * 0.3;
 export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = ({
   takes,
   onVote,
+  onSkip,
   onEndReached,
   isDarkMode = false,
 }) => {
@@ -46,6 +49,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
+
+  const theme = isDarkMode ? colors.dark : colors.light;
 
   // Safety check
   if (!takes || !Array.isArray(takes) || takes.length === 0) {
@@ -74,16 +79,24 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       // Check if we've reached the end
       if (nextIndex >= takes.length) {
         setTimeout(() => {
-          Alert.alert(
-            'No more takes!',
-            "You've voted on all available takes. Great job!",
-            [
-              {
-                text: 'Restart',
-                onPress: () => setCurrentIndex(0),
-              },
-            ]
-          );
+          onEndReached?.();
+        }, 500);
+      }
+    }
+  };
+
+  const handleSkip = () => {
+    if (currentIndex < takes.length) {
+      const currentTake = takes[currentIndex];
+      onSkip(currentTake.id);
+      
+      // Move to next card immediately
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      
+      // Check if we've reached the end
+      if (nextIndex >= takes.length) {
+        setTimeout(() => {
           onEndReached?.();
         }, 500);
       }
@@ -174,8 +187,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   if (currentIndex >= takes.length) {
     return (
       <View style={styles.container}>
-        <View style={styles.noDataContainer}>
-          <Text style={styles.noDataText}>All done! 🎉</Text>
+        <View style={styles.endContainer}>
+          <Text style={styles.endEmoji}>🎉</Text>
+          <Text style={[styles.endTitle, { color: theme.text }]}>Wow! You've reached the end!</Text>
+          <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
+            You've voted on all available hot takes.{'\n'}
+            How about adding some of your own?
+          </Text>
+          <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
+            Tap the clipboard icon (📋) to see your takes{'\n'}
+            and submit new ones!
+          </Text>
         </View>
       </View>
     );
@@ -211,12 +233,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         </Animated.View>
       </PanGestureHandler>
       
-      {/* Instructions */}
-      <View style={styles.cardCounter}>
-        <Text style={styles.counterText}>
-          {currentIndex + 1} / {takes.length}
-        </Text>
-      </View>
+      {/* Skip Button */}
+      <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+        <Text style={styles.skipButtonText}>Skip</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -246,6 +266,34 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
   },
+  endContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: dimensions.spacing.xl,
+  },
+  endEmoji: {
+    fontSize: 64,
+    marginBottom: dimensions.spacing.lg,
+  },
+  endTitle: {
+    fontSize: dimensions.fontSize.xxlarge,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: dimensions.spacing.md,
+  },
+  endMessage: {
+    fontSize: dimensions.fontSize.large,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: dimensions.spacing.lg,
+  },
+  endHint: {
+    fontSize: dimensions.fontSize.medium,
+    textAlign: 'center',
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
   overlayLeft: {
     position: 'absolute',
     top: 50,
@@ -271,17 +319,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  cardCounter: {
+  skipButton: {
     position: 'absolute',
     bottom: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  counterText: {
+  skipButtonText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
   },
 });

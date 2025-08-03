@@ -25,15 +25,18 @@ service cloud.firestore {
     
     // Takes collection
     match /takes/{takeId} {
-      // Anyone can read approved takes
-      allow read: if resource.data.isApproved == true;
+      // Anyone can read approved takes, or users can read their own takes
+      allow read: if resource.data.isApproved == true || 
+                     isOwner(resource.data.userId);
       
-      // Authenticated users can create takes (but they need approval)
+      // Authenticated users can create takes (auto-approved for development)
       allow create: if isAuthenticated() &&
                    isValidTakeText(request.resource.data.text) &&
                    isValidCategory(request.resource.data.category) &&
                    request.resource.data.userId == request.auth.uid &&
-                   request.resource.data.isApproved == false &&
+                   // Allow both approved and pending takes for development
+                   request.resource.data.isApproved in [true, false] &&
+                   request.resource.data.status in ['approved', 'pending'] &&
                    request.resource.data.hotVotes == 0 &&
                    request.resource.data.notVotes == 0 &&
                    request.resource.data.totalVotes == 0 &&
@@ -61,6 +64,21 @@ service cloud.firestore {
                    request.resource.data.votedAt is timestamp;
       
       // No updates or deletes allowed for votes
+      allow update, delete: if false;
+    }
+    
+    // Skips collection
+    match /skips/{skipId} {
+      // Allow reading all skips for leaderboard calculations
+      allow read: if isAuthenticated();
+      
+      // Users can create skips
+      allow create: if isAuthenticated() &&
+                   request.resource.data.userId == request.auth.uid &&
+                   request.resource.data.takeId is string &&
+                   request.resource.data.skippedAt is timestamp;
+      
+      // No updates or deletes allowed for skips
       allow update, delete: if false;
     }
     
