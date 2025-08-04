@@ -10,11 +10,15 @@ import {
 } from 'react-native';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
 import { CategoryDropdown } from '../components/CategoryDropdown';
+import { AdBanner } from '../components/AdBanner';
+import { AdConsentModal } from '../components/AdConsentModal';
 import { SubmitTakeScreen } from './SubmitTakeScreen';
 import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
 import { useInvisibleAISeeding } from '../services/invisibleAISeeding';
+// import adService from '../services/adService';
+import { useInterstitialAds } from '../hooks/useInterstitialAds';
 import { colors, dimensions } from '../constants';
 
 export const HomeScreen: React.FC = () => {
@@ -32,6 +36,9 @@ export const HomeScreen: React.FC = () => {
   // Invisible AI seeding - completely behind the scenes!
   useInvisibleAISeeding();
   
+  // Use the interstitial ads hook
+  const { onUserSwipe, onSessionEnd } = useInterstitialAds();
+  
   const theme = isDarkMode ? colors.dark : colors.light;
 
   // Auto sign-in on first load
@@ -45,6 +52,8 @@ export const HomeScreen: React.FC = () => {
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
       await submitVote(takeId, vote);
+      // Track swipe for ad service
+      onUserSwipe();
     } catch (error) {
       console.error('Error submitting vote:', error);
       // Could show a toast notification here
@@ -54,6 +63,8 @@ export const HomeScreen: React.FC = () => {
   const handleSkip = async (takeId: string) => {
     try {
       await skipTake(takeId);
+      // Track swipe for ad service
+      onUserSwipe();
     } catch (error) {
       console.error('Error skipping take:', error);
       // Could show a toast notification here
@@ -62,6 +73,12 @@ export const HomeScreen: React.FC = () => {
 
   const toggleTheme = () => {
     setIsDarkMode(prev => !prev);
+  };
+
+  const handleCategoryChange = (newCategory: string) => {
+    // Trigger ad on category change (session end)
+    onSessionEnd();
+    setSelectedCategory(newCategory);
   };
 
   return (
@@ -114,7 +131,7 @@ export const HomeScreen: React.FC = () => {
       <View style={styles.categoryContainer}>
         <CategoryDropdown
           selectedCategory={selectedCategory}
-          onCategoryChange={setSelectedCategory}
+          onCategoryChange={handleCategoryChange}
           isDarkMode={isDarkMode}
         />
       </View>
@@ -174,9 +191,7 @@ export const HomeScreen: React.FC = () => {
         </View>
         
         <View style={styles.adSpace}>
-          <Text style={[styles.adPlaceholder, { color: theme.textSecondary }]}>
-            [Ad Space - 320x50]
-          </Text>
+          <AdBanner />
         </View>
       </View>
 
@@ -238,6 +253,9 @@ export const HomeScreen: React.FC = () => {
           />
         </View>
       )}
+
+      {/* Ad Consent Modal */}
+      <AdConsentModal isDarkMode={isDarkMode} />
 
     </SafeAreaView>
   );
@@ -331,20 +349,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   adSpace: {
-    height: 50,
-    backgroundColor: 'rgba(128, 128, 128, 0.1)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(128, 128, 128, 0.3)',
+    minHeight: 50,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: dimensions.spacing.sm,
-  },
-  adPlaceholder: {
-    fontSize: dimensions.fontSize.small,
-    fontStyle: 'italic',
-    opacity: 0.6,
+    backgroundColor: 'transparent',
   },
   emptySubtext: {
     fontSize: dimensions.fontSize.medium,
@@ -364,5 +373,10 @@ const styles = StyleSheet.create({
     fontSize: dimensions.fontSize.large,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  adPlaceholder: {
+    fontSize: dimensions.fontSize.small,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });
