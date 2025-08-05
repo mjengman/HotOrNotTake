@@ -4,19 +4,19 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  TouchableOpacity,
   Text,
-  Modal,
 } from 'react-native';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
 import { CategoryDropdown } from '../components/CategoryDropdown';
 import { AdBanner } from '../components/AdBanner';
 import { AdConsentModal } from '../components/AdConsentModal';
+import { LoadingSkeleton } from '../components/loading/LoadingSkeleton';
+import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { SubmitTakeScreen } from './SubmitTakeScreen';
 import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
-import { useInvisibleAISeeding } from '../services/invisibleAISeeding';
+// import { useInvisibleAISeeding } from '../services/invisibleAISeeding';
 // import adService from '../services/adService';
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 import { colors, dimensions } from '../constants';
@@ -33,8 +33,8 @@ export const HomeScreen: React.FC = () => {
   });
   const { stats } = useUserStats();
   
-  // Invisible AI seeding - completely behind the scenes!
-  useInvisibleAISeeding();
+  // Invisible AI seeding - DISABLED for manual control
+  // useInvisibleAISeeding();
   
   // Use the interstitial ads hook
   const { onUserSwipe, onSessionEnd } = useInterstitialAds();
@@ -81,6 +81,19 @@ export const HomeScreen: React.FC = () => {
     setSelectedCategory(newCategory);
   };
 
+  const handleLoadMore = async () => {
+    console.log('Loading more content for category:', selectedCategory);
+    // Import AI generation functions
+    const { checkAndSeedCategories } = await import('../services/invisibleAISeeding');
+    try {
+      // Start AI generation (content will appear as it's generated)
+      await checkAndSeedCategories();
+      console.log('Successfully triggered AI content generation');
+    } catch (error) {
+      console.error('Error generating more content:', error);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar 
@@ -90,28 +103,34 @@ export const HomeScreen: React.FC = () => {
       
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <TouchableOpacity 
+          <AnimatedPressable 
             style={[styles.headerButton, { backgroundColor: theme.surface }]}
             onPress={() => setShowMyTakesModal(true)}
+            scaleValue={0.9}
+            hapticIntensity={8}
           >
             <Text style={styles.headerButtonIcon}>📋</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
           
-          <TouchableOpacity 
+          <AnimatedPressable 
             style={[styles.headerButton, { backgroundColor: theme.surface }]}
             onPress={() => setShowLeaderboardModal(true)}
+            scaleValue={0.9}
+            hapticIntensity={8}
           >
             <Text style={styles.headerButtonIcon}>📊</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
           
-          <TouchableOpacity 
+          <AnimatedPressable 
             style={[styles.headerButton, { backgroundColor: theme.surface }]}
             onPress={toggleTheme}
+            scaleValue={0.9}
+            hapticIntensity={12}
           >
             <Text style={styles.headerButtonIcon}>
               {isDarkMode ? '☀️' : '🌙'}
             </Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
         
         <View style={styles.titleContainer}>
@@ -138,48 +157,41 @@ export const HomeScreen: React.FC = () => {
 
       <View style={styles.deckContainer}>
         {takesLoading || authLoading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={[styles.loadingText, { color: theme.text }]}>
-              {authLoading ? 'Signing in...' : 'Loading hot takes...'}
-            </Text>
-          </View>
+          <LoadingSkeleton isDarkMode={isDarkMode} />
         ) : takesError ? (
           <View style={styles.loadingContainer}>
             <Text style={[styles.errorText, { color: theme.error }]}>
               {takesError}
             </Text>
-            <TouchableOpacity
+            <AnimatedPressable
               style={[styles.retryButton, { backgroundColor: theme.primary }]}
               onPress={() => window.location.reload()}
+              scaleValue={0.95}
+              hapticIntensity={15}
             >
               <Text style={[styles.retryButtonText, { color: '#FFFFFF' }]}>
                 Retry
               </Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
         ) : takes && takes.length > 0 ? (
           <CustomSwipeableCardDeck
             takes={takes}
             onVote={handleVote}
             onSkip={handleSkip}
+            onLoadMore={handleLoadMore}
+            onSubmitTake={() => setShowSubmitModal(true)}
             isDarkMode={isDarkMode}
           />
         ) : (
-          <View style={styles.loadingContainer}>
-            <Text style={[styles.loadingText, { color: theme.text }]}>
-              No takes available yet!
-            </Text>
-            <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>
-              Be the first to submit a hot take!
-            </Text>
-            <TouchableOpacity
-              style={[styles.emptySubmitButton, { backgroundColor: theme.primary }]}
-              onPress={() => setShowSubmitModal(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.emptySubmitButtonText}>✏️ Submit Take</Text>
-            </TouchableOpacity>
-          </View>
+          <CustomSwipeableCardDeck
+            takes={[]}
+            onVote={handleVote}
+            onSkip={handleSkip}
+            onLoadMore={handleLoadMore}
+            onSubmitTake={() => setShowSubmitModal(true)}
+            isDarkMode={isDarkMode}
+          />
         )}
       </View>
 
@@ -310,6 +322,7 @@ const styles = StyleSheet.create({
   deckContainer: {
     flex: 1,
     justifyContent: 'center',
+    marginTop: -65, // Pull the deck up to reduce dead space
   },
   loadingContainer: {
     flex: 1,

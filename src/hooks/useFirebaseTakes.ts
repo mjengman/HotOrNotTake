@@ -90,7 +90,24 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         // Then set up real-time subscription
         unsubscribe = subscribeToApprovedTakes((updatedTakes) => {
           const filteredUpdatedTakes = filterTakes(updatedTakes);
-          setTakes(filteredUpdatedTakes);
+          
+          // Smart update: preserve current and next card to prevent shuffling
+          setTakes(currentTakes => {
+            if (currentTakes.length === 0) {
+              // If no takes currently, just set the new ones
+              return filteredUpdatedTakes;
+            }
+            
+            // Keep first two cards (current and next) unchanged
+            const preservedCards = currentTakes.slice(0, 2);
+            const preservedIds = new Set(preservedCards.map(t => t.id));
+            
+            // Filter out preserved cards from new takes
+            const newTakes = filteredUpdatedTakes.filter(t => !preservedIds.has(t.id));
+            
+            // Combine: preserved cards + new takes
+            return [...preservedCards, ...newTakes];
+          });
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load takes');
@@ -130,7 +147,11 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       
       // Add take to interacted list and remove from current takes
       setInteractedTakeIds(prev => [...prev, takeId]);
-      setTakes(prevTakes => prevTakes.filter(take => take.id !== takeId));
+      setTakes(prevTakes => {
+        // Remove the voted card (should be the first one)
+        const remainingTakes = prevTakes.filter(take => take.id !== takeId);
+        return remainingTakes;
+      });
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to submit vote');
     }
@@ -148,7 +169,11 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       
       // Add take to interacted list and remove from current takes
       setInteractedTakeIds(prev => [...prev, takeId]);
-      setTakes(prevTakes => prevTakes.filter(take => take.id !== takeId));
+      setTakes(prevTakes => {
+        // Remove the skipped card (should be the first one)
+        const remainingTakes = prevTakes.filter(take => take.id !== takeId);
+        return remainingTakes;
+      });
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to skip take');
     }
@@ -190,13 +215,28 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
   }, [user]);
 
-  // Refresh takes manually
+  // Refresh takes manually (preserves current view)
   const refreshTakes = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       const freshTakes = await getApprovedTakes();
       const filteredFreshTakes = filterTakes(freshTakes);
-      setTakes(filteredFreshTakes);
+      
+      // Smart refresh: append new takes without disrupting current view
+      setTakes(currentTakes => {
+        if (currentTakes.length === 0) {
+          return filteredFreshTakes;
+        }
+        
+        // Keep first two cards unchanged
+        const preservedCards = currentTakes.slice(0, 2);
+        const preservedIds = new Set(preservedCards.map(t => t.id));
+        
+        // Get only new takes that aren't already preserved
+        const newTakes = filteredFreshTakes.filter(t => !preservedIds.has(t.id));
+        
+        return [...preservedCards, ...newTakes];
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh takes');
     } finally {

@@ -5,7 +5,9 @@ import {
   Dimensions,
   Alert,
   Text,
-  TouchableOpacity,
+  ScrollView,
+  RefreshControl,
+  Vibration,
 } from 'react-native';
 import {
   PanGestureHandler,
@@ -23,6 +25,7 @@ import Animated, {
 import { Take } from '../types';
 import { TakeCard } from './TakeCard';
 import { VoteIndicator } from './VoteIndicator';
+import { AnimatedPressable } from './transitions/AnimatedPressable';
 import { dimensions, colors } from '../constants';
 
 interface CustomSwipeableCardDeckProps {
@@ -30,6 +33,8 @@ interface CustomSwipeableCardDeckProps {
   onVote: (takeId: string, vote: 'hot' | 'not') => void;
   onSkip: (takeId: string) => void;
   onEndReached?: () => void;
+  onLoadMore?: () => Promise<void>;
+  onSubmitTake?: () => void;
   isDarkMode?: boolean;
 }
 
@@ -41,10 +46,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   onVote,
   onSkip,
   onEndReached,
+  onLoadMore,
+  onSubmitTake,
   isDarkMode = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -52,32 +60,37 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   const theme = isDarkMode ? colors.dark : colors.light;
 
-  // Safety check
-  if (!takes || !Array.isArray(takes) || takes.length === 0) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.noDataContainer}>
-          <Text style={styles.noDataText}>No takes available</Text>
-        </View>
-      </View>
-    );
-  }
+  const handleLoadMore = async () => {
+    if (!onLoadMore || isLoadingMore) return;
+    
+    try {
+      setIsLoadingMore(true);
+      await onLoadMore();
+    } catch (error) {
+      console.error('Error loading more content:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Ensure takes is always an array
+  const safeTakes = takes || [];
 
   const handleVote = (vote: 'hot' | 'not') => {
-    if (currentIndex < takes.length) {
-      const currentTake = takes[currentIndex];
+    if (currentIndex < safeTakes.length) {
+      const currentTake = safeTakes[currentIndex];
       onVote(currentTake.id, vote);
       
-      // Show vote indicator briefly
+      // Show vote indicator with better visibility
       setCurrentVote(vote);
-      setTimeout(() => setCurrentVote(null), 300);
+      setTimeout(() => setCurrentVote(null), 800);
       
       // Move to next card immediately
       const nextIndex = currentIndex + 1;
       setCurrentIndex(nextIndex);
       
       // Check if we've reached the end
-      if (nextIndex >= takes.length) {
+      if (nextIndex >= safeTakes.length) {
         setTimeout(() => {
           onEndReached?.();
         }, 500);
@@ -86,8 +99,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   };
 
   const handleSkip = () => {
-    if (currentIndex < takes.length) {
-      const currentTake = takes[currentIndex];
+    if (currentIndex < safeTakes.length) {
+      // Haptic feedback for skip action
+      Vibration.vibrate(12);
+      
+      const currentTake = safeTakes[currentIndex];
       onSkip(currentTake.id);
       
       // Move to next card immediately
@@ -95,7 +111,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       setCurrentIndex(nextIndex);
       
       // Check if we've reached the end
-      if (nextIndex >= takes.length) {
+      if (nextIndex >= safeTakes.length) {
         setTimeout(() => {
           onEndReached?.();
         }, 500);
@@ -106,16 +122,28 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
     onStart: () => {
       scale.value = withSpring(0.95);
+      // Light haptic feedback on touch start
+      runOnJS(Vibration.vibrate)(10);
     },
     onActive: (event) => {
       translateX.value = event.translationX;
       translateY.value = event.translationY * 0.1; // Subtle vertical movement
+      
+      // Provide haptic feedback when reaching swipe threshold
+      const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
+      const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
+      
+      if ((shouldSwipeRight || shouldSwipeLeft) && Math.abs(event.translationX) > SWIPE_THRESHOLD && Math.abs(event.translationX) < SWIPE_THRESHOLD + 20) {
+        runOnJS(Vibration.vibrate)(15);
+      }
     },
     onEnd: (event) => {
       const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
       const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
 
       if (shouldSwipeRight) {
+        // Strong haptic feedback for successful swipe
+        runOnJS(Vibration.vibrate)(25);
         translateX.value = withSpring(width * 1.5, { damping: 15, stiffness: 120 }, () => {
           runOnJS(handleVote)('hot');
           // Reset position immediately for the next card
@@ -123,6 +151,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           translateY.value = 0;
         });
       } else if (shouldSwipeLeft) {
+        // Strong haptic feedback for successful swipe
+        runOnJS(Vibration.vibrate)(25);
         translateX.value = withSpring(-width * 1.5, { damping: 15, stiffness: 120 }, () => {
           runOnJS(handleVote)('not');
           // Reset position immediately for the next card
@@ -130,6 +160,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           translateY.value = 0;
         });
       } else {
+        // Soft haptic feedback for bounce back
+        runOnJS(Vibration.vibrate)(8);
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
       }
@@ -184,27 +216,64 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     return { opacity };
   });
 
-  if (currentIndex >= takes.length) {
+  if (currentIndex >= safeTakes.length) {
     return (
       <View style={styles.container}>
-        <View style={styles.endContainer}>
-          <Text style={styles.endEmoji}>🎉</Text>
-          <Text style={[styles.endTitle, { color: theme.text }]}>Wow! You've reached the end!</Text>
-          <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
-            You've voted on all available hot takes.{'\n'}
-            How about adding some of your own?
-          </Text>
-          <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
-            Tap the clipboard icon (📋) to see your takes{'\n'}
-            and submit new ones!
-          </Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.endScrollContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoadingMore}
+              onRefresh={handleLoadMore}
+              tintColor={theme.primary}
+              title="Pull down to load more hot takes"
+              titleColor={theme.textSecondary}
+            />
+          }
+        >
+          <View style={styles.endContainer}>
+            <Text style={styles.endEmoji}>🎉</Text>
+            <Text style={[styles.endTitle, { color: theme.text }]}>
+              {safeTakes.length === 0 ? 'No takes available yet!' : 'You\'ve reached the end!'}
+            </Text>
+            <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
+              {isLoadingMore 
+                ? 'Loading more hot takes...' 
+                : 'Pull down to load more content!'
+              }
+            </Text>
+            
+            {onLoadMore && (
+              <Text style={[styles.pullHint, { color: theme.primary }]}>
+                {isLoadingMore ? '⏳' : '⬇️ Pull Down ⬇️'}
+              </Text>
+            )}
+            
+            {onSubmitTake && (
+              <AnimatedPressable
+                style={[styles.submitButton, { backgroundColor: theme.primary }]}
+                onPress={onSubmitTake}
+                scaleValue={0.95}
+                hapticIntensity={15}
+              >
+                <Text style={styles.submitButtonText}>✏️ Submit Take</Text>
+              </AnimatedPressable>
+            )}
+            
+            <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
+              {safeTakes.length === 0 
+                ? 'Or submit your own hot takes!'
+                : 'Or tap the clipboard icon (📋) to see your takes'
+              }
+            </Text>
+          </View>
+        </ScrollView>
       </View>
     );
   }
 
-  const currentTake = takes[currentIndex];
-  const nextTake = takes[currentIndex + 1];
+  const currentTake = safeTakes[currentIndex];
+  const nextTake = safeTakes[currentIndex + 1];
 
   return (
     <View style={styles.container}>
@@ -234,9 +303,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       </PanGestureHandler>
       
       {/* Skip Button */}
-      <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+      <AnimatedPressable 
+        style={styles.skipButton} 
+        onPress={handleSkip}
+        scaleValue={0.9}
+        hapticIntensity={12}
+      >
         <Text style={styles.skipButtonText}>Skip</Text>
-      </TouchableOpacity>
+      </AnimatedPressable>
     </View>
   );
 };
@@ -256,21 +330,15 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.95 }],
     opacity: 0.5,
   },
-  noDataContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noDataText: {
-    fontSize: 18,
-    color: '#666',
-    fontWeight: '500',
-  },
   endContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: dimensions.spacing.xl,
+    paddingVertical: dimensions.spacing.xl,
+  },
+  endScrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   endEmoji: {
     fontSize: 64,
@@ -293,6 +361,26 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     fontStyle: 'italic',
+  },
+  pullHint: {
+    fontSize: dimensions.fontSize.xlarge,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    marginVertical: dimensions.spacing.lg,
+  },
+  submitButton: {
+    paddingHorizontal: dimensions.spacing.xl,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: 25,
+    marginVertical: dimensions.spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitButtonText: {
+    fontSize: dimensions.fontSize.large,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   overlayLeft: {
     position: 'absolute',
