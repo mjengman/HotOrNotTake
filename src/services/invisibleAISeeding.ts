@@ -205,3 +205,54 @@ export const useInvisibleAISeeding = () => {
 export const triggerCategoryCheck = async (): Promise<void> => {
   await checkAndSeedCategories();
 };
+
+// Simplified function for manual pull-to-refresh generation
+export const generateTakesForSingleCategory = async (category: string, count: number = 20): Promise<number> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.log('No authenticated user - cannot generate content');
+    return 0;
+  }
+
+  try {
+    console.log(`🎯 Generating ${count} takes for category: ${category}`);
+    
+    const aiTakes = [];
+    const { generateAITake } = await import('./aiContentService');
+    
+    // Generate the requested number of takes
+    for (let i = 0; i < count; i++) {
+      try {
+        const aiTake = await generateAITake(category);
+        aiTakes.push(aiTake);
+        
+        // Small delay to avoid rate limiting
+        if (i < count - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      } catch (error) {
+        console.error(`Failed to generate take ${i + 1}:`, error);
+      }
+    }
+
+    // Submit all generated takes
+    let submitted = 0;
+    for (const aiTake of aiTakes) {
+      try {
+        const submission = convertAITakeToSubmission(aiTake);
+        await submitTake(submission, currentUser.uid);
+        submitted++;
+        console.log(`✅ Generated: "${aiTake.text.substring(0, 50)}..."`);
+      } catch (error) {
+        console.error('Failed to submit AI take:', error);
+      }
+    }
+
+    console.log(`🎉 Successfully generated ${submitted}/${count} takes for ${category}`);
+    return submitted;
+
+  } catch (error) {
+    console.error(`Error generating takes for ${category}:`, error);
+    return 0;
+  }
+};

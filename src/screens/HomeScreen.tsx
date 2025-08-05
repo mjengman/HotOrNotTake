@@ -33,8 +33,7 @@ export const HomeScreen: React.FC = () => {
   });
   const { stats } = useUserStats();
   
-  // Invisible AI seeding - DISABLED for manual control
-  // useInvisibleAISeeding();
+  // AI seeding is now manual-only via pull-to-refresh
   
   // Use the interstitial ads hook
   const { onUserSwipe, onSessionEnd } = useInterstitialAds();
@@ -83,14 +82,47 @@ export const HomeScreen: React.FC = () => {
 
   const handleLoadMore = async () => {
     console.log('Loading more content for category:', selectedCategory);
-    // Import AI generation functions
-    const { checkAndSeedCategories } = await import('../services/invisibleAISeeding');
-    try {
-      // Start AI generation (content will appear as it's generated)
-      await checkAndSeedCategories();
-      console.log('Successfully triggered AI content generation');
-    } catch (error) {
-      console.error('Error generating more content:', error);
+    
+    // For "all" category, generate a mix across different categories
+    if (selectedCategory === 'all') {
+      const { generateMultipleAITakes, convertAITakeToSubmission } = await import('../services/aiContentService');
+      const { submitTake } = await import('../services/takeService');
+      const { auth } = await import('../services/firebase');
+      
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          console.error('No authenticated user');
+          return;
+        }
+        
+        // Generate 20 takes across random categories
+        const aiTakes = await generateMultipleAITakes(20);
+        let submitted = 0;
+        
+        for (const aiTake of aiTakes) {
+          try {
+            const submission = convertAITakeToSubmission(aiTake);
+            await submitTake(submission, currentUser.uid);
+            submitted++;
+          } catch (error) {
+            console.error('Failed to submit AI take:', error);
+          }
+        }
+        
+        console.log(`Successfully generated ${submitted} takes across all categories`);
+      } catch (error) {
+        console.error('Error generating content for all categories:', error);
+      }
+    } else {
+      // Generate for specific category
+      const { generateTakesForSingleCategory } = await import('../services/invisibleAISeeding');
+      try {
+        const generated = await generateTakesForSingleCategory(selectedCategory, 20);
+        console.log(`Successfully generated ${generated} takes for ${selectedCategory}`);
+      } catch (error) {
+        console.error('Error generating more content:', error);
+      }
     }
   };
 
