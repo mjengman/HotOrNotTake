@@ -8,12 +8,12 @@ import {
 // Import InterstitialAd differently - it might be a default export
 const { InterstitialAd } = require('react-native-google-mobile-ads');
 
-// Test ad unit IDs (replace with your real IDs when going to production)
+// Ad unit IDs
 const interstitialAdUnitId = __DEV__ 
   ? TestIds.INTERSTITIAL // Use test IDs during development
   : Platform.select({
-      ios: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_INTERSTITIAL_AD_UNIT_ID',
-      android: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_INTERSTITIAL_AD_UNIT_ID',
+      ios: TestIds.INTERSTITIAL, // Keep test ID for iOS for now
+      android: 'ca-app-pub-1745058833253836/4423842963', // Your real interstitial ID
     }) ?? '';
 
 class AdService {

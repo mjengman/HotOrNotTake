@@ -6,12 +6,12 @@ interface AdBannerProps {
   size?: BannerAdSize;
 }
 
-// Test ad unit IDs (replace with your real IDs when going to production)
+// Ad unit IDs
 const adUnitId = __DEV__ 
   ? TestIds.BANNER // Use test IDs during development
   : Platform.select({
-      ios: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_AD_UNIT_ID',
-      android: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_AD_UNIT_ID',
+      ios: TestIds.BANNER, // Keep test ID for iOS for now
+      android: 'ca-app-pub-1745058833253836/2017171479', // Your real banner ID
     }) ?? '';
 
 export const AdBanner: React.FC<AdBannerProps> = ({ 

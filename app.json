@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.HotOrNotTakes"
+      "bundleIdentifier": "com.hotornottakes.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +22,7 @@
         "backgroundColor": "#1f1f1f"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.HotOrNotTakes"
+      "package": "com.hotornottakes.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -32,10 +32,15 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "androidAppId": "ca-app-pub-1745058833253836~8031915483",
           "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7d390f1c-4d9b-4414-a359-2d8fd3f3ed43"
+      }
+    }
   }
 }

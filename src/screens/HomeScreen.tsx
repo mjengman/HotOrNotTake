@@ -80,6 +80,20 @@ export const HomeScreen: React.FC = () => {
     setSelectedCategory(newCategory);
   };
 
+  const handleRetry = async () => {
+    // Force refresh the takes data
+    try {
+      window.location?.reload?.(); // Web only
+    } catch {
+      // For native platforms, we'll trigger a data refresh
+      // The useFirebaseTakes hook should handle this automatically
+      // but we can force a re-authentication if needed
+      if (!user) {
+        await signIn();
+      }
+    }
+  };
+
   const handleLoadMore = async () => {
     console.log('Loading more content for category:', selectedCategory);
     
@@ -197,7 +211,7 @@ export const HomeScreen: React.FC = () => {
             </Text>
             <AnimatedPressable
               style={[styles.retryButton, { backgroundColor: theme.primary }]}
-              onPress={() => window.location.reload()}
+              onPress={handleRetry}
               scaleValue={0.95}
               hapticIntensity={15}
             >
