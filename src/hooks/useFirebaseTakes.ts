@@ -49,15 +49,22 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     let lastCategory: string | null = null;
     let sameCount = 0;
     
+    console.log(`🎯 Starting category variety for ${takes.length} takes`);
+    
     while (remaining.length > 0) {
-      // Find index of a take with different category
       let nextIndex = 0;
       
-      // If we've had 2 of the same category, force a different one
+      // If we've had 2 consecutive of the same category, MUST find a different one
       if (sameCount >= 2 && lastCategory) {
+        console.log(`⚠️ Had ${sameCount} consecutive ${lastCategory}, forcing variety`);
         const differentIndex = remaining.findIndex(take => take.category !== lastCategory);
         if (differentIndex !== -1) {
           nextIndex = differentIndex;
+          console.log(`✅ Found different category at index ${differentIndex}: ${remaining[differentIndex].category}`);
+        } else {
+          console.log(`⚠️ No different categories available, using first available`);
+          // If no different category available, just take the first one
+          nextIndex = 0;
         }
       }
       
@@ -65,14 +72,38 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       const [selected] = remaining.splice(nextIndex, 1);
       result.push(selected);
       
-      // Update tracking
+      // Update tracking - this is the key fix!
       if (selected.category === lastCategory) {
         sameCount++;
       } else {
         lastCategory = selected.category;
-        sameCount = 1;
+        sameCount = 1; // Reset to 1 (not 0) because we just added one of this category
       }
+      
+      console.log(`📊 Added ${selected.category} (count: ${sameCount})`);
     }
+    
+    // Final verification - count consecutive categories
+    let consecutive = 0;
+    let currentCat = '';
+    let maxConsecutive = 0;
+    
+    result.forEach((take, index) => {
+      if (take.category === currentCat) {
+        consecutive++;
+      } else {
+        maxConsecutive = Math.max(maxConsecutive, consecutive);
+        currentCat = take.category;
+        consecutive = 1;
+      }
+    });
+    maxConsecutive = Math.max(maxConsecutive, consecutive);
+    
+    console.log(`✅ Category variety complete: ${result.length} takes, max consecutive: ${maxConsecutive}`);
+    
+    // Log first 10 categories for verification
+    const first10 = result.slice(0, 10).map(t => t.category).join(' -> ');
+    console.log(`🔍 First 10 categories: ${first10}`);
     
     return result;
   };
@@ -146,7 +177,16 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
             const newTakes = filteredUpdatedTakes.filter(t => !preservedIds.has(t.id));
             
             // Combine: preserved cards + new takes
-            return [...preservedCards, ...newTakes];
+            const combinedTakes = [...preservedCards, ...newTakes];
+            
+            // If we're in "all categories" mode, we need to re-apply variety to the new portion
+            if (category === 'all' && newTakes.length > 0) {
+              // Apply variety algorithm to just the new takes, then combine
+              const varietyNewTakes = ensureCategoryVariety(newTakes);
+              return [...preservedCards, ...varietyNewTakes];
+            }
+            
+            return combinedTakes;
           });
         });
       } catch (err) {
