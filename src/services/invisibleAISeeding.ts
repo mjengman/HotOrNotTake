@@ -98,7 +98,7 @@ const generateTakesForCategory = async (category: string, count: number): Promis
     for (const aiTake of aiTakes) {
       try {
         const submission = convertAITakeToSubmission(aiTake);
-        await submitTake(submission, currentUser.uid);
+        await submitTake(submission, currentUser.uid, true); // true = isAIGenerated
         submitted++;
         console.log(`✅ Seeded ${category}: "${aiTake.text.substring(0, 50)}..."`);
       } catch (error) {

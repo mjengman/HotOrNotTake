@@ -1,4 +1,5 @@
 import { TakeSubmission } from '../types/Take';
+import { getPromptByD20 } from './enhancedPrompts';
 
 // Categories from your existing takes
 const CATEGORIES = [
@@ -16,109 +17,9 @@ interface AIGeneratedTake {
 const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
-// Diverse sub-topics for each category to ensure variety
-const getCategoryPrompts = (category: string): string[] => {
-  const promptSets = {
-    food: [
-      'Generate a controversial opinion about a specific cuisine or cooking method',
-      'Create a hot take about restaurant culture, tipping, or dining etiquette', 
-      'Make a bold statement about a popular food trend or ingredient',
-      'Share a controversial opinion about grocery shopping, meal prep, or food waste',
-      'Create a divisive take about cooking shows, celebrity chefs, or food media'
-    ],
-    work: [
-      'Generate a controversial opinion about remote work vs office culture',
-      'Create a hot take about work-life balance, productivity, or career advice',
-      'Make a bold statement about corporate culture, meetings, or management',
-      'Share a controversial opinion about job interviews, resumes, or networking',
-      'Create a divisive take about workplace technology, automation, or the gig economy'
-    ],
-    pets: [
-      'Generate a controversial opinion about dog breeds, training, or ownership',
-      'Create a hot take about cats, cat behavior, or cat vs dog preferences',
-      'Make a bold statement about exotic pets, pet adoption, or breeding',
-      'Share a controversial opinion about pet care, veterinary costs, or pet insurance',
-      'Create a divisive take about service animals, pet-friendly spaces, or animal rights'
-    ],
-    technology: [
-      'Generate a controversial opinion about social media platforms or influencer culture',
-      'Create a hot take about smartphones, apps, or digital addiction',
-      'Make a bold statement about artificial AI, automation, or tech jobs',
-      'Share a controversial opinion about privacy, data collection, or tech companies',
-      'Create a divisive take about gaming, streaming, or digital entertainment'
-    ],
-    life: [
-      'Generate a controversial opinion about money, spending habits, or financial advice',
-      'Create a hot take about happiness, success, or life goals',
-      'Make a bold statement about aging, generations, or life stages',
-      'Share a controversial opinion about education, learning, or self-improvement',
-      'Create a divisive take about family, friendships, or personal values'
-    ],
-    entertainment: [
-      'Generate a controversial opinion about a specific movie genre, franchise, or trend',
-      'Create a hot take about music, artists, or the music industry',
-      'Make a bold statement about TV shows, streaming services, or binge-watching',
-      'Share a controversial opinion about celebrities, fame, or award shows',
-      'Create a divisive take about books, reading, or literary culture'
-    ],
-    environment: [
-      'Generate a controversial opinion about climate change solutions or policies',
-      'Create a hot take about recycling, waste reduction, or sustainable living',
-      'Make a bold statement about electric vehicles, renewable energy, or green technology',
-      'Share a controversial opinion about environmental activism or corporate responsibility',
-      'Create a divisive take about conservation, wildlife protection, or eco-tourism'
-    ],
-    wellness: [
-      'Generate a controversial opinion about diet trends, nutrition, or supplements',
-      'Create a hot take about exercise, fitness culture, or gym etiquette',
-      'Make a bold statement about mental health, therapy, or self-care',
-      'Share a controversial opinion about alternative medicine, wellness trends, or healthcare',
-      'Create a divisive take about sleep, stress management, or work-life balance'
-    ],
-    society: [
-      'Generate a controversial opinion about social norms, etiquette, or manners',
-      'Create a hot take about inequality, privilege, or social justice',
-      'Make a bold statement about education systems, parenting, or childhood',
-      'Share a controversial opinion about community, neighborhoods, or urban vs rural living',
-      'Create a divisive take about generational differences or cultural shifts'
-    ],
-    politics: [
-      'Generate a controversial opinion about voting, elections, or political participation',
-      'Create a hot take about government policies, regulations, or bureaucracy',
-      'Make a bold statement about political parties, candidates, or campaign strategies',
-      'Share a controversial opinion about political media, debates, or coverage',
-      'Create a divisive take about civic engagement, activism, or political apathy'
-    ],
-    sports: [
-      'Generate a controversial opinion about a specific sport, team, or athlete',
-      'Create a hot take about professional sports, salaries, or fan culture',
-      'Make a bold statement about college sports, youth athletics, or competition',
-      'Share a controversial opinion about sports media, commentary, or statistics',
-      'Create a divisive take about fitness trends, exercise culture, or athletic performance'
-    ],
-    travel: [
-      'Generate a controversial opinion about specific destinations or tourist attractions',
-      'Create a hot take about travel culture, tourism, or vacation planning',
-      'Make a bold statement about airlines, hotels, or travel experiences',
-      'Share a controversial opinion about cultural differences, expat life, or international relations',
-      'Create a divisive take about adventure travel, luxury travel, or budget travel'
-    ],
-    relationships: [
-      'Generate a controversial opinion about dating apps, modern dating, or romance',
-      'Create a hot take about marriage, commitment, or relationship expectations',
-      'Make a bold statement about friendship, social circles, or networking',
-      'Share a controversial opinion about parenting styles, family dynamics, or raising children',
-      'Create a divisive take about breakups, divorce, or relationship advice'
-    ]
-  };
-  
-  return promptSets[category as keyof typeof promptSets] || promptSets.life;
-};
-
-// Get a random diverse prompt for the category
-const getCategoryPrompt = (category: string): string => {
-  const prompts = getCategoryPrompts(category);
-  return prompts[Math.floor(Math.random() * prompts.length)];
+// Get category prompt using D20 system
+const getCategoryPrompt = (category: string, d20Roll?: number): string => {
+  return getPromptByD20(category, d20Roll);
 };
 
 // Check if content is too similar to existing takes
@@ -172,7 +73,9 @@ export const generateAITake = async (category?: string, maxRetries: number = 3):
   const selectedCategory = category || CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    const categoryPrompt = getCategoryPrompt(selectedCategory); // Get fresh prompt each time
+    // D20 roll for prompt selection (separate from personality roll)
+    const promptD20Roll = Math.floor(Math.random() * 20) + 1;
+    const categoryPrompt = getCategoryPrompt(selectedCategory, promptD20Roll);
     
     // Add variety factors to make each attempt more unique
     const varietyFactors = [
@@ -184,7 +87,16 @@ export const generateAITake = async (category?: string, maxRetries: number = 3):
     ];
     const varietyFactor = varietyFactors[Math.floor(Math.random() * varietyFactors.length)];
 
-    const systemPrompt = `You are a creative content generator for a "Hot or Not Takes" app where users vote on controversial opinions.
+    // Generate personality context with D4/D20 system (separate roll)
+    const { generatePersonalityContext, buildEnhancedPrompt } = await import('./personalityEngine');
+    const personalityContext = generatePersonalityContext(selectedCategory);
+    
+    // Debug logging for prompt selection
+    if (promptD20Roll >= 16) {
+      console.log(`🎲 D20 Prompt Roll: ${promptD20Roll} - Using rngSpice prompt`);
+    }
+
+    const baseSystemPrompt = `You are a creative content generator for a "Hot or Not Takes" app where users vote on controversial opinions.
 
 CRITICAL: Generate completely original content. Avoid generic or common hot takes.
 
@@ -192,10 +104,10 @@ INSTRUCTIONS:
 - Generate ONE controversial "hot take" that sounds like a real person wrote it
 - Keep it SHORT and PUNCHY - between 15-100 characters maximum
 - Make it opinion-based, not factual claims
-- Avoid offensive, discriminatory, or harmful content
+- Avoid discriminatory, or harmful content
 - Use conversational, confident tone like you're stating your opinion
 - BE CONCISE - think casual conversation, not formal writing
-- NO em-dashes (—) - use regular dashes (-) or commas instead
+- NO em-dashes (—) - use spaces + regular dashes ( - ) or commas instead
 - NO questions like "Hot or not?" - just state the opinion directly
 - Sound human and natural - like something someone would actually say
 - ${varietyFactor}
@@ -211,6 +123,15 @@ Examples of natural, human-sounding takes:
 - "Airport food is overpriced theater food"
 
 Return ONLY the hot take text, nothing else.`;
+
+    // Build enhanced prompt with personality context
+    const systemPrompt = buildEnhancedPrompt(
+      baseSystemPrompt,
+      selectedCategory,
+      categoryPrompt,
+      varietyFactor,
+      personalityContext
+    );
 
     try {
       const response = await fetch(OPENAI_API_URL, {
@@ -291,14 +212,29 @@ Return ONLY the hot take text, nothing else.`;
       }
 
       // Success! Content is unique and human-sounding
-      const confidence = Math.min(0.95, Math.max(0.4, 
+      let confidence = Math.min(0.95, Math.max(0.4, 
         (finalText.length / 150) * 0.6 + 
         (finalText.includes('!') ? 0.1 : 0) +
         (finalText.split(' ').length > 6 ? 0.2 : 0) +
         (attempt === 1 ? 0.1 : 0) // Bonus for first attempt success
       ));
 
-      console.log(`✅ Generated unique human-like take (attempt ${attempt}): "${finalText}"`);
+      // Personality mode bonus: personality-driven takes are potentially more engaging
+      if (personalityContext.isPersonalityMode) {
+        confidence = Math.min(0.95, confidence + 0.15); // 15% bonus for personality mode
+        
+        // Additional bonus for specific references (D20 rolls 16-20)
+        if (personalityContext.specificReference) {
+          confidence = Math.min(0.95, confidence + 0.05); // Extra 5% for specific references
+        }
+      }
+
+      console.log(`✅ Generated unique human-like take (attempt ${attempt})${personalityContext.isPersonalityMode ? ' [PERSONALITY]' : ''}: "${finalText}"`);
+      
+      // Debug personality activation
+      if (personalityContext.isPersonalityMode) {
+        console.log(`🎭 Personality Details: ${personalityContext.specificReference || personalityContext.archetype || 'unknown'}`);
+      }
 
       return {
         text: finalText,
@@ -326,6 +262,8 @@ Return ONLY the hot take text, nothing else.`;
 export const generateMultipleAITakes = async (count: number = 5): Promise<AIGeneratedTake[]> => {
   const takes: AIGeneratedTake[] = [];
   const errors: string[] = [];
+  let personalityActivations = 0;
+  const personalityTypes: { [key: string]: number } = {};
 
   // Distribute across different categories
   const categoriesToUse = [...CATEGORIES].sort(() => Math.random() - 0.5).slice(0, count);
@@ -336,12 +274,31 @@ export const generateMultipleAITakes = async (count: number = 5): Promise<AIGene
       const take = await generateAITake(category);
       takes.push(take);
       
+      // Track personality activations for debugging
+      const { generatePersonalityContext } = await import('./personalityEngine');
+      const personalityCheck = generatePersonalityContext(category);
+      if (personalityCheck.isPersonalityMode) {
+        personalityActivations++;
+        const personalityKey = personalityCheck.specificReference || personalityCheck.archetype || 'unknown';
+        personalityTypes[personalityKey] = (personalityTypes[personalityKey] || 0) + 1;
+      }
+      
       // Small delay to avoid rate limiting
       if (i < count - 1) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     } catch (error) {
       errors.push(`Take ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Debug personality statistics
+  if (takes.length > 0) {
+    const activationRate = (personalityActivations / takes.length * 100).toFixed(1);
+    console.log(`📊 Personality Stats - Generated: ${takes.length}, Personality Active: ${personalityActivations} (${activationRate}%)`);
+    
+    if (personalityActivations > 0) {
+      console.log(`🎭 Personality Types:`, personalityTypes);
     }
   }
 
@@ -415,4 +372,43 @@ export const autoSeedAITakes = async (targetCount: number = 10): Promise<number>
 export const generateAndPreviewTakes = async (count: number = 3): Promise<AIGeneratedTake[]> => {
   console.log(`🤖 Generating ${count} AI takes for preview...`);
   return await generateMultipleAITakes(count);
+};
+
+// Test personality system activation rates
+export const testPersonalityActivation = async (category: string = 'food', iterations: number = 10): Promise<void> => {
+  console.log(`🧪 Testing personality activation for ${category} (${iterations} iterations):`);
+  
+  let personalityCount = 0;
+  let specificReferenceCount = 0;
+  const archetypeCount: { [key: string]: number } = {};
+  
+  const { generatePersonalityContext } = await import('./personalityEngine');
+  
+  for (let i = 0; i < iterations; i++) {
+    const context = generatePersonalityContext(category);
+    
+    if (context.isPersonalityMode) {
+      personalityCount++;
+      
+      if (context.specificReference) {
+        specificReferenceCount++;
+        console.log(`  ${i + 1}. 🎯 Specific Reference: ${context.specificReference}`);
+      } else if (context.archetype) {
+        archetypeCount[context.archetype] = (archetypeCount[context.archetype] || 0) + 1;
+        console.log(`  ${i + 1}. 🎭 Archetype: ${context.archetype}`);
+      }
+    } else {
+      console.log(`  ${i + 1}. ⭕ Standard mode`);
+    }
+  }
+  
+  const activationRate = (personalityCount / iterations * 100).toFixed(1);
+  const specificRate = (specificReferenceCount / iterations * 100).toFixed(1);
+  
+  console.log(`
+📊 Results:`);
+  console.log(`  Total personality activations: ${personalityCount}/${iterations} (${activationRate}%)`);
+  console.log(`  Specific references: ${specificReferenceCount} (${specificRate}%)`);
+  console.log(`  Archetypes:`, archetypeCount);
+  console.log(`  Expected ~25% activation rate, actual: ${activationRate}%`);
 };

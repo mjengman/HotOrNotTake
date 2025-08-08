@@ -19,6 +19,7 @@ export interface Take {
   rejectionReason?: string;
   reportCount: number;
   isUserSubmitted?: boolean; // For UI display purposes
+  isAIGenerated?: boolean; // Flag for AI-generated content
 }
 
 export interface TakeVote {
@@ -46,6 +47,7 @@ export interface TakeFirestore {
   rejectedAt?: Date;
   rejectionReason?: string;
   reportCount: number;
+  isAIGenerated?: boolean; // Flag for AI-generated content
 }
 
 export interface TakeVoteFirestore {

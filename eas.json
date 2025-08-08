@@ -11,6 +11,7 @@
     "preview": {
       "distribution": "internal",
       "env": {
+        "EAS_BUILD": "true",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyB0mxVn3UsaErbWb1FIRuXJaTQpnPwpZRM",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "hot-or-not-takes.firebaseapp.com",
         "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "hot-or-not-takes",
@@ -24,6 +25,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
+        "EAS_BUILD": "true",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyB0mxVn3UsaErbWb1FIRuXJaTQpnPwpZRM",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "hot-or-not-takes.firebaseapp.com",
         "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "hot-or-not-takes",

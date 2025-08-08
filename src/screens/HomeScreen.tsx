@@ -31,7 +31,7 @@ export const HomeScreen: React.FC = () => {
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake } = useFirebaseTakes({
     category: selectedCategory
   });
-  const { stats } = useUserStats();
+  const { stats, refreshStats } = useUserStats();
   
   // AI seeding is now manual-only via pull-to-refresh
   
@@ -53,6 +53,8 @@ export const HomeScreen: React.FC = () => {
       await submitVote(takeId, vote);
       // Track swipe for ad service
       onUserSwipe();
+      // Update vote counter immediately
+      await refreshStats();
     } catch (error) {
       console.error('Error submitting vote:', error);
       // Could show a toast notification here
@@ -64,6 +66,8 @@ export const HomeScreen: React.FC = () => {
       await skipTake(takeId);
       // Track swipe for ad service
       onUserSwipe();
+      // Refresh stats in case there are other metrics tracked
+      await refreshStats();
     } catch (error) {
       console.error('Error skipping take:', error);
       // Could show a toast notification here
@@ -95,47 +99,59 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleLoadMore = async () => {
-    console.log('Loading more content for category:', selectedCategory);
+    console.log('🔄 Loading more content for category:', selectedCategory);
     
-    // For "all" category, generate a mix across different categories
-    if (selectedCategory === 'all') {
-      const { generateMultipleAITakes, convertAITakeToSubmission } = await import('../services/aiContentService');
-      const { submitTake } = await import('../services/takeService');
-      const { auth } = await import('../services/firebase');
+    try {
+      // Use the new reserve content system for smooth UX
+      const { getSmoothContent } = await import('../services/reserveContentService');
       
-      try {
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
-          console.error('No authenticated user');
-          return;
-        }
+      // Get reserve content with natural delay (2-4 seconds)
+      // This happens in background - reserves are submitted to Firebase automatically
+      await getSmoothContent(selectedCategory, 20);
+      
+      console.log(`✅ Successfully loaded reserve content for ${selectedCategory}`);
+    } catch (error) {
+      console.error('Error loading reserve content:', error);
+      
+      // Fallback to old system if reserve system fails
+      console.log('🔄 Falling back to direct generation...');
+      if (selectedCategory === 'all') {
+        const { generateMultipleAITakes, convertAITakeToSubmission } = await import('../services/aiContentService');
+        const { submitTake } = await import('../services/takeService');
+        const { auth } = await import('../services/firebase');
         
-        // Generate 20 takes across random categories
-        const aiTakes = await generateMultipleAITakes(20);
-        let submitted = 0;
-        
-        for (const aiTake of aiTakes) {
-          try {
-            const submission = convertAITakeToSubmission(aiTake);
-            await submitTake(submission, currentUser.uid);
-            submitted++;
-          } catch (error) {
-            console.error('Failed to submit AI take:', error);
+        try {
+          const currentUser = auth.currentUser;
+          if (!currentUser) {
+            console.error('No authenticated user');
+            return;
           }
+          
+          const aiTakes = await generateMultipleAITakes(20);
+          let submitted = 0;
+          
+          for (const aiTake of aiTakes) {
+            try {
+              const submission = convertAITakeToSubmission(aiTake);
+              await submitTake(submission, currentUser.uid, true); // true = isAIGenerated
+              submitted++;
+            } catch (error) {
+              console.error('Failed to submit AI take:', error);
+            }
+          }
+          
+          console.log(`Fallback: generated ${submitted} takes across all categories`);
+        } catch (error) {
+          console.error('Error in fallback generation:', error);
         }
-        
-        console.log(`Successfully generated ${submitted} takes across all categories`);
-      } catch (error) {
-        console.error('Error generating content for all categories:', error);
-      }
-    } else {
-      // Generate for specific category
-      const { generateTakesForSingleCategory } = await import('../services/invisibleAISeeding');
-      try {
-        const generated = await generateTakesForSingleCategory(selectedCategory, 20);
-        console.log(`Successfully generated ${generated} takes for ${selectedCategory}`);
-      } catch (error) {
-        console.error('Error generating more content:', error);
+      } else {
+        const { generateTakesForSingleCategory } = await import('../services/invisibleAISeeding');
+        try {
+          const generated = await generateTakesForSingleCategory(selectedCategory, 20);
+          console.log(`Fallback: generated ${generated} takes for ${selectedCategory}`);
+        } catch (error) {
+          console.error('Error in fallback generation:', error);
+        }
       }
     }
   };
@@ -354,6 +370,8 @@ const styles = StyleSheet.create({
   categoryContainer: {
     paddingHorizontal: dimensions.spacing.lg,
     paddingTop: dimensions.spacing.sm,
+    zIndex: 100, // Ensure dropdown stays above swipeable deck
+    elevation: 5, // For Android shadow
   },
   headerButton: {
     width: 40,

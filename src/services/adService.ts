@@ -9,12 +9,18 @@ import {
 const { InterstitialAd } = require('react-native-google-mobile-ads');
 
 // Ad unit IDs
-const interstitialAdUnitId = __DEV__ 
-  ? TestIds.INTERSTITIAL // Use test IDs during development
-  : Platform.select({
-      ios: TestIds.INTERSTITIAL, // Keep test ID for iOS for now
-      android: 'ca-app-pub-1745058833253836/4423842963', // Your real interstitial ID
-    }) ?? '';
+// For testing, let's be more explicit about when to use production ads
+const USE_PRODUCTION_ADS = true; // Set to true for production builds
+
+const interstitialAdUnitId = Platform.select({
+  ios: TestIds.INTERSTITIAL, // Keep test ID for iOS for now
+  android: USE_PRODUCTION_ADS 
+    ? 'ca-app-pub-1745058833253836/4423842963' // Your real interstitial ID
+    : TestIds.INTERSTITIAL,
+}) ?? '';
+
+console.log('🎯 Using interstitial ad ID:', interstitialAdUnitId);
+console.log('📱 Platform:', Platform.OS);
 
 class AdService {
   private interstitialAd: InterstitialAd;
@@ -52,7 +58,8 @@ class AdService {
     });
 
     this.interstitialAd.addAdEventListener(AdEventType.ERROR, (error) => {
-      console.log('❌ Interstitial ad failed to load:', error);
+      console.log('❌ Interstitial ad failed to load:', JSON.stringify(error, null, 2));
+      console.log('📍 Ad Unit ID was:', interstitialAdUnitId);
       this.isInterstitialLoaded = false;
       // Retry loading after a delay
       setTimeout(() => this.loadInterstitialAd(), 30000); // 30 seconds
@@ -72,7 +79,10 @@ class AdService {
 
   private loadInterstitialAd() {
     if (!this.isInterstitialLoaded) {
+      console.log('📥 Loading interstitial ad...');
       this.interstitialAd.load();
+    } else {
+      console.log('✅ Ad already loaded, skipping load request');
     }
   }
 

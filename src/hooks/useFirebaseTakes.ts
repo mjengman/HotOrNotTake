@@ -40,6 +40,43 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const [error, setError] = useState<string | null>(null);
   const [interactedTakeIds, setInteractedTakeIds] = useState<string[]>([]);
 
+  // Helper function to ensure variety in "all categories" mode
+  const ensureCategoryVariety = (takes: Take[]): Take[] => {
+    if (!takes || takes.length <= 2) return takes;
+    
+    const result: Take[] = [];
+    const remaining = [...takes];
+    let lastCategory: string | null = null;
+    let sameCount = 0;
+    
+    while (remaining.length > 0) {
+      // Find index of a take with different category
+      let nextIndex = 0;
+      
+      // If we've had 2 of the same category, force a different one
+      if (sameCount >= 2 && lastCategory) {
+        const differentIndex = remaining.findIndex(take => take.category !== lastCategory);
+        if (differentIndex !== -1) {
+          nextIndex = differentIndex;
+        }
+      }
+      
+      // Take the selected item
+      const [selected] = remaining.splice(nextIndex, 1);
+      result.push(selected);
+      
+      // Update tracking
+      if (selected.category === lastCategory) {
+        sameCount++;
+      } else {
+        lastCategory = selected.category;
+        sameCount = 1;
+      }
+    }
+    
+    return result;
+  };
+
   // Helper function to filter out interacted takes and apply category filter
   const filterTakes = useCallback((allTakes: Take[]) => {
     let filteredTakes = allTakes.filter(take => !interactedTakeIds.includes(take.id));
@@ -47,6 +84,9 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     // Apply category filter if specified (skip 'all' category)
     if (category && category !== 'all') {
       filteredTakes = filteredTakes.filter(take => take.category === category);
+    } else if (category === 'all') {
+      // Ensure variety when showing all categories
+      filteredTakes = ensureCategoryVariety(filteredTakes);
     }
     
     return filteredTakes;

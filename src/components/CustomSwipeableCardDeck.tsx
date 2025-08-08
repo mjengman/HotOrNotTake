@@ -81,9 +81,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       const currentTake = safeTakes[currentIndex];
       onVote(currentTake.id, vote);
       
-      // Show vote indicator with better visibility
-      setCurrentVote(vote);
-      setTimeout(() => setCurrentVote(null), 800);
+      // Clear vote indicator after showing it longer
+      setTimeout(() => setCurrentVote(null), 970); // Fine-tuned timing
       
       // Move to next card immediately
       const nextIndex = currentIndex + 1;
@@ -100,11 +99,15 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   const handleSkip = () => {
     if (currentIndex < safeTakes.length) {
-      // Haptic feedback for skip action
+      // Immediate haptic feedback for skip action
       Vibration.vibrate(12);
       
       const currentTake = safeTakes[currentIndex];
-      onSkip(currentTake.id);
+      
+      // Call onSkip asynchronously so it doesn't block the UI
+      setTimeout(() => {
+        onSkip(currentTake.id);
+      }, 0);
       
       // Move to next card immediately
       const nextIndex = currentIndex + 1;
@@ -142,8 +145,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
 
       if (shouldSwipeRight) {
-        // Strong haptic feedback for successful swipe
+        // Immediate feedback - show indicator and haptic
+        runOnJS(setCurrentVote)('hot');
         runOnJS(Vibration.vibrate)(25);
+        
         translateX.value = withSpring(width * 1.5, { damping: 15, stiffness: 120 }, () => {
           runOnJS(handleVote)('hot');
           // Reset position immediately for the next card
@@ -151,8 +156,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           translateY.value = 0;
         });
       } else if (shouldSwipeLeft) {
-        // Strong haptic feedback for successful swipe
+        // Immediate feedback - show indicator and haptic
+        runOnJS(setCurrentVote)('not');
         runOnJS(Vibration.vibrate)(25);
+        
         translateX.value = withSpring(-width * 1.5, { damping: 15, stiffness: 120 }, () => {
           runOnJS(handleVote)('not');
           // Reset position immediately for the next card

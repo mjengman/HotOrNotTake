@@ -44,6 +44,7 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   rejectedAt: data.rejectedAt ? convertTimestampToDate(data.rejectedAt) : undefined,
   rejectionReason: data.rejectionReason,
   reportCount: data.reportCount || 0,
+  isAIGenerated: data.isAIGenerated || false, // AI flag
 });
 
 // Get all approved takes
@@ -90,7 +91,8 @@ export const subscribeToApprovedTakes = (callback: (takes: Take[]) => void) => {
 // Submit a new take
 export const submitTake = async (
   takeData: TakeSubmission,
-  userId: string
+  userId: string,
+  isAIGenerated: boolean = false
 ): Promise<string> => {
   try {
     const now = new Date();
@@ -107,6 +109,7 @@ export const submitTake = async (
       status: 'approved', // Auto-approve for development
       approvedAt: now, // Set approval timestamp
       reportCount: 0,
+      isAIGenerated, // Flag for AI content
     };
 
     const docRef = await addDoc(collection(db, TAKES_COLLECTION), {
@@ -191,9 +194,10 @@ export const getTakesByCategory = async (category: string): Promise<Take[]> => {
   }
 };
 
-// Get user's submitted takes
+// Get user's submitted takes (excluding AI-generated content)
 export const getUserSubmittedTakes = async (userId: string): Promise<Take[]> => {
   try {
+    // Get all takes by the user
     const takesQuery = query(
       collection(db, TAKES_COLLECTION),
       where('userId', '==', userId),
@@ -202,7 +206,12 @@ export const getUserSubmittedTakes = async (userId: string): Promise<Take[]> => 
     );
     
     const snapshot = await getDocs(takesQuery);
-    return snapshot.docs.map(doc => convertFirestoreTake(doc.id, doc.data()));
+    const allUserTakes = snapshot.docs.map(doc => convertFirestoreTake(doc.id, doc.data()));
+    
+    // Filter out AI-generated takes in memory (to handle missing field)
+    const userSubmittedTakes = allUserTakes.filter(take => !take.isAIGenerated);
+    
+    return userSubmittedTakes;
   } catch (error) {
     console.error('Error fetching user takes:', error);
     throw new Error('Failed to load your takes');

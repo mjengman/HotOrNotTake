@@ -60,15 +60,7 @@ export const VoteIndicator: React.FC<VoteIndicatorProps> = ({
       const vibrationPattern = vote === 'hot' ? [0, 20, 40, 20] : [0, 15, 30, 15];
       Vibration.vibrate(vibrationPattern);
       
-      // Auto-hide after delay with smooth exit
-      setTimeout(() => {
-        scale.value = withSpring(0, { damping: 12 });
-        opacity.value = withTiming(0, { 
-          duration: 200, 
-          easing: Easing.in(Easing.quad) 
-        });
-        glowScale.value = withSpring(0, { damping: 10 });
-      }, 1200);
+      // No auto-hide - controlled by parent component
     } else {
       scale.value = withSpring(0, { damping: 15 });
       opacity.value = withSpring(0, { damping: 15 });

@@ -66,11 +66,30 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     loadLeaderboards();
   }, []);
 
-  const renderTakeItem = (take: Take, rank: number, subtitle: string) => (
-    <View key={take.id} style={[styles.takeItem, { backgroundColor: theme.surface }]}>
-      <View style={styles.rankBadge}>
-        <Text style={styles.rankText}>{rank}</Text>
-      </View>
+  const renderTakeItem = (take: Take, rank: number, subtitle: string) => {
+    // Get medal emoji for top 3, otherwise show number
+    const getRankDisplay = (rank: number) => {
+      switch (rank) {
+        case 1: return '🥇';
+        case 2: return '🥈';
+        case 3: return '🥉';
+        default: return rank.toString();
+      }
+    };
+
+    return (
+      <View key={take.id} style={[styles.takeItem, { backgroundColor: theme.surface }]}>
+        <View style={[
+          styles.rankBadge, 
+          rank <= 3 ? styles.medalBadge : styles.numberBadge
+        ]}>
+          <Text style={[
+            styles.rankText,
+            rank <= 3 ? styles.medalText : styles.numberText
+          ]}>
+            {getRankDisplay(rank)}
+          </Text>
+        </View>
       
       <View style={styles.takeContent}>
         <Text style={[styles.takeText, { color: theme.text }]} numberOfLines={3}>
@@ -86,7 +105,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         </View>
       </View>
     </View>
-  );
+    );
+  };
 
   const renderSkippedTakeItem = (item: { take: Take; skipCount: number }, rank: number) => (
     renderTakeItem(item.take, rank, `${item.skipCount} skips`)
@@ -298,15 +318,26 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FFD700',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: dimensions.spacing.md,
   },
+  medalBadge: {
+    backgroundColor: 'transparent', // No background for medal emojis
+  },
+  numberBadge: {
+    backgroundColor: '#FFD700', // Keep gold background for numbers
+  },
   rankText: {
     fontSize: dimensions.fontSize.medium,
     fontWeight: 'bold',
-    color: '#000',
+  },
+  medalText: {
+    fontSize: 20, // Slightly larger for medal emojis
+    // Remove color styling to let emojis display properly
+  },
+  numberText: {
+    color: '#000', // Black text for numbered badges
   },
   takeContent: {
     flex: 1,
