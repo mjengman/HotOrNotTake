@@ -18,34 +18,36 @@ class ReserveContentManager {
   private readonly RESERVE_SIZE = 15; // Number of takes to keep in reserve per category
   private readonly MIN_RESERVE_THRESHOLD = 5; // Minimum before replenishing
   private isReplenishing: { [category: string]: boolean } = {};
+  private replenishAttempts: { [category: string]: number } = {}; // Track replenish attempts
+  private readonly MAX_REPLENISH_ATTEMPTS = 3; // Max attempts per category
+  private lastReplenishTime: { [category: string]: number } = {}; // Track timing
+  private readonly REPLENISH_COOLDOWN = 30000; // 30 second cooldown between replenishments
 
   constructor() {
     // Don't auto-initialize - do it on-demand based on what user requests
-    console.log('🔄 RESERVE DEBUG - ReserveContentManager created (lazy initialization)');
   }
 
   // Initialize reserve pools for specific categories
   private async initializeCategoryIfNeeded(category: string): Promise<void> {
     if (this.reserves[category] && this.reserves[category].length > 0) {
-      console.log(`✅ RESERVE DEBUG - ${category} already has ${this.reserves[category].length} reserves`);
       return; // Already initialized
     }
     
-    console.log(`🔄 RESERVE DEBUG - Initializing ${category} reserves...`);
+    console.log(`🔄 Initializing ${category} reserves...`);
     
     try {
       this.reserves[category] = [];
       await this.replenishReserves(category, this.RESERVE_SIZE, true);
-      console.log(`✅ RESERVE DEBUG - ${category} initialized with ${this.reserves[category].length} reserves`);
+      console.log(`✅ ${category} ready: ${this.reserves[category].length} reserves`);
     } catch (error) {
-      console.error(`❌ RESERVE DEBUG - Failed to initialize ${category}:`, error);
+      console.error(`❌ Failed to initialize ${category}:`, error);
       this.reserves[category] = []; // Ensure array exists even if initialization fails
     }
   }
   
   // Initialize for "all" mode - only the categories we'll actually use
   private async initializeForAllMode(): Promise<void> {
-    console.log('🔄 RESERVE DEBUG - Initializing reserves for "all" mode...');
+    console.log('🔄 Initializing priority categories for "all" mode...');
     
     // Only initialize a few key categories for "all" mode to start
     const priorityCategories = ['food', 'technology', 'life', 'work', 'entertainment'];
@@ -54,13 +56,11 @@ class ReserveContentManager {
       await this.initializeCategoryIfNeeded(category);
     }
     
-    console.log('✅ RESERVE DEBUG - Priority categories initialized for "all" mode');
+    console.log('✅ Priority categories ready for "all" mode');
   }
 
   // Get reserve takes for immediate display (smooth UX)
   public async getReserveContent(category: string, count: number = 10): Promise<TakeSubmission[]> {
-    console.log(`🔥 RESERVE DEBUG - getReserveContent called for ${category}, requested: ${count}`);
-    
     // Handle "all" category by mixing from different categories
     if (category === 'all') {
       await this.initializeForAllMode();
@@ -74,8 +74,6 @@ class ReserveContentManager {
     const categoryReserves = this.reserves[category] || [];
     const available = Math.min(count, categoryReserves.length);
     
-    console.log(`🔥 RESERVE DEBUG - ${category} reserves: ${categoryReserves.length}, available: ${available}`);
-    
     if (available === 0) {
       console.log(`⚠️ No reserves available for ${category}, generating on-demand`);
       return this.generateImmediateContent(category, count);
@@ -84,36 +82,26 @@ class ReserveContentManager {
     // Return reserves and remove them from pool
     const reservesToReturn = categoryReserves.splice(0, available);
     
-    console.log(`🔥 RESERVE DEBUG - Returning ${reservesToReturn.length} reserves for ${category}`);
-    reservesToReturn.forEach((reserve, i) => {
-      console.log(`🔥 RESERVE DEBUG - Reserve ${i + 1}: "${reserve.text.substring(0, 30)}..."`);
-    });
-    
-    // Trigger background replenishment if running low
+    // Trigger background replenishment if running low (with safeguards)
     if (categoryReserves.length < this.MIN_RESERVE_THRESHOLD) {
-      this.backgroundReplenish(category);
+      this.safeBackgroundReplenish(category);
     }
 
-    console.log(`🎯 Served ${available} reserve takes for ${category}`);
+    console.log(`🎯 Served ${available} ${category} takes`);
     return reservesToReturn;
   }
 
   // Get mixed content from initialized categories for "all" mode
   private async getReserveContentMix(count: number): Promise<TakeSubmission[]> {
-    console.log(`🔥 RESERVE DEBUG - getReserveContentMix called for ${count} items`);
-    
     const allReserves: TakeSubmission[] = [];
     
     // Collect reserves from initialized categories only
     for (const category of CATEGORIES) {
       const categoryReserves = this.reserves[category] || [];
       if (categoryReserves.length > 0) {
-        console.log(`🔥 RESERVE DEBUG - ${category} has ${categoryReserves.length} reserves`);
         allReserves.push(...categoryReserves);
       }
     }
-
-    console.log(`🔥 RESERVE DEBUG - Total reserves collected: ${allReserves.length}`);
 
     if (allReserves.length === 0) {
       console.log(`⚠️ No reserves available for "all", generating on-demand`);
@@ -123,8 +111,6 @@ class ReserveContentManager {
     // Shuffle and return requested count
     const shuffled = this.shuffleArray([...allReserves]);
     const selected = shuffled.slice(0, Math.min(count, shuffled.length));
-
-    console.log(`🔥 RESERVE DEBUG - Selected ${selected.length} items from ${shuffled.length} available`);
 
     // Remove selected items from their respective category reserves
     selected.forEach(selectedTake => {
@@ -141,33 +127,31 @@ class ReserveContentManager {
     // Trigger background replenishment for categories running low (only initialized ones)
     for (const category of CATEGORIES) {
       if (this.reserves[category] && this.reserves[category].length < this.MIN_RESERVE_THRESHOLD) {
-        this.backgroundReplenish(category);
+        this.safeBackgroundReplenish(category);
       }
     }
 
-    console.log(`🔥 RESERVE DEBUG - Returning ${selected.length} mixed reserves`);
+    console.log(`🎯 Mixed reserves: ${selected.length} takes from ${allReserves.length} available`);
     return selected;
   }
 
   // Generate content immediately when reserves are empty (fallback)
   private async generateImmediateContent(category: string, count: number): Promise<TakeSubmission[]> {
-    console.log(`🔥 RESERVE DEBUG - generateImmediateContent for ${category}, count: ${count}`);
     const content: TakeSubmission[] = [];
     
     try {
       const actualCategory = category === 'all' ? CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)] : category;
       const generateCount = Math.min(count, 5); // Limit to 5 for performance
       
-      console.log(`🔥 RESERVE DEBUG - Generating ${generateCount} immediate content for ${actualCategory}`);
+      console.log(`⚡ Generating ${generateCount} immediate takes for ${actualCategory}`);
       
       for (let i = 0; i < generateCount; i++) {
         const aiTake = await generateAITake(actualCategory);
         const submission = convertAITakeToSubmission(aiTake);
         content.push(submission);
-        console.log(`🔥 RESERVE DEBUG - Generated immediate content ${i + 1}: "${submission.text.substring(0, 30)}..."`);
       }
       
-      console.log(`🔥 RESERVE DEBUG - Generated ${content.length} immediate content items`);
+      console.log(`✅ Generated ${content.length} immediate takes`);
     } catch (error) {
       console.error(`❌ Failed to generate immediate content for ${category}:`, error);
     }
@@ -175,22 +159,51 @@ class ReserveContentManager {
     return content;
   }
 
+  // Safe background replenishment with loop prevention
+  private safeBackgroundReplenish(category: string): void {
+    const now = Date.now();
+    const lastReplenish = this.lastReplenishTime[category] || 0;
+    const attempts = this.replenishAttempts[category] || 0;
+    
+    // Check cooldown period
+    if (now - lastReplenish < this.REPLENISH_COOLDOWN) {
+      console.log(`⏸️ ${category} replenishment on cooldown (${Math.round((this.REPLENISH_COOLDOWN - (now - lastReplenish)) / 1000)}s remaining)`);
+      return;
+    }
+    
+    // Check max attempts
+    if (attempts >= this.MAX_REPLENISH_ATTEMPTS) {
+      console.log(`🛑 ${category} hit max replenishment attempts (${attempts}/${this.MAX_REPLENISH_ATTEMPTS})`);
+      return;
+    }
+    
+    // Proceed with replenishment
+    this.backgroundReplenish(category);
+  }
+
   // Replenish reserves in the background
   private async backgroundReplenish(category: string): Promise<void> {
     if (this.isReplenishing[category]) return; // Avoid duplicate replenishment
 
     this.isReplenishing[category] = true;
-    console.log(`🔄 Background replenishing reserves for ${category}...`);
+    this.lastReplenishTime[category] = Date.now();
+    this.replenishAttempts[category] = (this.replenishAttempts[category] || 0) + 1;
 
     try {
       const currentCount = this.reserves[category]?.length || 0;
-      const needed = this.RESERVE_SIZE - currentCount;
+      const needed = Math.min(this.RESERVE_SIZE - currentCount, 5); // Limit to max 5 per replenishment
       
       if (needed > 0) {
         await this.replenishReserves(category, needed, false);
+        console.log(`🔄 Replenished ${category}: +${needed} reserves (attempt ${this.replenishAttempts[category]})`);
+        
+        // Reset attempts on successful replenishment
+        if (this.reserves[category]?.length >= this.MIN_RESERVE_THRESHOLD) {
+          this.replenishAttempts[category] = 0;
+        }
       }
     } catch (error) {
-      console.error(`Failed to replenish reserves for ${category}:`, error);
+      console.log(`⚠️ Failed to replenish reserves for ${category}: ${error instanceof Error ? error.message : 'unknown error'}`);
     } finally {
       this.isReplenishing[category] = false;
     }
@@ -213,7 +226,7 @@ class ReserveContentManager {
           await new Promise(resolve => setTimeout(resolve, 800));
         }
       } catch (error) {
-        console.error(`Failed to generate reserve take ${i + 1} for ${category}:`, error);
+        console.log(`⚠️ Skipped reserve take ${i + 1} for ${category}: ${error instanceof Error ? error.message : 'generation failed'}`);
       }
     }
 
@@ -228,47 +241,38 @@ class ReserveContentManager {
 
   // Submit reserve content to Firebase and update items with document IDs
   public async submitReserveContent(reserveContent: TakeSubmission[]): Promise<TakeSubmission[]> {
-    console.log(`🔥 RESERVE DEBUG - submitReserveContent called with ${reserveContent.length} items`);
-    
     const currentUser = auth.currentUser;
-    console.log(`🔥 RESERVE DEBUG - Current user: ${currentUser ? currentUser.uid : 'NULL'}`);
     
     if (!currentUser) {
-      console.log('🔥 RESERVE DEBUG - No authenticated user - cannot submit reserve content');
       throw new Error('No authenticated user for reserve content submission');
     }
 
     const submittedContent: TakeSubmission[] = [];
-    let submitted = 0;
     let errors = 0;
     
     for (let i = 0; i < reserveContent.length; i++) {
       const reserve = reserveContent[i];
-      console.log(`🔥 RESERVE DEBUG - Submitting reserve ${i + 1}/${reserveContent.length}`);
       
       try {
         const docId = await submitTake(reserve, currentUser.uid, true); // true = isAIGenerated, no embedding available in reserve
-        console.log(`🔥 RESERVE DEBUG - SUCCESS ${i + 1}: ${docId}`);
         
         // Add document ID to the content
         submittedContent.push({
           ...reserve,
           id: docId
         });
-        submitted++;
       } catch (error) {
-        console.error(`🔥 RESERVE DEBUG - ERROR ${i + 1}:`, error);
+        console.log(`⚠️ Submission ${i + 1} failed: ${error instanceof Error ? error.message.substring(0, 50) : 'unknown error'}`);
         errors++;
         // Don't include failed submissions in result
       }
     }
 
-    console.log(`🔥 RESERVE DEBUG - Final result: ${submitted} submitted, ${errors} errors`);
-    
     if (submittedContent.length === 0) {
       throw new Error(`Failed to submit any reserve content: ${errors} errors occurred`);
     }
     
+    console.log(`📤 Submitted ${submittedContent.length}/${reserveContent.length} takes to Firebase`);
     return submittedContent;
   }
 

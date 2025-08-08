@@ -24,11 +24,37 @@ const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
 const OPENAI_API_URL = 'https://api.openai.com/v1/embeddings';
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 
-// Similarity thresholds
+// Global similarity thresholds
 const SIMILARITY_THRESHOLDS = {
   HIGH: 0.90,    // 90%+ = definitely duplicate, reject
   MEDIUM: 0.85,  // 85-90% = very similar, likely reject
   LOW: 0.75      // 75-85% = somewhat similar, flag for review
+};
+
+// Category-specific similarity thresholds
+// Some categories naturally have more similar takes than others
+const CATEGORY_SIMILARITY_THRESHOLDS = {
+  // High diversity categories - stricter thresholds (more unique content expected)
+  technology: 0.82,      // Tech takes can be very diverse
+  politics: 0.80,        // Political takes should be quite different
+  society: 0.82,         // Social commentary can vary widely
+  work: 0.83,           // Work experiences are diverse
+  
+  // Medium diversity categories - standard thresholds
+  entertainment: 0.85,   // Movie/TV opinions are somewhat predictable
+  travel: 0.85,         // Travel takes have common themes
+  life: 0.85,           // Life advice has patterns
+  wellness: 0.85,       // Wellness takes often similar
+  
+  // Lower diversity categories - more lenient thresholds
+  food: 0.87,           // Food takes naturally cluster (pizza, coffee, etc.)
+  pets: 0.88,           // Pet takes are often similar (cats vs dogs, etc.)
+  sports: 0.87,         // Sports takes often about same teams/players
+  relationships: 0.86,   // Dating takes have common patterns
+  environment: 0.86,    // Environmental takes often overlap
+  
+  // Default fallback
+  default: 0.85         // Standard threshold for unlisted categories
 };
 
 export class SemanticSimilarityService {
@@ -77,7 +103,14 @@ export class SemanticSimilarityService {
       return embedding;
       
     } catch (error) {
-      console.error('❌ Error generating embedding:', error);
+      console.log('⚠️ Embedding generation failed:', error instanceof Error ? error.message : 'unknown error');
+      
+      // For 503 errors or API issues, don't crash - return null and let the caller handle it
+      if (error instanceof Error && error.message.includes('503')) {
+        console.log('🔄 OpenAI embeddings service temporarily unavailable, skipping similarity check');
+        throw new Error('EMBEDDING_SERVICE_UNAVAILABLE');
+      }
+      
       throw error;
     }
   }
@@ -167,7 +200,13 @@ export class SemanticSimilarityService {
       };
       
     } catch (error) {
-      console.error('❌ Error in similarity check:', error);
+      console.log('⚠️ Similarity check failed:', error instanceof Error ? error.message : 'unknown error');
+      
+      // If it's an embedding service issue, allow content through
+      if (error instanceof Error && error.message.includes('EMBEDDING_SERVICE_UNAVAILABLE')) {
+        console.log('✅ Skipping similarity check due to service unavailability - allowing content');
+      }
+      
       // Default to allowing content if similarity check fails
       return {
         isSimilar: false,
@@ -209,6 +248,30 @@ export class SemanticSimilarityService {
   }
 
   /**
+   * Get category-specific similarity threshold
+   */
+  static getCategoryThreshold(category: string): number {
+    const normalizedCategory = category.toLowerCase().trim();
+    return CATEGORY_SIMILARITY_THRESHOLDS[normalizedCategory as keyof typeof CATEGORY_SIMILARITY_THRESHOLDS] || 
+           CATEGORY_SIMILARITY_THRESHOLDS.default;
+  }
+
+  /**
+   * Check if new text is semantically similar using category-specific threshold
+   */
+  static async checkCategorySimilarity(
+    newText: string,
+    existingEmbeddings: number[][],
+    category: string
+  ): Promise<SimilarityResult> {
+    const categoryThreshold = this.getCategoryThreshold(category);
+    
+    console.log(`🎯 Using ${category} threshold: ${(categoryThreshold * 100).toFixed(1)}%`);
+    
+    return await this.checkSimilarity(newText, existingEmbeddings, categoryThreshold);
+  }
+
+  /**
    * Analyze similarity distribution for debugging
    */
   static async analyzeSimilarityDistribution(texts: string[]): Promise<{
@@ -243,6 +306,70 @@ export class SemanticSimilarityService {
       maxSimilarity: Math.max(...similarities),
       minSimilarity: Math.min(...similarities),
       totalComparisons: similarities.length
+    };
+  }
+
+  /**
+   * Get all category thresholds for debugging/analysis
+   */
+  static getAllCategoryThresholds(): Record<string, number> {
+    return { ...CATEGORY_SIMILARITY_THRESHOLDS };
+  }
+
+  /**
+   * Test category threshold effectiveness by analyzing existing content
+   */
+  static async testCategoryThresholds(category: string, sampleTexts: string[]): Promise<{
+    category: string;
+    threshold: number;
+    recommendedThreshold: number;
+    analysis: {
+      averageSimilarity: number;
+      maxSimilarity: number;
+      totalComparisons: number;
+      duplicatesAtCurrentThreshold: number;
+      duplicatesAtRecommendedThreshold: number;
+    };
+  }> {
+    const currentThreshold = this.getCategoryThreshold(category);
+    const analysis = await this.analyzeSimilarityDistribution(sampleTexts);
+    
+    // Recommend threshold based on data
+    // Set threshold slightly above average similarity to catch true duplicates
+    const recommendedThreshold = Math.min(0.90, analysis.averageSimilarity + 0.15);
+    
+    // Count how many comparisons would be flagged as duplicates
+    const embeddings = await this.batchGenerateEmbeddings(sampleTexts);
+    let duplicatesAtCurrent = 0;
+    let duplicatesAtRecommended = 0;
+    
+    for (let i = 0; i < embeddings.length; i++) {
+      for (let j = i + 1; j < embeddings.length; j++) {
+        const similarity = this.calculateCosineSimilarity(embeddings[i], embeddings[j]);
+        if (similarity >= currentThreshold) duplicatesAtCurrent++;
+        if (similarity >= recommendedThreshold) duplicatesAtRecommended++;
+      }
+    }
+    
+    console.log(`📊 ${category} Analysis:`);
+    console.log(`   Current threshold: ${(currentThreshold * 100).toFixed(1)}%`);
+    console.log(`   Recommended threshold: ${(recommendedThreshold * 100).toFixed(1)}%`);
+    console.log(`   Average similarity: ${(analysis.averageSimilarity * 100).toFixed(1)}%`);
+    console.log(`   Max similarity: ${(analysis.maxSimilarity * 100).toFixed(1)}%`);
+    console.log(`   Duplicates found (current): ${duplicatesAtCurrent}`);
+    console.log(`   Duplicates found (recommended): ${duplicatesAtRecommended}`);
+    
+    return {
+      category,
+      threshold: currentThreshold,
+      recommendedThreshold,
+      analysis: {
+        averageSimilarity: analysis.averageSimilarity,
+        maxSimilarity: analysis.maxSimilarity,
+        totalComparisons: analysis.totalComparisons,
+        duplicatesAtCurrentThreshold: duplicatesAtCurrent,
+        duplicatesAtRecommendedThreshold: duplicatesAtRecommended
+      }
     };
   }
 }

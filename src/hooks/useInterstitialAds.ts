@@ -6,18 +6,27 @@ import { useInterstitialAd, TestIds, AdEventType } from 'react-native-google-mob
 const IS_PRODUCTION_BUILD = true;
 const isDevelopment = __DEV__;
 
-// Get the correct ad unit ID
+// One-time logging to prevent spam
+let hasLoggedAdConfig = false;
+
+// Get the correct ad unit ID  
 const getAdUnitId = (): string => {
   if (IS_PRODUCTION_BUILD && !isDevelopment) {
     const productionId = Platform.OS === 'android' 
       ? 'ca-app-pub-1745058833253836/4423842963'
       : TestIds.INTERSTITIAL; // iOS placeholder until you get the iOS ID
     
-    console.log('🚀 Hook using PRODUCTION ad ID:', productionId);
+    if (!hasLoggedAdConfig) {
+      console.log('🚀 Using PRODUCTION ad ID:', productionId);
+      hasLoggedAdConfig = true;
+    }
     return productionId;
   }
   
-  console.log('🧪 Hook using TEST ad ID:', TestIds.INTERSTITIAL);
+  if (!hasLoggedAdConfig) {
+    console.log('🧪 Using TEST ad ID:', TestIds.INTERSTITIAL);
+    hasLoggedAdConfig = true;
+  }
   return TestIds.INTERSTITIAL;
 };
 
@@ -27,21 +36,12 @@ export const useInterstitialAds = () => {
   const SWIPES_UNTIL_AD = 12;
   
   const adUnitId = getAdUnitId();
-  
-  console.log('🎯 useInterstitialAds initialized with ID:', adUnitId);
-  console.log('📱 Platform:', Platform.OS);
-  console.log('🏗️ Production mode:', IS_PRODUCTION_BUILD && !isDevelopment);
 
   // Use the correct ad unit ID
   const { isLoaded, isClosed, load, show, error } = useInterstitialAd(adUnitId);
 
   useEffect(() => {
     // Start loading the interstitial ad
-    console.log('📱 Starting to load interstitial ad...');
-    console.log('🔍 Current state - isLoaded:', isLoaded);
-    console.log('🔍 Ad ID being used:', adUnitId);
-    console.log('🏗️ Production build:', IS_PRODUCTION_BUILD);
-    console.log('🔧 Development mode:', isDevelopment);
     load();
   }, []); // Remove load dependency to prevent double loading
   
@@ -49,10 +49,7 @@ export const useInterstitialAds = () => {
     if (error) {
       console.error('❌ Interstitial ad error:', error);
       // Retry loading after 5 seconds on error
-      setTimeout(() => {
-        console.log('🔄 Retrying ad load after error...');
-        load();
-      }, 5000);
+      setTimeout(() => load(), 5000);
     }
   }, [error, load]);
   
@@ -65,7 +62,6 @@ export const useInterstitialAds = () => {
   useEffect(() => {
     if (isClosed) {
       // Reload ad after it was shown
-      console.log('🔄 Reloading interstitial ad after close');
       load();
     }
   }, [isClosed, load]);
