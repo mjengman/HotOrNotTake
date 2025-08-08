@@ -45,6 +45,7 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   rejectionReason: data.rejectionReason,
   reportCount: data.reportCount || 0,
   isAIGenerated: data.isAIGenerated || false, // AI flag
+  embedding: data.embedding, // Optional embedding field
 });
 
 // Get all approved takes
@@ -95,6 +96,13 @@ export const submitTake = async (
   isAIGenerated: boolean = false,
   embedding?: number[]
 ): Promise<string> => {
+  console.log(`🔥 SUBMIT TAKE DEBUG - Starting submission`);
+  console.log(`  Text: "${takeData.text.substring(0, 50)}..."`);
+  console.log(`  Category: ${takeData.category}`);
+  console.log(`  UserId: ${userId}`);
+  console.log(`  isAIGenerated: ${isAIGenerated}`);
+  console.log(`  Has embedding: ${embedding ? 'YES (' + embedding.length + ' dims)' : 'NO'}`);
+  
   try {
     const now = new Date();
     const takeFirestore: TakeFirestore = {
@@ -111,9 +119,13 @@ export const submitTake = async (
       approvedAt: now, // Set approval timestamp
       reportCount: 0,
       isAIGenerated, // Flag for AI content
-      embedding, // OpenAI embedding for semantic similarity (optional)
+      ...(embedding && { embedding }), // Only include embedding if it exists
     };
 
+    console.log(`🔥 SUBMIT TAKE DEBUG - Prepared Firestore document`);
+    console.log(`  Collection: ${TAKES_COLLECTION}`);
+    console.log(`  Document size: ${JSON.stringify(takeFirestore).length} chars`);
+    
     const docRef = await addDoc(collection(db, TAKES_COLLECTION), {
       ...takeFirestore,
       createdAt: Timestamp.fromDate(takeFirestore.createdAt),
@@ -121,10 +133,15 @@ export const submitTake = async (
       approvedAt: Timestamp.fromDate(takeFirestore.approvedAt!),
     });
 
+    console.log(`🔥 SUBMIT TAKE DEBUG - SUCCESS! Doc ID: ${docRef.id}`);
     return docRef.id;
   } catch (error) {
-    console.error('Error submitting take:', error);
-    throw new Error('Failed to submit take');
+    console.error(`🔥 SUBMIT TAKE DEBUG - FAILED!`);
+    console.error(`  Error type: ${error?.constructor?.name}`);
+    console.error(`  Error message: ${error?.message}`);
+    console.error(`  Error code: ${(error as any)?.code}`);
+    console.error(`  Full error:`, error);
+    throw new Error(`Failed to submit take: ${error?.message || 'Unknown error'}`);
   }
 };
 

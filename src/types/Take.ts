@@ -64,4 +64,5 @@ export interface TakeVoteFirestore {
 export interface TakeSubmission {
   text: string;
   category: string;
+  id?: string; // Firebase document ID for submitted content
 }
