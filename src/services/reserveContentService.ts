@@ -24,7 +24,7 @@ class ReserveContentManager {
   }
 
   // Initialize reserve pools for all categories
-  private async initializeReserves(): Promise<void> => {
+  private async initializeReserves(): Promise<void> {
     console.log('🔄 Initializing reserve content pools...');
     
     for (const category of CATEGORIES) {
