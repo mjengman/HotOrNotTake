@@ -133,7 +133,7 @@ export const HomeScreen: React.FC = () => {
           for (const aiTake of aiTakes) {
             try {
               const submission = convertAITakeToSubmission(aiTake);
-              await submitTake(submission, currentUser.uid, true); // true = isAIGenerated
+              await submitTake(submission, currentUser.uid, true, (aiTake as any).embedding); // true = isAIGenerated, pass embedding
               submitted++;
             } catch (error) {
               console.error('Failed to submit AI take:', error);

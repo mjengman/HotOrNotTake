@@ -177,7 +177,7 @@ class ReserveContentManager {
     let submitted = 0;
     for (const reserve of reserveContent) {
       try {
-        await submitTake(reserve, currentUser.uid, true); // true = isAIGenerated
+        await submitTake(reserve, currentUser.uid, true); // true = isAIGenerated, no embedding available in reserve
         submitted++;
       } catch (error) {
         console.error('Failed to submit reserve content:', error);

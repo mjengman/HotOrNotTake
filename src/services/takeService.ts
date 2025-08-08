@@ -92,7 +92,8 @@ export const subscribeToApprovedTakes = (callback: (takes: Take[]) => void) => {
 export const submitTake = async (
   takeData: TakeSubmission,
   userId: string,
-  isAIGenerated: boolean = false
+  isAIGenerated: boolean = false,
+  embedding?: number[]
 ): Promise<string> => {
   try {
     const now = new Date();
@@ -110,6 +111,7 @@ export const submitTake = async (
       approvedAt: now, // Set approval timestamp
       reportCount: 0,
       isAIGenerated, // Flag for AI content
+      embedding, // OpenAI embedding for semantic similarity (optional)
     };
 
     const docRef = await addDoc(collection(db, TAKES_COLLECTION), {

@@ -20,6 +20,7 @@ export interface Take {
   reportCount: number;
   isUserSubmitted?: boolean; // For UI display purposes
   isAIGenerated?: boolean; // Flag for AI-generated content
+  embedding?: number[]; // OpenAI embedding vector for semantic similarity
 }
 
 export interface TakeVote {
@@ -48,6 +49,7 @@ export interface TakeFirestore {
   rejectionReason?: string;
   reportCount: number;
   isAIGenerated?: boolean; // Flag for AI-generated content
+  embedding?: number[]; // OpenAI embedding vector for semantic similarity
 }
 
 export interface TakeVoteFirestore {

@@ -11,6 +11,7 @@ interface AIGeneratedTake {
   text: string;
   category: string;
   confidence: number; // 0-1 score for content quality
+  embedding?: number[]; // OpenAI embedding for semantic similarity
 }
 
 // OpenAI API configuration
@@ -22,45 +23,93 @@ const getCategoryPrompt = (category: string, d20Roll?: number): string => {
   return getPromptByD20(category, d20Roll);
 };
 
-// Check if content is too similar to existing takes
+// Check if content is semantically unique using embeddings
 const isContentUnique = async (newText: string, category: string): Promise<boolean> => {
   try {
     const { getApprovedTakes } = await import('./takeService');
+    const SemanticSimilarityService = (await import('./semanticSimilarity')).default;
+    
+    console.log(`🔍 Checking semantic uniqueness for "${newText.substring(0, 50)}..."`);
+    
     const existingTakes = await getApprovedTakes();
     
-    // Filter to same category
+    // Filter to same category for more relevant comparison
     const categoryTakes = existingTakes.filter(take => take.category === category);
     
-    // Convert to lowercase for comparison
-    const newTextLower = newText.toLowerCase();
+    if (categoryTakes.length === 0) {
+      console.log('✅ No existing takes in category, content is unique');
+      return true;
+    }
     
-    // Check for exact matches or very similar content
+    // Get embeddings from existing takes (if available) or their text
+    const existingEmbeddings: number[][] = [];
+    const textsNeedingEmbedding: string[] = [];
+    
     for (const take of categoryTakes) {
-      const existingText = take.text.toLowerCase();
-      
-      // Exact match check
-      if (existingText === newTextLower) {
-        return false;
-      }
-      
-      // Similar content check (shared key phrases)
-      const newWords = newTextLower.split(/\s+/).filter(w => w.length > 3);
-      const existingWords = existingText.split(/\s+/).filter(w => w.length > 3);
-      
-      // If 60%+ of meaningful words overlap, consider it too similar
-      const sharedWords = newWords.filter(word => existingWords.includes(word));
-      const similarity = sharedWords.length / Math.max(newWords.length, 1);
-      
-      if (similarity > 0.6) {
-        console.log(`⚠️ Content too similar to existing: "${take.text}"`);
-        return false;
+      if (take.embedding && take.embedding.length > 0) {
+        // Use existing embedding if available
+        existingEmbeddings.push(take.embedding);
+      } else {
+        // Need to generate embedding for this text
+        textsNeedingEmbedding.push(take.text);
       }
     }
     
-    return true;
+    // Generate embeddings for texts that don't have them
+    if (textsNeedingEmbedding.length > 0) {
+      console.log(`🔄 Generating embeddings for ${textsNeedingEmbedding.length} existing takes...`);
+      const newEmbeddings = await SemanticSimilarityService.batchGenerateEmbeddings(textsNeedingEmbedding);
+      existingEmbeddings.push(...newEmbeddings);
+    }
+    
+    if (existingEmbeddings.length === 0) {
+      console.log('✅ No embeddings available, content considered unique');
+      return true;
+    }
+    
+    // Check semantic similarity
+    const threshold = SemanticSimilarityService.getThreshold('MEDIUM'); // 85% threshold
+    const result = await SemanticSimilarityService.checkSimilarity(
+      newText, 
+      existingEmbeddings, 
+      threshold
+    );
+    
+    return !result.isSimilar;
+    
   } catch (error) {
-    console.error('Error checking content uniqueness:', error);
-    return true; // Default to allowing content if check fails
+    console.error('❌ Error checking semantic uniqueness:', error);
+    console.log('⚠️ Falling back to word-based similarity check...');
+    
+    // Fallback to old word-based method if embedding fails
+    try {
+      const { getApprovedTakes } = await import('./takeService');
+      const existingTakes = await getApprovedTakes();
+      const categoryTakes = existingTakes.filter(take => take.category === category);
+      const newTextLower = newText.toLowerCase();
+      
+      for (const take of categoryTakes) {
+        const existingText = take.text.toLowerCase();
+        if (existingText === newTextLower) {
+          return false;
+        }
+        
+        const newWords = newTextLower.split(/\s+/).filter(w => w.length > 3);
+        const existingWords = existingText.split(/\s+/).filter(w => w.length > 3);
+        const sharedWords = newWords.filter(word => existingWords.includes(word));
+        const similarity = sharedWords.length / Math.max(newWords.length, 1);
+        
+        if (similarity > 0.6) {
+          console.log(`⚠️ Fallback: Content too similar to existing: "${take.text}"`);
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (fallbackError) {
+      console.error('❌ Fallback similarity check also failed:', fallbackError);
+      return true; // Default to allowing content if all checks fail
+    }
   }
 };
 
@@ -236,10 +285,22 @@ Return ONLY the hot take text, nothing else.`;
         console.log(`🎭 Personality Details: ${personalityContext.specificReference || personalityContext.archetype || 'unknown'}`);
       }
 
+      // Generate embedding for the final text for future similarity checks
+      let embedding: number[] | undefined = undefined;
+      try {
+        const SemanticSimilarityService = (await import('./semanticSimilarity')).default;
+        embedding = await SemanticSimilarityService.generateEmbedding(finalText);
+        console.log(`🔍 Generated embedding for new take: ${embedding.length} dimensions`);
+      } catch (embeddingError) {
+        console.error('⚠️ Failed to generate embedding for new take:', embeddingError);
+        // Continue without embedding - it's not critical for the take generation
+      }
+
       return {
         text: finalText,
         category: selectedCategory,
-        confidence
+        confidence,
+        embedding
       };
 
     } catch (error) {
@@ -351,7 +412,7 @@ export const autoSeedAITakes = async (targetCount: number = 10): Promise<number>
     for (const aiTake of aiTakes) {
       try {
         const submission = convertAITakeToSubmission(aiTake);
-        await submitTake(submission, currentUser.uid);
+        await submitTake(submission, currentUser.uid, true, aiTake.embedding); // true = isAIGenerated, pass embedding
         submitted++;
         console.log(`✅ Submitted AI take: "${aiTake.text}" (${aiTake.category})`);
       } catch (error) {
