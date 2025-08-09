@@ -371,16 +371,24 @@ export const getSmoothContent = async (
 ): Promise<TakeSubmission[]> => {
   console.log(`🔥 SMOOTH CONTENT - Starting getSmoothContent for ${category}, count: ${count}`);
   
+  // DEBUG: Import Alert for device debugging
+  const { Alert } = require('react-native');
+  Alert.alert('DEBUG SMOOTH', `getSmoothContent called for ${category}`);
+  
   try {
     // Skip delay - it was causing issues on device
     // console.log(`🔥 SMOOTH CONTENT - Adding natural delay of ${Math.round(naturalDelayMs)}ms`);
     // await new Promise(resolve => setTimeout(resolve, naturalDelayMs));
     // console.log(`🔥 SMOOTH CONTENT - Delay complete, proceeding...`);
     
+    Alert.alert('DEBUG SMOOTH', 'About to call getReserveContent...');
+    
     // Get reserve content
     console.log(`🔥 SMOOTH CONTENT - Getting reserve content...`);
     const reserves = await reserveManager.getReserveContent(category, count);
     console.log(`🔥 SMOOTH CONTENT - Got reserves response: ${reserves.length} items`);
+    
+    Alert.alert('DEBUG SMOOTH', `Got ${reserves.length} reserves from manager`);
   
     if (reserves.length === 0) {
       console.log(`⚠️ SMOOTH CONTENT - No reserves available, returning empty array`);

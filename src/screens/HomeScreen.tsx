@@ -101,13 +101,22 @@ export const HomeScreen: React.FC = () => {
   const handleLoadMore = async () => {
     console.log('🔄 Loading more content for category:', selectedCategory);
     
+    // DEBUG: Alert at start
+    Alert.alert('DEBUG', `Starting pull-to-refresh for category: ${selectedCategory}`);
+    
     try {
+      Alert.alert('DEBUG', 'Step 1: Importing reserve content service...');
+      
       // Use the new reserve content system for smooth UX
       const { getSmoothContent } = await import('../services/reserveContentService');
+      
+      Alert.alert('DEBUG', 'Step 2: Calling getSmoothContent...');
       
       // Get reserve content with natural delay (2-4 seconds)
       // This happens in background - reserves are submitted to Firebase automatically
       const newTakes = await getSmoothContent(selectedCategory, 20);
+      
+      Alert.alert('DEBUG', `Step 3: Got ${newTakes.length} takes back from getSmoothContent`);
       
       console.log(`✅ Successfully loaded ${newTakes.length} reserve takes for ${selectedCategory}`);
       
