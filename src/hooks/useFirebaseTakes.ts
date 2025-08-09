@@ -117,20 +117,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     return result;
   };
 
-  // Helper function to filter out interacted takes and apply category filter
-  const filterTakes = useCallback((allTakes: Take[]) => {
-    let filteredTakes = allTakes.filter(take => !interactedTakeIds.includes(take.id));
-    
-    // Apply category filter if specified (skip 'all' category)
-    if (category && category !== 'all') {
-      filteredTakes = filteredTakes.filter(take => take.category === category);
-    } else if (category === 'all') {
-      // Ensure variety when showing all categories
-      filteredTakes = ensureCategoryVariety(filteredTakes);
-    }
-    
-    return filteredTakes;
-  }, [interactedTakeIds, category]);
+  // Filtering logic is now inlined in effects to prevent circular dependencies
 
   // Load user's interaction history
   useEffect(() => {
@@ -194,24 +181,43 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     };
   }, [user]); // Remove category from dependencies
 
-  // Apply category filtering and preserve local state
+  // Apply category filtering and preserve local state (with debouncing)
   useEffect(() => {
     if (allTakes.length === 0) {
       setTakes([]);
       return;
     }
 
-    console.log(`🔄 Filtering ${allTakes.length} takes for category: ${category}`);
-    
-    // Clear cache to ensure fresh data when switching categories
-    categoryStateCache.clear();
-    
-    // Apply fresh filtering
-    const filteredTakes = filterTakes(allTakes);
-    setTakes(filteredTakes);
-    
-    console.log(`✅ Filtered to ${filteredTakes.length} takes for category: ${category}`);
-  }, [allTakes, category, interactedTakeIds, filterTakes]);
+    // Debounce rapid successive calls (common during swipes)
+    const timeoutId = setTimeout(() => {
+      console.log(`🔄 Filtering ${allTakes.length} takes for category: ${category}`);
+      console.log(`🎯 User has interacted with ${interactedTakeIds.length} takes total`);
+      
+      // Clear cache to ensure fresh data when switching categories
+      categoryStateCache.clear();
+      
+      // Apply fresh filtering (inline to avoid dependency issues)
+      let filteredTakes = allTakes.filter(take => !interactedTakeIds.includes(take.id));
+      const removedByInteraction = allTakes.length - filteredTakes.length;
+      if (removedByInteraction > 0) {
+        console.log(`⚠️ Filtered out ${removedByInteraction} takes due to prior interactions`);
+      }
+      
+      // Apply category filter if specified (skip 'all' category)
+      if (category && category !== 'all') {
+        filteredTakes = filteredTakes.filter(take => take.category === category);
+      } else if (category === 'all') {
+        // Ensure variety when showing all categories
+        filteredTakes = ensureCategoryVariety(filteredTakes);
+      }
+      
+      setTakes(filteredTakes);
+      
+      console.log(`✅ Filtered to ${filteredTakes.length} takes for category: ${category}`);
+    }, 50); // 50ms debounce to prevent double calls
+
+    return () => clearTimeout(timeoutId);
+  }, [allTakes, category, interactedTakeIds]);
 
   // Submit a vote
   const handleSubmitVote = useCallback(async (
@@ -229,21 +235,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Update user's vote count
       await incrementUserVoteCount(user.uid);
       
-      // Add take to interacted list and remove from current takes
+      // Add take to interacted list (filtering effect will handle takes update)
       setInteractedTakeIds(prev => [...prev, takeId]);
-      setTakes(prevTakes => {
-        // Remove the voted card (should be the first one)
-        const remainingTakes = prevTakes.filter(take => take.id !== takeId);
-        
-        // Update cache for current category
-        categoryStateCache.set(category, {
-          takes: remainingTakes,
-          currentIndex: 0,
-          interactedIds: [...interactedTakeIds, takeId]
-        });
-        
-        return remainingTakes;
-      });
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to submit vote');
     }
@@ -259,21 +252,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Record the skip in Firebase
       await skipTake(takeId, user.uid);
       
-      // Add take to interacted list and remove from current takes
+      // Add take to interacted list (filtering effect will handle takes update)
       setInteractedTakeIds(prev => [...prev, takeId]);
-      setTakes(prevTakes => {
-        // Remove the skipped card (should be the first one)
-        const remainingTakes = prevTakes.filter(take => take.id !== takeId);
-        
-        // Update cache for current category
-        categoryStateCache.set(category, {
-          takes: remainingTakes,
-          currentIndex: 0,
-          interactedIds: [...interactedTakeIds, takeId]
-        });
-        
-        return remainingTakes;
-      });
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to skip take');
     }
@@ -325,8 +305,16 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Clear cache for current category to force refresh
       categoryStateCache.delete(category);
       
-      // Apply filtering with fresh data
-      const filteredFreshTakes = filterTakes(freshTakes);
+      // Apply filtering with fresh data (inline to match main effect)
+      let filteredFreshTakes = freshTakes.filter(take => !interactedTakeIds.includes(take.id));
+      
+      // Apply category filter if specified (skip 'all' category)
+      if (category && category !== 'all') {
+        filteredFreshTakes = filteredFreshTakes.filter(take => take.category === category);
+      } else if (category === 'all') {
+        // Ensure variety when showing all categories
+        filteredFreshTakes = ensureCategoryVariety(filteredFreshTakes);
+      }
       
       // Smart refresh: append new takes without disrupting current view
       setTakes(currentTakes => {
@@ -363,7 +351,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     } finally {
       setLoading(false);
     }
-  }, [filterTakes, category, interactedTakeIds]);
+  }, [category, interactedTakeIds]);
 
   return {
     takes,

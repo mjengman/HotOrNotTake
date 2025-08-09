@@ -11,7 +11,6 @@ interface AIGeneratedTake {
   text: string;
   category: string;
   confidence: number; // 0-1 score for content quality
-  embedding?: number[]; // OpenAI embedding for semantic similarity
 }
 
 // OpenAI API configuration
@@ -117,97 +116,67 @@ const calculateEngagementScore = (text: string): number => {
   return Math.min(score, 1.0);
 };
 
-// Check if content is semantically unique using embeddings
+// Simple, fast text-based duplicate detection  
 const isContentUnique = async (newText: string, category: string): Promise<boolean> => {
   try {
     const { getApprovedTakes } = await import('./takeService');
-    const SemanticSimilarityService = (await import('./semanticSimilarity')).default;
     
-    console.log(`🔍 Checking semantic uniqueness for "${newText.substring(0, 50)}..."`);
+    console.log(`🔍 Checking text uniqueness for "${newText.substring(0, 50)}..."`);
     
     const existingTakes = await getApprovedTakes();
     
-    // Filter to same category and limit to most recent 30 takes for performance
+    // Filter to same category and limit to most recent 50 takes
     const categoryTakes = existingTakes
       .filter(take => take.category === category)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()) // Most recent first
-      .slice(0, 30); // Only compare against last 30 takes
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 50);
     
     if (categoryTakes.length === 0) {
       console.log('✅ No existing takes in category, content is unique');
       return true;
     }
     
-    console.log(`🎯 Comparing against ${categoryTakes.length} recent takes (limited for performance)`);
+    console.log(`🎯 Comparing against ${categoryTakes.length} recent takes`);
     
-    // Get embeddings from existing takes (if available) or their text
-    const existingEmbeddings: number[][] = [];
-    const textsNeedingEmbedding: string[] = [];
+    // Normalize text for comparison
+    const normalizeText = (text: string): string => {
+      return text.toLowerCase()
+        .replace(/[.,!?;:"'()\-]/g, '') // Remove punctuation
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+    };
     
-    for (const take of categoryTakes) {
-      if (take.embedding && take.embedding.length > 0) {
-        // Use existing embedding if available
-        existingEmbeddings.push(take.embedding);
-      } else {
-        // Need to generate embedding for this text
-        textsNeedingEmbedding.push(take.text);
+    const normalizedNewText = normalizeText(newText);
+    const words = normalizedNewText.split(' ');
+    
+    // Check for exact duplicates or very similar content
+    for (const existingTake of categoryTakes) {
+      const normalizedExisting = normalizeText(existingTake.text);
+      
+      // Exact match check
+      if (normalizedExisting === normalizedNewText) {
+        console.log(`❌ Exact duplicate found: "${existingTake.text}"`);
+        return false;
+      }
+      
+      // High word overlap check (>75% words in common)
+      const existingWords = normalizedExisting.split(' ');
+      const commonWords = words.filter(word => existingWords.includes(word));
+      const similarity = commonWords.length / Math.max(words.length, existingWords.length);
+      
+      if (similarity > 0.75) {
+        console.log(`❌ High similarity (${(similarity * 100).toFixed(1)}%) with: "${existingTake.text}"`);
+        return false;
       }
     }
     
-    // Generate embeddings for texts that don't have them
-    if (textsNeedingEmbedding.length > 0) {
-      console.log(`🔄 Generating embeddings for ${textsNeedingEmbedding.length} existing takes...`);
-      const newEmbeddings = await SemanticSimilarityService.batchGenerateEmbeddings(textsNeedingEmbedding);
-      existingEmbeddings.push(...newEmbeddings);
-    }
-    
-    if (existingEmbeddings.length === 0) {
-      console.log('✅ No embeddings available, content considered unique');
-      return true;
-    }
-    
-    // Check semantic similarity using category-specific threshold
-    const result = await SemanticSimilarityService.checkCategorySimilarity(
-      newText, 
-      existingEmbeddings, 
-      category
-    );
-    
-    return !result.isSimilar;
+    console.log('✅ Content appears unique based on text comparison');
+    return true;
     
   } catch (error) {
-    console.log('⚠️ Semantic similarity check failed:', error instanceof Error ? error.message : 'unknown error');
-    console.log('🔄 Falling back to word-based similarity check...');
-    
-    // Fallback to old word-based method if embedding fails
-    try {
-      const { getApprovedTakes } = await import('./takeService');
-      const existingTakes = await getApprovedTakes();
-      const categoryTakes = existingTakes.filter(take => take.category === category);
-      const newTextLower = newText.toLowerCase();
-      
-      for (const take of categoryTakes) {
-        const existingText = take.text.toLowerCase();
-        if (existingText === newTextLower) {
-          return false;
-        }
-        
-        const newWords = newTextLower.split(/\s+/).filter(w => w.length > 3);
-        const existingWords = existingText.split(/\s+/).filter(w => w.length > 3);
-        const sharedWords = newWords.filter(word => existingWords.includes(word));
-        const similarity = sharedWords.length / Math.max(newWords.length, 1);
-        
-        if (similarity > 0.6) {
-          console.log(`⚠️ Fallback: Content too similar to existing: "${take.text}"`);
-          return false;
-        }
-      }
-      
-      return true;
-    } catch (fallbackError) {
-      console.log('⚠️ Fallback similarity check also failed:', fallbackError instanceof Error ? fallbackError.message : 'unknown error');
-      return true; // Default to allowing content if all checks fail
-    }
+    console.error('❌ Error checking content uniqueness:', error);
+    // Fail open - allow content if we can't check
+    return true;
   }
 };
 
@@ -405,22 +374,10 @@ Return ONLY the hot take text, nothing else.`;
       console.log(`✅ SUCCESS (attempt ${attempt}): "${finalText}"${personalityContext.isPersonalityMode ? ` [${personalityContext.specificReference || personalityContext.archetype}]` : ''}`);
       console.log(`📊 Engagement: ${engagementScore.toFixed(2)} | Confidence: ${confidence.toFixed(2)}`);
 
-      // Generate embedding for the final text for future similarity checks
-      let embedding: number[] | undefined = undefined;
-      try {
-        const SemanticSimilarityService = (await import('./semanticSimilarity')).default;
-        embedding = await SemanticSimilarityService.generateEmbedding(finalText);
-        console.log(`🔍 Generated embedding for new take: ${embedding.length} dimensions`);
-      } catch (embeddingError) {
-        console.log('⚠️ Skipping embedding generation:', embeddingError instanceof Error ? embeddingError.message : 'service unavailable');
-        // Continue without embedding - it's not critical for the take generation
-      }
-
       return {
         text: finalText,
         category: selectedCategory,
-        confidence,
-        embedding
+        confidence
       };
 
     } catch (error) {
@@ -487,7 +444,6 @@ export const generateMultipleAITakes = async (count: number = 5): Promise<AIGene
 export const convertAITakeToSubmission = (aiTake: AIGeneratedTake): TakeSubmission => ({
   text: aiTake.text,
   category: aiTake.category,
-  embedding: aiTake.embedding, // Include the embedding that was generated!
 });
 
 // Auto-seed the database with AI takes when running low
@@ -522,7 +478,7 @@ export const autoSeedAITakes = async (targetCount: number = 10): Promise<number>
     for (const aiTake of aiTakes) {
       try {
         const submission = convertAITakeToSubmission(aiTake);
-        await submitTake(submission, currentUser.uid, true, aiTake.embedding); // true = isAIGenerated, pass embedding
+        await submitTake(submission, currentUser.uid, true); // true = isAIGenerated
         submitted++;
         console.log(`✅ Submitted AI take: "${aiTake.text}" (${aiTake.category})`);
       } catch (error) {
@@ -617,362 +573,5 @@ export const testEngagementScoring = (): void => {
   });
 };
 
-// Test category-specific similarity thresholds
-export const testCategoryThresholds = async (): Promise<void> => {
-  console.log('🎯 Testing category-specific similarity thresholds:');
-  
-  const SemanticSimilarityService = (await import('./semanticSimilarity')).default;
-  const thresholds = SemanticSimilarityService.getAllCategoryThresholds();
-  
-  console.log('\n📊 Category Threshold Settings:');
-  
-  // Group by threshold level for better visualization
-  const groupedThresholds = Object.entries(thresholds).reduce((acc, [category, threshold]) => {
-    const level = threshold <= 0.82 ? 'STRICT' : threshold <= 0.85 ? 'STANDARD' : 'LENIENT';
-    if (!acc[level]) acc[level] = [];
-    acc[level].push({ category, threshold });
-    return acc;
-  }, {} as { [key: string]: { category: string; threshold: number }[] });
-  
-  Object.entries(groupedThresholds).forEach(([level, categories]) => {
-    console.log(`\n🎯 ${level} (${categories.length} categories):`);
-    categories
-      .sort((a, b) => a.threshold - b.threshold)
-      .forEach(({ category, threshold }) => {
-        console.log(`   • ${category}: ${(threshold * 100).toFixed(1)}%`);
-      });
-  });
-  
-  console.log('\n💡 Threshold Logic:');
-  console.log('   • STRICT (80-82%): High diversity categories (tech, politics, society)');
-  console.log('   • STANDARD (85%): Medium diversity categories (entertainment, travel, life)');
-  console.log('   • LENIENT (86-88%): Lower diversity categories (food, pets, sports)');
-  
-  // Test some example category lookups
-  const testCategories = ['technology', 'food', 'politics', 'pets', 'nonexistent'];
-  console.log('\n🧪 Test Category Lookups:');
-  testCategories.forEach(category => {
-    const threshold = SemanticSimilarityService.getCategoryThreshold(category);
-    const level = threshold <= 0.82 ? 'STRICT' : threshold <= 0.85 ? 'STANDARD' : 'LENIENT';
-    console.log(`   • ${category}: ${(threshold * 100).toFixed(1)}% (${level})`);
-  });
-};
 
-// Comprehensive testing function for take quality
-export const runTakeQualityTest = async (category: string = 'food', testCount: number = 5): Promise<void> => {
-  console.log('🧪 COMPREHENSIVE TAKE QUALITY TEST');
-  console.log('=====================================');
-  console.log(`Category: ${category} | Test Count: ${testCount}`);
-  console.log('');
-
-  const results = {
-    generated: 0,
-    failed: 0,
-    personalityModeCount: 0,
-    specificReferenceCount: 0,
-    archetypeCount: {} as Record<string, number>,
-    engagementScores: [] as number[],
-    confidenceScores: [] as number[],
-    lengthStats: [] as number[],
-    uniquenessResults: [] as boolean[],
-    totalAttempts: 0
-  };
-
-  const SemanticSimilarityService = (await import('./semanticSimilarity')).default;
-  const categoryThreshold = SemanticSimilarityService.getCategoryThreshold(category);
-  
-  console.log(`🎯 Using ${category} similarity threshold: ${(categoryThreshold * 100).toFixed(1)}%`);
-  console.log('');
-
-  for (let i = 1; i <= testCount; i++) {
-    console.log(`📝 Test ${i}/${testCount}:`);
-    console.log('------------------------');
-    
-    try {
-      // Generate AI take with full pipeline
-      const startTime = Date.now();
-      const aiTake = await generateAITake(category, 3); // Allow up to 3 retries
-      const endTime = Date.now();
-      
-      // Track successful generation
-      results.generated++;
-      results.totalAttempts += 1; // This would need to be tracked from within generateAITake for accuracy
-      
-      // Analyze the generated take
-      const engagementScore = calculateEngagementScore(aiTake.text);
-      results.engagementScores.push(engagementScore);
-      results.confidenceScores.push(aiTake.confidence);
-      results.lengthStats.push(aiTake.text.length);
-      
-      // Test personality detection
-      const { generatePersonalityContext } = await import('./personalityEngine');
-      const personalityContext = generatePersonalityContext(category);
-      
-      if (personalityContext.isPersonalityMode) {
-        results.personalityModeCount++;
-        if (personalityContext.specificReference) {
-          results.specificReferenceCount++;
-        } else if (personalityContext.archetype) {
-          results.archetypeCount[personalityContext.archetype] = 
-            (results.archetypeCount[personalityContext.archetype] || 0) + 1;
-        }
-      }
-      
-      // Test uniqueness
-      const { getApprovedTakes } = await import('./takeService');
-      const existingTakes = await getApprovedTakes();
-      const categoryTakes = existingTakes.filter(take => take.category === category);
-      
-      let isUnique = true;
-      if (categoryTakes.length > 0) {
-        const existingTexts = categoryTakes.map(take => take.text);
-        const similarity = await SemanticSimilarityService.analyzeSimilarityDistribution([...existingTexts, aiTake.text]);
-        isUnique = similarity.maxSimilarity < categoryThreshold;
-      }
-      results.uniquenessResults.push(isUnique);
-      
-      // Output results for this take
-      console.log(`✅ Generated: "${aiTake.text}"`);
-      console.log(`   Length: ${aiTake.text.length} chars`);
-      console.log(`   Engagement: ${engagementScore.toFixed(2)} | Confidence: ${aiTake.confidence.toFixed(2)}`);
-      console.log(`   Personality: ${personalityContext.isPersonalityMode ? 'YES' : 'NO'}${personalityContext.isPersonalityMode ? ` (${personalityContext.specificReference || personalityContext.archetype})` : ''}`);
-      console.log(`   Unique: ${isUnique ? 'YES' : 'NO'}`);
-      console.log(`   Generation time: ${endTime - startTime}ms`);
-      
-      // Small delay between tests
-      if (i < testCount) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
-    } catch (error) {
-      console.log(`❌ Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      results.failed++;
-    }
-    
-    console.log('');
-  }
-
-  // Final summary
-  console.log('🏁 FINAL TEST SUMMARY');
-  console.log('====================');
-  console.log(`Success Rate: ${results.generated}/${testCount} (${(results.generated / testCount * 100).toFixed(1)}%)`);
-  console.log(`Failed: ${results.failed}`);
-  console.log('');
-  
-  if (results.generated > 0) {
-    // Engagement statistics
-    const avgEngagement = results.engagementScores.reduce((a, b) => a + b, 0) / results.engagementScores.length;
-    const minEngagement = Math.min(...results.engagementScores);
-    const maxEngagement = Math.max(...results.engagementScores);
-    
-    console.log('📊 ENGAGEMENT ANALYSIS:');
-    console.log(`   Average: ${avgEngagement.toFixed(2)} | Min: ${minEngagement.toFixed(2)} | Max: ${maxEngagement.toFixed(2)}`);
-    console.log(`   Above 0.2 threshold: ${results.engagementScores.filter(s => s >= 0.2).length}/${results.engagementScores.length}`);
-    console.log('');
-    
-    // Confidence statistics
-    const avgConfidence = results.confidenceScores.reduce((a, b) => a + b, 0) / results.confidenceScores.length;
-    const minConfidence = Math.min(...results.confidenceScores);
-    const maxConfidence = Math.max(...results.confidenceScores);
-    
-    console.log('🎯 CONFIDENCE ANALYSIS:');
-    console.log(`   Average: ${avgConfidence.toFixed(2)} | Min: ${minConfidence.toFixed(2)} | Max: ${maxConfidence.toFixed(2)}`);
-    console.log('');
-    
-    // Length statistics
-    const avgLength = results.lengthStats.reduce((a, b) => a + b, 0) / results.lengthStats.length;
-    const minLength = Math.min(...results.lengthStats);
-    const maxLength = Math.max(...results.lengthStats);
-    
-    console.log('📏 LENGTH ANALYSIS:');
-    console.log(`   Average: ${avgLength.toFixed(1)} chars | Min: ${minLength} | Max: ${maxLength}`);
-    console.log(`   Within 20-130 range: ${results.lengthStats.filter(l => l >= 20 && l <= 130).length}/${results.lengthStats.length}`);
-    console.log('');
-    
-    // Personality statistics
-    const personalityRate = (results.personalityModeCount / results.generated * 100).toFixed(1);
-    const specificRate = (results.specificReferenceCount / results.generated * 100).toFixed(1);
-    
-    console.log('🎭 PERSONALITY ANALYSIS:');
-    console.log(`   Personality activation: ${results.personalityModeCount}/${results.generated} (${personalityRate}%)`);
-    console.log(`   Specific references: ${results.specificReferenceCount} (${specificRate}%)`);
-    
-    if (Object.keys(results.archetypeCount).length > 0) {
-      console.log('   Archetypes used:');
-      Object.entries(results.archetypeCount).forEach(([archetype, count]) => {
-        console.log(`     • ${archetype}: ${count} times`);
-      });
-    }
-    console.log('');
-    
-    // Uniqueness statistics
-    const uniqueCount = results.uniquenessResults.filter(u => u).length;
-    const uniqueRate = (uniqueCount / results.uniquenessResults.length * 100).toFixed(1);
-    
-    console.log('🔍 UNIQUENESS ANALYSIS:');
-    console.log(`   Unique takes: ${uniqueCount}/${results.uniquenessResults.length} (${uniqueRate}%)`);
-    console.log(`   Similarity threshold used: ${(categoryThreshold * 100).toFixed(1)}%`);
-    console.log('');
-    
-    // Overall quality assessment
-    const qualityMetrics = {
-      engagementPass: results.engagementScores.filter(s => s >= 0.2).length / results.engagementScores.length,
-      lengthPass: results.lengthStats.filter(l => l >= 20 && l <= 130).length / results.lengthStats.length,
-      uniquenessPass: uniqueCount / results.uniquenessResults.length,
-      personalityRate: results.personalityModeCount / results.generated
-    };
-    
-    const overallQuality = (qualityMetrics.engagementPass * 0.3 + 
-                           qualityMetrics.lengthPass * 0.2 + 
-                           qualityMetrics.uniquenessPass * 0.3 + 
-                           qualityMetrics.personalityRate * 0.2) * 100;
-    
-    console.log('🏆 OVERALL QUALITY SCORE:');
-    console.log(`   ${overallQuality.toFixed(1)}% (Weighted: Engagement 30%, Uniqueness 30%, Length 20%, Personality 20%)`);
-    
-    const grade = overallQuality >= 90 ? 'A+' : 
-                  overallQuality >= 80 ? 'A' : 
-                  overallQuality >= 70 ? 'B' : 
-                  overallQuality >= 60 ? 'C' : 'D';
-    
-    console.log(`   Grade: ${grade}`);
-  }
-  
-  console.log('');
-  console.log('✨ Test completed!');
-};
-
-// Quick take quality test for faster validation
-export const quickQualityTest = async (category: string = 'food'): Promise<{
-  success: boolean;
-  take: string;
-  engagement: number;
-  confidence: number;
-  length: number;
-  personality: boolean;
-  unique: boolean;
-  generationTime: number;
-}> => {
-  console.log(`🚀 Quick quality test for ${category}:`);
-  
-  const startTime = Date.now();
-  
-  try {
-    // Generate single take
-    const aiTake = await generateAITake(category);
-    const endTime = Date.now();
-    
-    // Quick analysis
-    const engagementScore = calculateEngagementScore(aiTake.text);
-    const { generatePersonalityContext } = await import('./personalityEngine');
-    const personalityContext = generatePersonalityContext(category);
-    
-    // Basic uniqueness check (simplified)
-    const { getApprovedTakes } = await import('./takeService');
-    const existingTakes = await getApprovedTakes();
-    const categoryTakes = existingTakes.filter(take => take.category === category);
-    const isUnique = !categoryTakes.some(take => take.text.toLowerCase() === aiTake.text.toLowerCase());
-    
-    const result = {
-      success: true,
-      take: aiTake.text,
-      engagement: engagementScore,
-      confidence: aiTake.confidence,
-      length: aiTake.text.length,
-      personality: personalityContext.isPersonalityMode,
-      unique: isUnique,
-      generationTime: endTime - startTime
-    };
-    
-    // Log results
-    console.log(`✅ "${result.take}"`);
-    console.log(`   📊 Engagement: ${result.engagement.toFixed(2)} | Confidence: ${result.confidence.toFixed(2)}`);
-    console.log(`   📏 Length: ${result.length} chars | 🎭 Personality: ${result.personality ? 'YES' : 'NO'}`);
-    console.log(`   🔍 Unique: ${result.unique ? 'YES' : 'NO'} | ⏱️ Time: ${result.generationTime}ms`);
-    
-    return result;
-    
-  } catch (error) {
-    console.log(`❌ Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    return {
-      success: false,
-      take: '',
-      engagement: 0,
-      confidence: 0,
-      length: 0,
-      personality: false,
-      unique: false,
-      generationTime: Date.now() - startTime
-    };
-  }
-};
-
-// Batch test multiple categories for comparison
-export const batchCategoryTest = async (categories: string[] = ['food', 'technology', 'politics', 'pets'], testsPerCategory: number = 3): Promise<void> => {
-  console.log('🎯 BATCH CATEGORY QUALITY TEST');
-  console.log('===============================');
-  console.log(`Categories: ${categories.join(', ')} | Tests per category: ${testsPerCategory}`);
-  console.log('');
-  
-  const categoryResults: Record<string, {
-    successRate: number;
-    avgEngagement: number;
-    avgConfidence: number;
-    avgLength: number;
-    personalityRate: number;
-    uniqueRate: number;
-    avgGenerationTime: number;
-  }> = {};
-  
-  for (const category of categories) {
-    console.log(`🔍 Testing ${category}...`);
-    
-    const results: Array<Awaited<ReturnType<typeof quickQualityTest>>> = [];
-    
-    for (let i = 0; i < testsPerCategory; i++) {
-      const result = await quickQualityTest(category);
-      results.push(result);
-      
-      // Small delay between tests
-      if (i < testsPerCategory - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    }
-    
-    // Calculate statistics for this category
-    const successful = results.filter(r => r.success);
-    if (successful.length > 0) {
-      categoryResults[category] = {
-        successRate: successful.length / results.length,
-        avgEngagement: successful.reduce((sum, r) => sum + r.engagement, 0) / successful.length,
-        avgConfidence: successful.reduce((sum, r) => sum + r.confidence, 0) / successful.length,
-        avgLength: successful.reduce((sum, r) => sum + r.length, 0) / successful.length,
-        personalityRate: successful.filter(r => r.personality).length / successful.length,
-        uniqueRate: successful.filter(r => r.unique).length / successful.length,
-        avgGenerationTime: successful.reduce((sum, r) => sum + r.generationTime, 0) / successful.length
-      };
-    } else {
-      categoryResults[category] = {
-        successRate: 0, avgEngagement: 0, avgConfidence: 0, avgLength: 0,
-        personalityRate: 0, uniqueRate: 0, avgGenerationTime: 0
-      };
-    }
-    
-    console.log('');
-  }
-  
-  // Summary comparison
-  console.log('📊 CATEGORY COMPARISON SUMMARY');
-  console.log('==============================');
-  
-  categories.forEach(category => {
-    const stats = categoryResults[category];
-    console.log(`\n🎯 ${category.toUpperCase()}:`);
-    console.log(`   Success Rate: ${(stats.successRate * 100).toFixed(1)}%`);
-    console.log(`   Avg Engagement: ${stats.avgEngagement.toFixed(2)} | Avg Confidence: ${stats.avgConfidence.toFixed(2)}`);
-    console.log(`   Avg Length: ${stats.avgLength.toFixed(0)} chars | Personality Rate: ${(stats.personalityRate * 100).toFixed(1)}%`);
-    console.log(`   Unique Rate: ${(stats.uniqueRate * 100).toFixed(1)}% | Avg Time: ${stats.avgGenerationTime.toFixed(0)}ms`);
-  });
-  
-  console.log('\n✨ Batch testing completed!');
-};
+// Test functions removed - no longer needed with simplified text-based duplicate detection

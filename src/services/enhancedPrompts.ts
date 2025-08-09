@@ -602,8 +602,10 @@ export const getPromptByD20 = (category: string, d20Roll?: number): string => {
   // 1-10: Generic prompts (50%)
   if (d20Roll) {
     if (d20Roll >= 19 && d20Roll <= 20) {
-      // NUCLEAR tier - map 19 to key 19, 20 to key 20
-      return categoryPrompts.rngSpice[d20Roll] || categoryPrompts.focused[0];
+      // NUCLEAR tier - randomly select from all 20 nuclear prompts
+      const nuclearKeys = Object.keys(categoryPrompts.rngSpice).map(k => parseInt(k));
+      const randomKey = nuclearKeys[Math.floor(Math.random() * nuclearKeys.length)];
+      return categoryPrompts.rngSpice[randomKey] || categoryPrompts.focused[0];
     } else if (d20Roll >= 11 && d20Roll <= 18) {
       // Focused tier - randomly select from focused prompts
       const focusedPrompts = categoryPrompts.focused;

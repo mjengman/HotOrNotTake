@@ -18,17 +18,18 @@ import { Take } from '../types';
 
 const CATEGORIES = [
   'food',
-  'technology', 
-  'life',
   'work',
+  'pets',
+  'technology',
+  'life',
   'entertainment',
+  'environment',
+  'wellness',
   'society',
   'politics',
   'sports',
-  'health',
-  'environment',
+  'travel',
   'relationships',
-  'money',
 ] as const;
 
 const MIN_LENGTH = 10;

@@ -45,7 +45,6 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   rejectionReason: data.rejectionReason,
   reportCount: data.reportCount || 0,
   isAIGenerated: data.isAIGenerated || false, // AI flag
-  embedding: data.embedding, // Optional embedding field
 });
 
 // Get database statistics (only approved takes due to security rules)
@@ -53,8 +52,8 @@ export const getDatabaseStats = async (): Promise<{
   total: number;
   approved: number;
   byCategory: { [category: string]: number };
-  withEmbeddings: number;
-  withoutEmbeddings: number;
+  aiGenerated: number;
+  userGenerated: number;
 }> => {
   // Only query approved takes since security rules limit access
   const takesRef = collection(db, TAKES_COLLECTION);
@@ -66,19 +65,27 @@ export const getDatabaseStats = async (): Promise<{
   
   let total = 0;
   let approved = 0;
-  let withEmbeddings = 0;
-  let withoutEmbeddings = 0;
+  let aiGenerated = 0;
+  let userGenerated = 0;
+  
+  // Initialize all categories to 0 to show complete picture
+  const allCategories = [
+    'food', 'work', 'pets', 'technology', 'life', 'entertainment', 
+    'environment', 'wellness', 'society', 'politics', 'sports', 'travel', 'relationships'
+  ];
   const byCategory: { [category: string]: number } = {};
+  allCategories.forEach(cat => byCategory[cat] = 0);
   
   snapshot.forEach((doc) => {
     const data = doc.data();
     total++;
     approved++; // All queried takes are approved
     
-    if (data.embedding && data.embedding.length > 0) {
-      withEmbeddings++;
+    // Track AI vs user generated content instead of embeddings
+    if (data.isAIGenerated) {
+      aiGenerated++;
     } else {
-      withoutEmbeddings++;
+      userGenerated++;
     }
     
     const category = data.category || 'unknown';
@@ -89,8 +96,8 @@ export const getDatabaseStats = async (): Promise<{
     total, // This is actually just approved count due to security rules
     approved,
     byCategory,
-    withEmbeddings,
-    withoutEmbeddings
+    aiGenerated,
+    userGenerated
   };
 };
 
@@ -139,8 +146,7 @@ export const subscribeToApprovedTakes = (callback: (takes: Take[]) => void) => {
 export const submitTake = async (
   takeData: TakeSubmission,
   userId: string,
-  isAIGenerated: boolean = false,
-  embedding?: number[]
+  isAIGenerated: boolean = false
 ): Promise<string> => {
   try {
     const now = new Date();
@@ -158,7 +164,6 @@ export const submitTake = async (
       approvedAt: now, // Set approval timestamp
       reportCount: 0,
       isAIGenerated, // Flag for AI content
-      ...(embedding && { embedding }), // Only include embedding if it exists
     };
 
     const docRef = await addDoc(collection(db, TAKES_COLLECTION), {

@@ -43,8 +43,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     total: number;
     approved: number;
     byCategory: { [category: string]: number };
-    withEmbeddings: number;
-    withoutEmbeddings: number;
+    aiGenerated: number;
+    userGenerated: number;
   } | null>(null);
   
   const theme = isDarkMode ? colors.dark : colors.light;
@@ -255,16 +255,21 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                   Approved Takes: {dbStats.total}
                 </Text>
                 <Text style={[styles.dbStatsText, { color: theme.textSecondary }]}>
-                  With embeddings: {dbStats.withEmbeddings} | Without: {dbStats.withoutEmbeddings}
+                  AI Generated: {dbStats.aiGenerated} | User Generated: {dbStats.userGenerated}
                 </Text>
-                <Text style={[styles.dbStatsText, { color: theme.textSecondary }]}>By Category:</Text>
+                <Text style={[styles.dbStatsText, { color: theme.textSecondary }]}>
+                  All Categories ({Object.keys(dbStats.byCategory).length} total):
+                </Text>
                 {Object.entries(dbStats.byCategory)
                   .sort((a, b) => b[1] - a[1]) // Sort by count descending
-                  .map(([category, count]) => (
-                  <Text key={category} style={[styles.dbCategoryText, { color: theme.textSecondary }]}>
-                    • {category}: {count}
-                  </Text>
-                ))}
+                  .map(([category, count], index) => {
+                    const percentage = ((count / dbStats.total) * 100).toFixed(1);
+                    return (
+                      <Text key={category} style={[styles.dbCategoryText, { color: theme.textSecondary }]}>
+                        {index + 1}. {category}: {count} ({percentage}%)
+                      </Text>
+                    );
+                  })}
                 <TouchableOpacity 
                   style={styles.hideStatsButton}
                   onPress={() => {

@@ -20,7 +20,6 @@ export interface Take {
   reportCount: number;
   isUserSubmitted?: boolean; // For UI display purposes
   isAIGenerated?: boolean; // Flag for AI-generated content
-  embedding?: number[]; // OpenAI embedding vector for semantic similarity
 }
 
 export interface TakeVote {
@@ -49,7 +48,6 @@ export interface TakeFirestore {
   rejectionReason?: string;
   reportCount: number;
   isAIGenerated?: boolean; // Flag for AI-generated content
-  embedding?: number[]; // OpenAI embedding vector for semantic similarity
 }
 
 export interface TakeVoteFirestore {
@@ -65,5 +63,4 @@ export interface TakeSubmission {
   text: string;
   category: string;
   id?: string; // Firebase document ID for submitted content
-  embedding?: number[]; // Optional OpenAI embedding vector
 }

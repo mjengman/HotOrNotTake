@@ -288,7 +288,7 @@ class ReserveContentManager {
       const reserve = reserveContent[i];
       
       try {
-        const docId = await submitTake(reserve, currentUser.uid, true, reserve.embedding); // true = isAIGenerated, pass the embedding
+        const docId = await submitTake(reserve, currentUser.uid, true); // true = isAIGenerated
         
         // Add document ID to the content
         submittedContent.push({
