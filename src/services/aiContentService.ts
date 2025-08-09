@@ -182,8 +182,15 @@ const isContentUnique = async (newText: string, category: string): Promise<boole
 
 // Generate a single AI take for a specific category with uniqueness checking
 export const generateAITake = async (category?: string, maxRetries: number = 5): Promise<AIGeneratedTake> => {
+  // DEBUG: Check API key availability on device
+  const hasApiKey = !!OPENAI_API_KEY;
+  const keyLength = OPENAI_API_KEY?.length || 0;
+  console.log(`🔍 DEBUG - API Key available: ${hasApiKey}, length: ${keyLength}`);
+  
   if (!OPENAI_API_KEY) {
-    throw new Error('OpenAI API key not configured. Please set EXPO_PUBLIC_OPENAI_API_KEY in your environment.');
+    const error = 'OpenAI API key not configured. Please set EXPO_PUBLIC_OPENAI_API_KEY in your environment.';
+    console.log(`❌ DEBUG - ${error}`);
+    throw new Error(error);
   }
 
   const selectedCategory = category || CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
@@ -279,6 +286,8 @@ Return ONLY the hot take text, nothing else.`;
       };
       
       console.log(`⚡ OpenAI Request: temp=${requestPayload.temperature}, attempt=${attempt}`);
+      console.log(`🔍 DEBUG - Making request to: ${OPENAI_API_URL}`);
+      console.log(`🔍 DEBUG - Using API key ending in: ...${OPENAI_API_KEY?.slice(-4)}`);
       
       const response = await fetch(OPENAI_API_URL, {
         method: 'POST',
@@ -289,9 +298,14 @@ Return ONLY the hot take text, nothing else.`;
         body: JSON.stringify(requestPayload),
       });
 
+      console.log(`🔍 DEBUG - Response status: ${response.status} ${response.statusText}`);
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+        const errorMessage = `OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`;
+        console.log(`❌ DEBUG - ${errorMessage}`);
+        console.log(`❌ DEBUG - Full error:`, errorData);
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
