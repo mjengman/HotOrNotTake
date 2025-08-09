@@ -115,11 +115,10 @@ export const HomeScreen: React.FC = () => {
     } catch (error) {
       console.error('Error loading reserve content:', error);
       
-      // DEBUG: Show error on device screen
-      if (__DEV__) {
-        Alert.alert('DEBUG: Reserve Content Error', 
-          `${error instanceof Error ? error.message : 'Unknown error'}\n\nCheck console for details`);
-      }
+      // Show error on device screen for debugging
+      Alert.alert('Pull-to-refresh Error', 
+        `${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease report this to support.`);
+      console.error('Full error details:', error);
       
       // Fallback to old system if reserve system fails
       console.log('🔄 Falling back to direct generation...');
