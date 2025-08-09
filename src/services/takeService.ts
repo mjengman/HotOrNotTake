@@ -14,7 +14,8 @@ import {
   increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Take, TakeFirestore, TakeSubmission } from '../types/Take';
+import { Take, TakeFirestore, TakeSubmission, TakeStatus } from '../types/Take';
+import { moderateUserTake } from './aiModerationService';
 
 // Collection references
 const TAKES_COLLECTION = 'takes';
@@ -150,32 +151,73 @@ export const submitTake = async (
 ): Promise<string> => {
   try {
     const now = new Date();
-    const takeFirestore: TakeFirestore = {
+    let isApproved = true;
+    let status: TakeStatus = 'approved';
+    let approvedAt: Date | undefined = now;
+    let rejectedAt: Date | undefined = undefined;
+    let rejectionReason: string | undefined = undefined;
+
+    // Only moderate user-submitted content (skip AI content)
+    if (!isAIGenerated) {
+      console.log(`🛡️ Moderating user-submitted take: "${takeData.text.substring(0, 50)}..."`);
+      
+      const moderationResult = await moderateUserTake(takeData.text);
+      
+      if (!moderationResult.approved) {
+        console.log(`❌ Take rejected by AI moderation: ${moderationResult.reason}`);
+        isApproved = false;
+        status = 'rejected';
+        approvedAt = undefined;
+        rejectedAt = now;
+        rejectionReason = moderationResult.reason || 'Content violates community guidelines';
+        
+        // Still save rejected takes for analytics/review
+        console.log(`📝 Saving rejected take for review purposes`);
+      } else {
+        console.log(`✅ Take approved by AI moderation`);
+      }
+    } else {
+      console.log(`🤖 Skipping moderation for AI-generated content`);
+    }
+
+    const firestoreData: any = {
       text: takeData.text.trim(),
       category: takeData.category.toLowerCase(),
       hotVotes: 0,
       notVotes: 0,
       totalVotes: 0,
-      createdAt: now,
-      submittedAt: now,
+      createdAt: Timestamp.fromDate(now),
+      submittedAt: Timestamp.fromDate(now),
       userId,
-      isApproved: true, // Auto-approve for development
-      status: 'approved', // Auto-approve for development
-      approvedAt: now, // Set approval timestamp
+      isApproved,
+      status,
       reportCount: 0,
       isAIGenerated, // Flag for AI content
     };
 
-    const docRef = await addDoc(collection(db, TAKES_COLLECTION), {
-      ...takeFirestore,
-      createdAt: Timestamp.fromDate(takeFirestore.createdAt),
-      submittedAt: Timestamp.fromDate(takeFirestore.submittedAt),
-      approvedAt: Timestamp.fromDate(takeFirestore.approvedAt!),
-    });
-    return docRef.id;
+    // Only add optional timestamp fields if they have values
+    if (approvedAt) {
+      firestoreData.approvedAt = Timestamp.fromDate(approvedAt);
+    }
+    if (rejectedAt) {
+      firestoreData.rejectedAt = Timestamp.fromDate(rejectedAt);
+    }
+    if (rejectionReason) {
+      firestoreData.rejectionReason = rejectionReason;
+    }
+
+    // Only save approved takes to avoid permissions issues
+    if (isApproved) {
+      const docRef = await addDoc(collection(db, TAKES_COLLECTION), firestoreData);
+      return docRef.id;
+    } else {
+      // Don't save rejected takes - just throw error for UI feedback
+      throw new Error(`Take rejected: ${rejectionReason}`);
+    }
   } catch (error) {
     console.error(`Failed to submit take:`, error);
-    throw new Error(`Failed to submit take: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Re-throw the original error without wrapping it
+    throw error;
   }
 };
 

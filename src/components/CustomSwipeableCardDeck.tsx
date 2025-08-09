@@ -5,8 +5,6 @@ import {
   Dimensions,
   Alert,
   Text,
-  ScrollView,
-  RefreshControl,
   Vibration,
 } from 'react-native';
 import {
@@ -32,8 +30,6 @@ interface CustomSwipeableCardDeckProps {
   takes: Take[];
   onVote: (takeId: string, vote: 'hot' | 'not') => void;
   onSkip: (takeId: string) => void;
-  onEndReached?: () => void;
-  onLoadMore?: () => Promise<void>;
   onSubmitTake?: () => void;
   isDarkMode?: boolean;
 }
@@ -45,33 +41,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   takes,
   onVote,
   onSkip,
-  onEndReached,
-  onLoadMore,
   onSubmitTake,
   isDarkMode = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
 
   const theme = isDarkMode ? colors.dark : colors.light;
-
-  const handleLoadMore = async () => {
-    if (!onLoadMore || isLoadingMore) return;
-    
-    try {
-      setIsLoadingMore(true);
-      await onLoadMore();
-    } catch (error) {
-      console.error('Error loading more content:', error);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  };
 
   // Ensure takes is always an array
   const safeTakes = takes || [];
@@ -88,12 +68,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       const nextIndex = currentIndex + 1;
       setCurrentIndex(nextIndex);
       
-      // Check if we've reached the end
-      if (nextIndex >= safeTakes.length) {
-        setTimeout(() => {
-          onEndReached?.();
-        }, 500);
-      }
+      // Check if we've reached the end - no more content loading for MVP
     }
   };
 
@@ -113,12 +88,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       const nextIndex = currentIndex + 1;
       setCurrentIndex(nextIndex);
       
-      // Check if we've reached the end
-      if (nextIndex >= safeTakes.length) {
-        setTimeout(() => {
-          onEndReached?.();
-        }, 500);
-      }
+      // Check if we've reached the end - no more content loading for MVP
     }
   };
 
@@ -226,55 +196,33 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   if (currentIndex >= safeTakes.length) {
     return (
       <View style={styles.container}>
-        <ScrollView
-          contentContainerStyle={styles.endScrollContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={isLoadingMore}
-              onRefresh={handleLoadMore}
-              tintColor={theme.primary}
-              title="Pull down to load more hot takes"
-              titleColor={theme.textSecondary}
-            />
-          }
-        >
-          <View style={styles.endContainer}>
-            <Text style={styles.endEmoji}>🎉</Text>
-            <Text style={[styles.endTitle, { color: theme.text }]}>
-              {safeTakes.length === 0 ? 'No takes available yet!' : 'You\'ve reached the end!'}
-            </Text>
-            <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
-              {isLoadingMore 
-                ? 'Loading more hot takes...' 
-                : 'Pull down to load more content!'
-              }
-            </Text>
-            
-            {onLoadMore && (
-              <Text style={[styles.pullHint, { color: theme.primary }]}>
-                {isLoadingMore ? '⏳' : '⬇️ Pull Down ⬇️'}
-              </Text>
-            )}
-            
-            {onSubmitTake && (
-              <AnimatedPressable
-                style={[styles.submitButton, { backgroundColor: theme.primary }]}
-                onPress={onSubmitTake}
-                scaleValue={0.95}
-                hapticIntensity={15}
-              >
-                <Text style={styles.submitButtonText}>✏️ Submit Take</Text>
-              </AnimatedPressable>
-            )}
-            
-            <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
-              {safeTakes.length === 0 
-                ? 'Submit your own hot takes!'
-                : 'Or tap the clipboard icon (📋) to see your takes'
-              }
-            </Text>
-          </View>
-        </ScrollView>
+        <View style={styles.endContainer}>
+          <Text style={styles.endEmoji}>🎉</Text>
+          <Text style={[styles.endTitle, { color: theme.text }]}>
+            {safeTakes.length === 0 ? 'No takes available yet!' : 'You\'ve reached the end!'}
+          </Text>
+          <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
+            {safeTakes.length === 0 
+              ? 'Be the first to submit a hot take!'
+              : 'Submit more takes to keep the conversation going!'
+            }
+          </Text>
+          
+          {onSubmitTake && (
+            <AnimatedPressable
+              style={[styles.submitButton, { backgroundColor: theme.primary }]}
+              onPress={onSubmitTake}
+              scaleValue={0.95}
+              hapticIntensity={15}
+            >
+              <Text style={styles.submitButtonText}>✏️ Submit Take</Text>
+            </AnimatedPressable>
+          )}
+          
+          <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
+            Tap the clipboard icon (📋) to see all your takes
+          </Text>
+        </View>
       </View>
     );
   }
@@ -343,10 +291,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: dimensions.spacing.xl,
     paddingVertical: dimensions.spacing.xl,
   },
-  endScrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
+  // Removed endScrollContainer - no longer needed
   endEmoji: {
     fontSize: 64,
     marginBottom: dimensions.spacing.lg,
@@ -369,12 +314,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontStyle: 'italic',
   },
-  pullHint: {
-    fontSize: dimensions.fontSize.xlarge,
-    textAlign: 'center',
-    fontWeight: 'bold',
-    marginVertical: dimensions.spacing.lg,
-  },
+  // Removed pullHint - no longer needed
   submitButton: {
     paddingHorizontal: dimensions.spacing.xl,
     paddingVertical: dimensions.spacing.md,

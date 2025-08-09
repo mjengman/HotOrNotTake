@@ -16,8 +16,7 @@ import { SubmitTakeScreen } from './SubmitTakeScreen';
 import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
-// import { useInvisibleAISeeding } from '../services/invisibleAISeeding';
-// import adService from '../services/adService';
+// AI seeding disabled for MVP launch
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 import { colors, dimensions } from '../constants';
 
@@ -99,77 +98,10 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleLoadMore = async () => {
-    console.log('🔄 Loading more content for category:', selectedCategory);
-    
-    // DEBUG: Alert at start
-    Alert.alert('DEBUG', `Starting pull-to-refresh for category: ${selectedCategory}`);
-    
-    try {
-      Alert.alert('DEBUG', 'Step 1: Importing reserve content service...');
-      
-      // Use the new reserve content system for smooth UX
-      const { getSmoothContent } = await import('../services/reserveContentService');
-      
-      Alert.alert('DEBUG', 'Step 2: Calling getSmoothContent...');
-      
-      // Get reserve content with natural delay (2-4 seconds)
-      // This happens in background - reserves are submitted to Firebase automatically
-      const newTakes = await getSmoothContent(selectedCategory, 20);
-      
-      Alert.alert('DEBUG', `Step 3: Got ${newTakes.length} takes back from getSmoothContent`);
-      
-      console.log(`✅ Successfully loaded ${newTakes.length} reserve takes for ${selectedCategory}`);
-      
-      // The new caching system in useFirebaseTakes handles this automatically
-    } catch (error) {
-      console.error('Error loading reserve content:', error);
-      
-      // Show error on device screen for debugging
-      Alert.alert('Pull-to-refresh Error', 
-        `${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease report this to support.`);
-      console.error('Full error details:', error);
-      
-      // Fallback to old system if reserve system fails
-      console.log('🔄 Falling back to direct generation...');
-      if (selectedCategory === 'all') {
-        const { generateMultipleAITakes, convertAITakeToSubmission } = await import('../services/aiContentService');
-        const { submitTake } = await import('../services/takeService');
-        const { auth } = await import('../services/firebase');
-        
-        try {
-          const currentUser = auth.currentUser;
-          if (!currentUser) {
-            console.error('No authenticated user');
-            return;
-          }
-          
-          const aiTakes = await generateMultipleAITakes(20);
-          let submitted = 0;
-          
-          for (const aiTake of aiTakes) {
-            try {
-              const submission = convertAITakeToSubmission(aiTake);
-              await submitTake(submission, currentUser.uid, true); // true = isAIGenerated
-              submitted++;
-            } catch (error) {
-              console.error('Failed to submit AI take:', error);
-            }
-          }
-          
-          console.log(`Fallback: generated ${submitted} takes across all categories`);
-        } catch (error) {
-          console.error('Error in fallback generation:', error);
-        }
-      } else {
-        const { generateTakesForSingleCategory } = await import('../services/invisibleAISeeding');
-        try {
-          const generated = await generateTakesForSingleCategory(selectedCategory, 20);
-          console.log(`Fallback: generated ${generated} takes for ${selectedCategory}`);
-        } catch (error) {
-          console.error('Error in fallback generation:', error);
-        }
-      }
-    }
+    console.log('🚫 AI generation disabled for MVP launch');
+    // AI generation removed - pure user-content MVP
+    // Users must submit their own takes
+    return;
   };
 
   return (
@@ -257,7 +189,6 @@ export const HomeScreen: React.FC = () => {
             takes={takes}
             onVote={handleVote}
             onSkip={handleSkip}
-            onLoadMore={handleLoadMore}
             onSubmitTake={() => setShowSubmitModal(true)}
             isDarkMode={isDarkMode}
           />
@@ -266,7 +197,6 @@ export const HomeScreen: React.FC = () => {
             takes={[]}
             onVote={handleVote}
             onSkip={handleSkip}
-            onLoadMore={handleLoadMore}
             onSubmitTake={() => setShowSubmitModal(true)}
             isDarkMode={isDarkMode}
           />

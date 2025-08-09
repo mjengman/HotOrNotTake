@@ -268,13 +268,28 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
 
     try {
-      // Submit the take to Firebase
+      // Submit the take to Firebase (includes AI moderation)
       const takeId = await submitTake(takeData, user.uid);
       
       // Update user's submission count
       await incrementUserSubmissionCount(user.uid, takeId);
+      
+      // Force refresh takes list to show new submission immediately
+      const freshTakes = await getApprovedTakes();
+      setAllTakes(freshTakes);
+      
+      console.log(`✅ Take submitted, approved, and list refreshed - new take should appear`);
     } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'Failed to submit take');
+      // If the error message contains "Take rejected:", it's a moderation rejection
+      const errorMessage = err instanceof Error ? err.message : 'Failed to submit take';
+      
+      if (errorMessage.startsWith('Take rejected:')) {
+        // Extract just the reason part
+        const reason = errorMessage.replace('Take rejected: ', '');
+        throw new Error(`Your take was not approved: ${reason}`);
+      } else {
+        throw new Error(errorMessage);
+      }
     }
   }, [user]);
 

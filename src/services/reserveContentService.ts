@@ -371,52 +371,7 @@ export const getSmoothContent = async (
 ): Promise<TakeSubmission[]> => {
   console.log(`🔥 SMOOTH CONTENT - Starting getSmoothContent for ${category}, count: ${count}`);
   
-  // DEBUG: Import Alert for device debugging
-  const { Alert } = require('react-native');
-  Alert.alert('DEBUG SMOOTH', `getSmoothContent called for ${category}`);
-  
-  try {
-    // Skip delay - it was causing issues on device
-    // console.log(`🔥 SMOOTH CONTENT - Adding natural delay of ${Math.round(naturalDelayMs)}ms`);
-    // await new Promise(resolve => setTimeout(resolve, naturalDelayMs));
-    // console.log(`🔥 SMOOTH CONTENT - Delay complete, proceeding...`);
-    
-    Alert.alert('DEBUG SMOOTH', 'About to call getReserveContent...');
-    
-    // Get reserve content
-    console.log(`🔥 SMOOTH CONTENT - Getting reserve content...`);
-    const reserves = await reserveManager.getReserveContent(category, count);
-    console.log(`🔥 SMOOTH CONTENT - Got reserves response: ${reserves.length} items`);
-    
-    Alert.alert('DEBUG SMOOTH', `Got ${reserves.length} reserves from manager`);
-  
-    if (reserves.length === 0) {
-      console.log(`⚠️ SMOOTH CONTENT - No reserves available, returning empty array`);
-      return [];
-    }
-    
-    console.log(`🔥 SMOOTH CONTENT - Got ${reserves.length} reserves, submitting to Firebase...`);
-    
-    try {
-      // Submit to Firebase and wait for completion (blocking)
-      console.log(`🔥 SMOOTH CONTENT - Calling submitReserveContent...`);
-      const submittedContent = await reserveManager.submitReserveContent(reserves);
-      console.log(`✅ SMOOTH CONTENT - Successfully submitted ${submittedContent.length} takes to Firebase`);
-      
-      // Return the content with document IDs for vote targeting
-      return submittedContent;
-      
-    } catch (firebaseError) {
-      console.error(`❌ SMOOTH CONTENT - Firebase submission failed:`, firebaseError);
-      
-      // Fallback: return content without IDs (votes will fail but content shows)
-      console.log(`🔄 SMOOTH CONTENT - Returning content without IDs as fallback`);
-      return reserves;
-    }
-    
-  } catch (error) {
-    console.error(`❌ SMOOTH CONTENT - Top level error:`, error);
-    // Re-throw to trigger the error alert in HomeScreen
-    throw error;
-  }
+  // AI generation system disabled for MVP launch
+  console.log(`🚫 AI reserve system disabled - returning empty array for ${category}`);
+  return [];
 };

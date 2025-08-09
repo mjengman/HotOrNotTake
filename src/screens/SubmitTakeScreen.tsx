@@ -51,6 +51,7 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [moderationError, setModerationError] = useState<string | null>(null);
   
   const theme = isDarkMode ? colors.dark : colors.light;
   
@@ -67,6 +68,7 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
 
     try {
       setIsSubmitting(true);
+      setModerationError(null); // Clear any previous error
       
       await submitNewTake({
         text: text.trim(),
@@ -83,6 +85,7 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
               setText('');
               setSelectedCategory('');
               setShowPreview(false);
+              setModerationError(null);
             },
           },
           {
@@ -93,12 +96,24 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
         ]
       );
     } catch (error) {
-      Alert.alert(
-        'Submission Failed',
-        'There was an error submitting your take. Please try again.',
-        [{ text: 'OK' }]
-      );
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Submission error:', error);
+      console.log(`🔍 Error message: "${errorMessage}"`);
+      
+      // Check if this is a moderation rejection
+      if (errorMessage.startsWith('Your take was not approved:')) {
+        const reason = errorMessage.replace('Your take was not approved: ', '');
+        console.log(`🔍 Setting moderation error: "${reason}"`);
+        setModerationError(reason);
+      } else {
+        console.log(`🔍 Not a moderation error, showing alert`);
+        // General error - show alert
+        Alert.alert(
+          'Submission Failed',
+          'There was an error submitting your take. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -189,6 +204,16 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
 
               {/* Text Input */}
               <View style={styles.inputSection}>
+                {moderationError && (
+                  <View style={styles.errorContainer}>
+                    <Text style={[styles.errorText, { color: theme.error }]}>
+                      ❌ {moderationError}
+                    </Text>
+                    <Text style={[styles.errorHint, { color: theme.textSecondary }]}>
+                      Please revise your take and try again
+                    </Text>
+                  </View>
+                )}
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>
                   Your Hot Take
                 </Text>
@@ -204,7 +229,13 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
                   placeholder="What's your controversial opinion?"
                   placeholderTextColor={theme.textSecondary}
                   value={text}
-                  onChangeText={setText}
+                  onChangeText={(newText) => {
+                    setText(newText);
+                    // Clear moderation error when user starts editing
+                    if (moderationError) {
+                      setModerationError(null);
+                    }
+                  }}
                   multiline
                   textAlignVertical="top"
                   maxLength={MAX_LENGTH + 50} // Allow some overage for user feedback
@@ -373,6 +404,23 @@ const styles = StyleSheet.create({
   inputSection: {
     paddingHorizontal: dimensions.spacing.lg,
     marginBottom: dimensions.spacing.lg,
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 0, 0.3)',
+    borderRadius: 8,
+    padding: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.md,
+  },
+  errorText: {
+    fontSize: dimensions.fontSize.medium,
+    fontWeight: '600',
+    marginBottom: dimensions.spacing.xs,
+  },
+  errorHint: {
+    fontSize: dimensions.fontSize.small,
+    fontStyle: 'italic',
   },
   textInput: {
     height: 120,
