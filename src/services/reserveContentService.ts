@@ -65,14 +65,20 @@ class ReserveContentManager {
 
   // Get reserve takes for immediate display (smooth UX)
   public async getReserveContent(category: string, count: number = 10): Promise<TakeSubmission[]> {
+    console.log(`📦 getReserveContent: Starting for ${category}, count: ${count}`);
+    
     // Handle "all" category by mixing from different categories
     if (category === 'all') {
+      console.log(`📦 getReserveContent: Initializing for "all" mode...`);
       await this.initializeForAllMode();
+      console.log(`📦 getReserveContent: Getting mixed content...`);
       return await this.getReserveContentMix(count);
     }
 
     // Initialize specific category if needed
+    console.log(`📦 getReserveContent: Initializing ${category} if needed...`);
     await this.initializeCategoryIfNeeded(category);
+    console.log(`📦 getReserveContent: Initialization complete for ${category}`);
     
     // Get specific category reserves
     const categoryReserves = this.reserves[category] || [];
@@ -275,10 +281,15 @@ class ReserveContentManager {
 
   // Submit reserve content to Firebase and update items with document IDs
   public async submitReserveContent(reserveContent: TakeSubmission[]): Promise<TakeSubmission[]> {
+    console.log(`📤 submitReserveContent: Starting submission of ${reserveContent.length} items`);
+    
     const currentUser = auth.currentUser;
+    console.log(`📤 submitReserveContent: Current user:`, !!currentUser);
     
     if (!currentUser) {
-      throw new Error('No authenticated user for reserve content submission');
+      const error = 'No authenticated user for reserve content submission';
+      console.log(`❌ submitReserveContent: ${error}`);
+      throw new Error(error);
     }
 
     const submittedContent: TakeSubmission[] = [];
@@ -286,9 +297,11 @@ class ReserveContentManager {
     
     for (let i = 0; i < reserveContent.length; i++) {
       const reserve = reserveContent[i];
+      console.log(`📤 submitReserveContent: Submitting item ${i + 1}/${reserveContent.length}: "${reserve.text.substring(0, 50)}..."`);
       
       try {
         const docId = await submitTake(reserve, currentUser.uid, true); // true = isAIGenerated
+        console.log(`✅ submitReserveContent: Item ${i + 1} submitted successfully with ID: ${docId}`);
         
         // Add document ID to the content
         submittedContent.push({
@@ -296,7 +309,8 @@ class ReserveContentManager {
           id: docId
         });
       } catch (error) {
-        console.log(`⚠️ Submission ${i + 1} failed: ${error instanceof Error ? error.message.substring(0, 50) : 'unknown error'}`);
+        const errorMsg = `Submission ${i + 1} failed: ${error instanceof Error ? error.message.substring(0, 50) : 'unknown error'}`;
+        console.log(`❌ submitReserveContent: ${errorMsg}`);
         errors++;
         // Don't include failed submissions in result
       }
@@ -353,38 +367,48 @@ export default reserveManager;
 export const getSmoothContent = async (
   category: string, 
   count: number = 10,
-  naturalDelayMs: number = 2000 + Math.random() * 2000 // 2-4 seconds
+  naturalDelayMs: number = 0 // Removed delay - was causing issues on device
 ): Promise<TakeSubmission[]> => {
   console.log(`🔥 SMOOTH CONTENT - Starting getSmoothContent for ${category}, count: ${count}`);
   
-  // Add natural delay for smooth UX
-  console.log(`🔥 SMOOTH CONTENT - Adding natural delay of ${Math.round(naturalDelayMs)}ms`);
-  await new Promise(resolve => setTimeout(resolve, naturalDelayMs));
-  
-  // Get reserve content
-  console.log(`🔥 SMOOTH CONTENT - Getting reserve content...`);
-  const reserves = await reserveManager.getReserveContent(category, count);
-  
-  if (reserves.length === 0) {
-    console.log(`⚠️ SMOOTH CONTENT - No reserves available, returning empty array`);
-    return [];
-  }
-  
-  console.log(`🔥 SMOOTH CONTENT - Got ${reserves.length} reserves, submitting to Firebase...`);
-  
   try {
-    // Submit to Firebase and wait for completion (blocking)
-    const submittedContent = await reserveManager.submitReserveContent(reserves);
-    console.log(`✅ SMOOTH CONTENT - Successfully submitted ${submittedContent.length} takes to Firebase`);
+    // Skip delay - it was causing issues on device
+    // console.log(`🔥 SMOOTH CONTENT - Adding natural delay of ${Math.round(naturalDelayMs)}ms`);
+    // await new Promise(resolve => setTimeout(resolve, naturalDelayMs));
+    // console.log(`🔥 SMOOTH CONTENT - Delay complete, proceeding...`);
     
-    // Return the content with document IDs for vote targeting
-    return submittedContent;
+    // Get reserve content
+    console.log(`🔥 SMOOTH CONTENT - Getting reserve content...`);
+    const reserves = await reserveManager.getReserveContent(category, count);
+    console.log(`🔥 SMOOTH CONTENT - Got reserves response: ${reserves.length} items`);
+  
+    if (reserves.length === 0) {
+      console.log(`⚠️ SMOOTH CONTENT - No reserves available, returning empty array`);
+      return [];
+    }
+    
+    console.log(`🔥 SMOOTH CONTENT - Got ${reserves.length} reserves, submitting to Firebase...`);
+    
+    try {
+      // Submit to Firebase and wait for completion (blocking)
+      console.log(`🔥 SMOOTH CONTENT - Calling submitReserveContent...`);
+      const submittedContent = await reserveManager.submitReserveContent(reserves);
+      console.log(`✅ SMOOTH CONTENT - Successfully submitted ${submittedContent.length} takes to Firebase`);
+      
+      // Return the content with document IDs for vote targeting
+      return submittedContent;
+      
+    } catch (firebaseError) {
+      console.error(`❌ SMOOTH CONTENT - Firebase submission failed:`, firebaseError);
+      
+      // Fallback: return content without IDs (votes will fail but content shows)
+      console.log(`🔄 SMOOTH CONTENT - Returning content without IDs as fallback`);
+      return reserves;
+    }
     
   } catch (error) {
-    console.error(`❌ SMOOTH CONTENT - Firebase submission failed:`, error);
-    
-    // Fallback: return content without IDs (votes will fail but content shows)
-    console.log(`🔄 SMOOTH CONTENT - Returning content without IDs as fallback`);
-    return reserves;
+    console.error(`❌ SMOOTH CONTENT - Top level error:`, error);
+    // Re-throw to trigger the error alert in HomeScreen
+    throw error;
   }
 };

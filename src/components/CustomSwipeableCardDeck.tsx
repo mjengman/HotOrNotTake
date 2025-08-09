@@ -269,7 +269,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
             
             <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
               {safeTakes.length === 0 
-                ? 'Or submit your own hot takes!'
+                ? 'Submit your own hot takes!'
                 : 'Or tap the clipboard icon (📋) to see your takes'
               }
             </Text>
