@@ -45,18 +45,22 @@ class ReserveContentManager {
     }
   }
   
-  // Initialize for "all" mode - only the categories we'll actually use
+  // Initialize for "all" mode - ensure variety across categories
   private async initializeForAllMode(): Promise<void> {
-    console.log('🔄 Initializing priority categories for "all" mode...');
+    console.log('🔄 Initializing mixed categories for "all" mode...');
     
-    // Only initialize a few key categories for "all" mode to start
-    const priorityCategories = ['food', 'technology', 'life', 'work', 'entertainment'];
+    // Initialize multiple categories to ensure variety
+    // Shuffle and pick 5-6 random categories to start with
+    const shuffledCategories = this.shuffleArray([...CATEGORIES]);
+    const categoriesToInit = shuffledCategories.slice(0, 6);
     
-    for (const category of priorityCategories) {
+    console.log(`📋 Initializing categories: ${categoriesToInit.join(', ')}`);
+    
+    for (const category of categoriesToInit) {
       await this.initializeCategoryIfNeeded(category);
     }
     
-    console.log('✅ Priority categories ready for "all" mode');
+    console.log('✅ Mixed categories ready for "all" mode with variety');
   }
 
   // Get reserve takes for immediate display (smooth UX)
@@ -140,18 +144,48 @@ class ReserveContentManager {
     const content: TakeSubmission[] = [];
     
     try {
-      const actualCategory = category === 'all' ? CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)] : category;
-      const generateCount = Math.min(count, 5); // Limit to 5 for performance
-      
-      console.log(`⚡ Generating ${generateCount} immediate takes for ${actualCategory}`);
-      
-      for (let i = 0; i < generateCount; i++) {
-        const aiTake = await generateAITake(actualCategory);
-        const submission = convertAITakeToSubmission(aiTake);
-        content.push(submission);
+      if (category === 'all') {
+        // For "all" mode, generate a mix of categories
+        const generateCount = Math.min(count, 20); // Allow more for variety
+        const categoriesPerBatch = Math.min(5, CATEGORIES.length); // Use 5 different categories per batch
+        const takesPerCategory = Math.ceil(generateCount / categoriesPerBatch);
+        
+        console.log(`⚡ Generating ${generateCount} mixed takes across ${categoriesPerBatch} categories`);
+        
+        // Shuffle categories to get random selection
+        const shuffledCategories = this.shuffleArray([...CATEGORIES]);
+        const selectedCategories = shuffledCategories.slice(0, categoriesPerBatch);
+        
+        for (const selectedCategory of selectedCategories) {
+          for (let i = 0; i < takesPerCategory && content.length < generateCount; i++) {
+            try {
+              const aiTake = await generateAITake(selectedCategory);
+              const submission = convertAITakeToSubmission(aiTake);
+              content.push(submission);
+            } catch (error) {
+              console.log(`⚠️ Failed to generate take for ${selectedCategory}:`, error);
+            }
+          }
+        }
+        
+        // Shuffle the final content to mix categories
+        const shuffledContent = this.shuffleArray(content);
+        console.log(`✅ Generated ${shuffledContent.length} mixed takes`);
+        return shuffledContent;
+      } else {
+        // Single category generation
+        const generateCount = Math.min(count, 5); // Limit to 5 for performance
+        
+        console.log(`⚡ Generating ${generateCount} immediate takes for ${category}`);
+        
+        for (let i = 0; i < generateCount; i++) {
+          const aiTake = await generateAITake(category);
+          const submission = convertAITakeToSubmission(aiTake);
+          content.push(submission);
+        }
+        
+        console.log(`✅ Generated ${content.length} immediate takes`);
       }
-      
-      console.log(`✅ Generated ${content.length} immediate takes`);
     } catch (error) {
       console.error(`❌ Failed to generate immediate content for ${category}:`, error);
     }
