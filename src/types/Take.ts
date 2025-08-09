@@ -65,4 +65,5 @@ export interface TakeSubmission {
   text: string;
   category: string;
   id?: string; // Firebase document ID for submitted content
+  embedding?: number[]; // Optional OpenAI embedding vector
 }

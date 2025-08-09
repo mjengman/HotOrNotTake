@@ -48,6 +48,52 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   embedding: data.embedding, // Optional embedding field
 });
 
+// Get database statistics (only approved takes due to security rules)
+export const getDatabaseStats = async (): Promise<{
+  total: number;
+  approved: number;
+  byCategory: { [category: string]: number };
+  withEmbeddings: number;
+  withoutEmbeddings: number;
+}> => {
+  // Only query approved takes since security rules limit access
+  const takesRef = collection(db, TAKES_COLLECTION);
+  const approvedQuery = query(
+    takesRef,
+    where('isApproved', '==', true)
+  );
+  const snapshot = await getDocs(approvedQuery);
+  
+  let total = 0;
+  let approved = 0;
+  let withEmbeddings = 0;
+  let withoutEmbeddings = 0;
+  const byCategory: { [category: string]: number } = {};
+  
+  snapshot.forEach((doc) => {
+    const data = doc.data();
+    total++;
+    approved++; // All queried takes are approved
+    
+    if (data.embedding && data.embedding.length > 0) {
+      withEmbeddings++;
+    } else {
+      withoutEmbeddings++;
+    }
+    
+    const category = data.category || 'unknown';
+    byCategory[category] = (byCategory[category] || 0) + 1;
+  });
+  
+  return {
+    total, // This is actually just approved count due to security rules
+    approved,
+    byCategory,
+    withEmbeddings,
+    withoutEmbeddings
+  };
+};
+
 // Get all approved takes
 export const getApprovedTakes = async (): Promise<Take[]> => {
   try {
@@ -124,7 +170,7 @@ export const submitTake = async (
     return docRef.id;
   } catch (error) {
     console.error(`Failed to submit take:`, error);
-    throw new Error(`Failed to submit take: ${error?.message || 'Unknown error'}`);
+    throw new Error(`Failed to submit take: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 

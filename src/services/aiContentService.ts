@@ -482,6 +482,7 @@ export const generateMultipleAITakes = async (count: number = 5): Promise<AIGene
 export const convertAITakeToSubmission = (aiTake: AIGeneratedTake): TakeSubmission => ({
   text: aiTake.text,
   category: aiTake.category,
+  embedding: aiTake.embedding, // Include the embedding that was generated!
 });
 
 // Auto-seed the database with AI takes when running low

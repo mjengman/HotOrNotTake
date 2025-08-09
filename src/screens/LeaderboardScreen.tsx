@@ -14,6 +14,7 @@ import {
   getHottestTakesByCategory,
   getNottestTakesByCategory,
   getMostSkippedTakesByCategory,
+  getDatabaseStats,
 } from '../services/takeService';
 
 interface LeaderboardScreenProps {
@@ -34,6 +35,17 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const [hottestTakes, setHottestTakes] = useState<Record<string, Take[]>>({});
   const [nottestTakes, setNottestTakes] = useState<Record<string, Take[]>>({});
   const [skippedTakes, setSkippedTakes] = useState<Record<string, { take: Take; skipCount: number }[]>>({});
+  
+  // Hidden dev feature - tap counter for database stats
+  const [hottestTapCount, setHottestTapCount] = useState(0);
+  const [showDbStats, setShowDbStats] = useState(false);
+  const [dbStats, setDbStats] = useState<{
+    total: number;
+    approved: number;
+    byCategory: { [category: string]: number };
+    withEmbeddings: number;
+    withoutEmbeddings: number;
+  } | null>(null);
   
   const theme = isDarkMode ? colors.dark : colors.light;
 
@@ -60,6 +72,26 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     setRefreshing(true);
     await loadLeaderboards();
     setRefreshing(false);
+  };
+
+  // Hidden dev feature: Handle hottest tab taps
+  const handleHottestTabPress = async () => {
+    const newCount = hottestTapCount + 1;
+    setHottestTapCount(newCount);
+    
+    if (newCount >= 5 && !showDbStats) {
+      console.log('🔍 Loading database stats (dev feature)...');
+      try {
+        const stats = await getDatabaseStats();
+        setDbStats(stats);
+        setShowDbStats(true);
+        console.log('📊 Database stats loaded:', stats);
+      } catch (error) {
+        console.error('Error loading database stats:', error);
+      }
+    }
+    
+    setActiveTab('hottest');
   };
 
   useEffect(() => {
@@ -182,7 +214,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 backgroundColor: activeTab === tab.key ? theme.primary : theme.surface,
               },
             ]}
-            onPress={() => setActiveTab(tab.key)}
+            onPress={tab.key === 'hottest' ? handleHottestTabPress : () => setActiveTab(tab.key)}
           >
             <Text style={styles.tabIcon}>{tab.icon}</Text>
             <Text
@@ -215,6 +247,36 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           </View>
         ) : (
           <View style={styles.contentContainer}>
+            {/* Database Stats - Hidden Dev Feature */}
+            {showDbStats && dbStats && (
+              <View style={[styles.dbStatsContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.dbStatsTitle, { color: theme.text }]}>🔍 Database Stats (Dev)</Text>
+                <Text style={[styles.dbStatsText, { color: theme.textSecondary }]}>
+                  Approved Takes: {dbStats.total}
+                </Text>
+                <Text style={[styles.dbStatsText, { color: theme.textSecondary }]}>
+                  With embeddings: {dbStats.withEmbeddings} | Without: {dbStats.withoutEmbeddings}
+                </Text>
+                <Text style={[styles.dbStatsText, { color: theme.textSecondary }]}>By Category:</Text>
+                {Object.entries(dbStats.byCategory)
+                  .sort((a, b) => b[1] - a[1]) // Sort by count descending
+                  .map(([category, count]) => (
+                  <Text key={category} style={[styles.dbCategoryText, { color: theme.textSecondary }]}>
+                    • {category}: {count}
+                  </Text>
+                ))}
+                <TouchableOpacity 
+                  style={styles.hideStatsButton}
+                  onPress={() => {
+                    setShowDbStats(false);
+                    setHottestTapCount(0);
+                  }}
+                >
+                  <Text style={[styles.hideStatsText, { color: theme.primary }]}>Hide Stats</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            
             {Object.keys(getCurrentData()).length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>
@@ -387,5 +449,37 @@ const styles = StyleSheet.create({
     fontSize: dimensions.fontSize.medium,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  // Database stats styles (hidden dev feature)
+  dbStatsContainer: {
+    marginHorizontal: dimensions.spacing.lg,
+    marginBottom: dimensions.spacing.lg,
+    padding: dimensions.spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  dbStatsTitle: {
+    fontSize: dimensions.fontSize.large,
+    fontWeight: 'bold',
+    marginBottom: dimensions.spacing.xs,
+  },
+  dbStatsText: {
+    fontSize: dimensions.fontSize.small,
+    marginBottom: dimensions.spacing.xs,
+  },
+  dbCategoryText: {
+    fontSize: dimensions.fontSize.small,
+    marginLeft: dimensions.spacing.sm,
+    marginBottom: 2,
+  },
+  hideStatsButton: {
+    alignSelf: 'flex-end',
+    marginTop: dimensions.spacing.xs,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  hideStatsText: {
+    fontSize: dimensions.fontSize.small,
+    fontWeight: '600',
   },
 });
