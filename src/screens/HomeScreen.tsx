@@ -28,7 +28,7 @@ export const HomeScreen: React.FC = () => {
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const { user, loading: authLoading, signIn } = useAuth();
-  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake } = useFirebaseTakes({
+  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes } = useFirebaseTakes({
     category: selectedCategory
   });
   const { stats, refreshStats } = useUserStats();
@@ -107,9 +107,11 @@ export const HomeScreen: React.FC = () => {
       
       // Get reserve content with natural delay (2-4 seconds)
       // This happens in background - reserves are submitted to Firebase automatically
-      await getSmoothContent(selectedCategory, 20);
+      const newTakes = await getSmoothContent(selectedCategory, 20);
       
-      console.log(`✅ Successfully loaded reserve content for ${selectedCategory}`);
+      console.log(`✅ Successfully loaded ${newTakes.length} reserve takes for ${selectedCategory}`);
+      
+      // The new caching system in useFirebaseTakes handles this automatically
     } catch (error) {
       console.error('Error loading reserve content:', error);
       

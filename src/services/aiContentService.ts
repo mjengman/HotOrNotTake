@@ -127,13 +127,18 @@ const isContentUnique = async (newText: string, category: string): Promise<boole
     
     const existingTakes = await getApprovedTakes();
     
-    // Filter to same category for more relevant comparison
-    const categoryTakes = existingTakes.filter(take => take.category === category);
+    // Filter to same category and limit to most recent 30 takes for performance
+    const categoryTakes = existingTakes
+      .filter(take => take.category === category)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()) // Most recent first
+      .slice(0, 30); // Only compare against last 30 takes
     
     if (categoryTakes.length === 0) {
       console.log('✅ No existing takes in category, content is unique');
       return true;
     }
+    
+    console.log(`🎯 Comparing against ${categoryTakes.length} recent takes (limited for performance)`);
     
     // Get embeddings from existing takes (if available) or their text
     const existingEmbeddings: number[][] = [];
@@ -239,7 +244,7 @@ export const generateAITake = async (category?: string, maxRetries: number = 5):
     const personalityContext = generatePersonalityContext(selectedCategory);
     
     // Log prompt selection details (use the same personalityContext from above)
-    const promptTier = promptD20Roll >= 16 ? 'rngSpice' : (promptD20Roll >= 6 ? 'focused' : 'generic');
+    const promptTier = promptD20Roll >= 19 ? 'rngSpice' : (promptD20Roll >= 11 ? 'focused' : 'generic');
     console.log(`🎲 AI Generation: ${selectedCategory} | D20: ${promptD20Roll} (${promptTier}) | Personality: ${personalityContext.isPersonalityMode ? 'YES' : 'NO'}`);
     
     // Log personality details if active

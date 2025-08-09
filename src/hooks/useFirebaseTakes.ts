@@ -32,13 +32,22 @@ interface UseFirebaseTakesOptions {
   category?: string;
 }
 
+// Global cache to preserve takes across category switches
+const globalTakesCache = new Map<string, Take[]>();
+const categoryStateCache = new Map<string, {
+  takes: Take[];
+  currentIndex: number;
+  interactedIds: string[];
+}>();
+
 export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFirebaseTakesResult => {
   const { user } = useAuth();
-  const { category } = options;
+  const { category = 'all' } = options;
   const [takes, setTakes] = useState<Take[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [interactedTakeIds, setInteractedTakeIds] = useState<string[]>([]);
+  const [allTakes, setAllTakes] = useState<Take[]>([]);
 
   // Helper function to ensure variety in "all categories" mode
   const ensureCategoryVariety = (takes: Take[]): Take[] => {
@@ -54,9 +63,9 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     while (remaining.length > 0) {
       let nextIndex = 0;
       
-      // If we've had 2 consecutive of the same category, MUST find a different one
-      if (sameCount >= 2 && lastCategory) {
-        console.log(`⚠️ Had ${sameCount} consecutive ${lastCategory}, forcing variety`);
+      // If we would have 3 consecutive of the same category, MUST find a different one
+      if (sameCount >= 2 && lastCategory && remaining[0].category === lastCategory) {
+        console.log(`⚠️ Would have ${sameCount + 1} consecutive ${lastCategory}, forcing variety`);
         const differentIndex = remaining.findIndex(take => take.category !== lastCategory);
         if (differentIndex !== -1) {
           nextIndex = differentIndex;
@@ -144,7 +153,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     loadUserInteractions();
   }, [user]);
 
-  // Load initial takes and set up real-time subscription
+  // Load all takes and set up real-time subscription (category-independent)
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
 
@@ -153,38 +162,17 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         setLoading(true);
         setError(null);
 
-        // First, load takes immediately
+        // Load all takes (no category filtering here)
         const initialTakes = await getApprovedTakes();
-        const filteredTakes = filterTakes(initialTakes);
-        setTakes(filteredTakes);
+        setAllTakes(initialTakes);
+        
+        // Cache all takes globally
+        globalTakesCache.set('all', initialTakes);
 
-        // Then set up real-time subscription
+        // Set up real-time subscription for all takes
         unsubscribe = subscribeToApprovedTakes((updatedTakes) => {
-          const filteredUpdatedTakes = filterTakes(updatedTakes);
-          
-          // Smart update: preserve current and next card to prevent shuffling
-          setTakes(currentTakes => {
-            if (currentTakes.length === 0) {
-              // If no takes currently, just set the new ones
-              return filteredUpdatedTakes;
-            }
-            
-            // In "all categories" mode, don't preserve cards - use the full variety algorithm result
-            if (category === 'all') {
-              console.log('🔄 All categories mode: Using full variety algorithm result');
-              return filteredUpdatedTakes;
-            }
-            
-            // For specific categories, preserve first two cards to prevent shuffling
-            const preservedCards = currentTakes.slice(0, 2);
-            const preservedIds = new Set(preservedCards.map(t => t.id));
-            
-            // Filter out preserved cards from new takes
-            const newTakes = filteredUpdatedTakes.filter(t => !preservedIds.has(t.id));
-            
-            // Combine: preserved cards + new takes
-            return [...preservedCards, ...newTakes];
-          });
+          setAllTakes(updatedTakes);
+          globalTakesCache.set('all', updatedTakes);
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load takes');
@@ -204,7 +192,26 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         unsubscribe();
       }
     };
-  }, [user, filterTakes, category]); // Add category as dependency
+  }, [user]); // Remove category from dependencies
+
+  // Apply category filtering and preserve local state
+  useEffect(() => {
+    if (allTakes.length === 0) {
+      setTakes([]);
+      return;
+    }
+
+    console.log(`🔄 Filtering ${allTakes.length} takes for category: ${category}`);
+    
+    // Clear cache to ensure fresh data when switching categories
+    categoryStateCache.clear();
+    
+    // Apply fresh filtering
+    const filteredTakes = filterTakes(allTakes);
+    setTakes(filteredTakes);
+    
+    console.log(`✅ Filtered to ${filteredTakes.length} takes for category: ${category}`);
+  }, [allTakes, category, interactedTakeIds, filterTakes]);
 
   // Submit a vote
   const handleSubmitVote = useCallback(async (
@@ -227,12 +234,20 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setTakes(prevTakes => {
         // Remove the voted card (should be the first one)
         const remainingTakes = prevTakes.filter(take => take.id !== takeId);
+        
+        // Update cache for current category
+        categoryStateCache.set(category, {
+          takes: remainingTakes,
+          currentIndex: 0,
+          interactedIds: [...interactedTakeIds, takeId]
+        });
+        
         return remainingTakes;
       });
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to submit vote');
     }
-  }, [user]);
+  }, [user, category, interactedTakeIds]);
 
   // Skip a take
   const handleSkipTake = useCallback(async (takeId: string): Promise<void> => {
@@ -249,12 +264,20 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setTakes(prevTakes => {
         // Remove the skipped card (should be the first one)
         const remainingTakes = prevTakes.filter(take => take.id !== takeId);
+        
+        // Update cache for current category
+        categoryStateCache.set(category, {
+          takes: remainingTakes,
+          currentIndex: 0,
+          interactedIds: [...interactedTakeIds, takeId]
+        });
+        
         return remainingTakes;
       });
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to skip take');
     }
-  }, [user]);
+  }, [user, category, interactedTakeIds]);
 
   // Submit a new take
   const handleSubmitNewTake = useCallback(async (
@@ -297,6 +320,12 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     try {
       setLoading(true);
       const freshTakes = await getApprovedTakes();
+      setAllTakes(freshTakes);
+      
+      // Clear cache for current category to force refresh
+      categoryStateCache.delete(category);
+      
+      // Apply filtering with fresh data
       const filteredFreshTakes = filterTakes(freshTakes);
       
       // Smart refresh: append new takes without disrupting current view
@@ -318,14 +347,23 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         // Get only new takes that aren't already preserved
         const newTakes = filteredFreshTakes.filter(t => !preservedIds.has(t.id));
         
-        return [...preservedCards, ...newTakes];
+        const result = [...preservedCards, ...newTakes];
+        
+        // Update cache with new result
+        categoryStateCache.set(category, {
+          takes: result,
+          currentIndex: 0,
+          interactedIds: interactedTakeIds
+        });
+        
+        return result;
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh takes');
     } finally {
       setLoading(false);
     }
-  }, [filterTakes]);
+  }, [filterTakes, category, interactedTakeIds]);
 
   return {
     takes,
