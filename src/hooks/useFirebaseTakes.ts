@@ -169,7 +169,13 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
               return filteredUpdatedTakes;
             }
             
-            // Keep first two cards (current and next) unchanged
+            // In "all categories" mode, don't preserve cards - use the full variety algorithm result
+            if (category === 'all') {
+              console.log('🔄 All categories mode: Using full variety algorithm result');
+              return filteredUpdatedTakes;
+            }
+            
+            // For specific categories, preserve first two cards to prevent shuffling
             const preservedCards = currentTakes.slice(0, 2);
             const preservedIds = new Set(preservedCards.map(t => t.id));
             
@@ -177,16 +183,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
             const newTakes = filteredUpdatedTakes.filter(t => !preservedIds.has(t.id));
             
             // Combine: preserved cards + new takes
-            const combinedTakes = [...preservedCards, ...newTakes];
-            
-            // If we're in "all categories" mode, we need to re-apply variety to the new portion
-            if (category === 'all' && newTakes.length > 0) {
-              // Apply variety algorithm to just the new takes, then combine
-              const varietyNewTakes = ensureCategoryVariety(newTakes);
-              return [...preservedCards, ...varietyNewTakes];
-            }
-            
-            return combinedTakes;
+            return [...preservedCards, ...newTakes];
           });
         });
       } catch (err) {
@@ -308,7 +305,13 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           return filteredFreshTakes;
         }
         
-        // Keep first two cards unchanged
+        // In "all categories" mode, don't preserve cards - use the full variety algorithm result
+        if (category === 'all') {
+          console.log('🔄 All categories refresh: Using full variety algorithm result');
+          return filteredFreshTakes;
+        }
+        
+        // For specific categories, keep first two cards unchanged
         const preservedCards = currentTakes.slice(0, 2);
         const preservedIds = new Set(preservedCards.map(t => t.id));
         
