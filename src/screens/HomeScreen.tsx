@@ -6,6 +6,8 @@ import {
   StatusBar,
   Text,
   TouchableOpacity,
+  ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
 import { CategoryDropdown } from '../components/CategoryDropdown';
@@ -28,6 +30,7 @@ export const HomeScreen: React.FC = () => {
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
+  const [refreshing, setRefreshing] = useState(false);
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes } = useFirebaseTakes({
     category: selectedCategory
@@ -106,6 +109,18 @@ export const HomeScreen: React.FC = () => {
     return;
   };
 
+  const handlePullToRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshTakes();
+      await refreshStats();
+    } catch (error) {
+      console.error('Pull to refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar 
@@ -113,8 +128,20 @@ export const HomeScreen: React.FC = () => {
         backgroundColor={theme.background}
       />
       
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handlePullToRefresh}
+            colors={[theme.primary]}
+            tintColor={theme.primary}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
           <AnimatedPressable 
             style={[styles.headerButton, { backgroundColor: theme.surface }]}
             onPress={() => setShowMyTakesModal(true)}
@@ -289,6 +316,7 @@ export const HomeScreen: React.FC = () => {
       >
         <Text style={styles.fabText}>✏️</Text>
       </TouchableOpacity>
+      </ScrollView>
 
       {/* Ad Consent Modal */}
       <AdConsentModal isDarkMode={isDarkMode} />
@@ -300,6 +328,9 @@ export const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   header: {
     paddingHorizontal: dimensions.spacing.lg,
