@@ -2,7 +2,6 @@
 // Checks for hate speech, profanity, and inappropriate content
 
 import Constants from 'expo-constants';
-import * as Updates from 'expo-updates';
 
 interface ModerationResult {
   approved: boolean;
@@ -15,11 +14,11 @@ interface SemanticMatchResult {
   suggestedCategory?: string;
 }
 
-// ChatGPT's bulletproof solution: Use expo-constants + manifest fallback
-const OPENAI_API_KEY =
-  (Constants.expoConfig?.extra as any)?.openaiApiKey ??
-  // When running an OTA update, use the manifest's extra:
-  (Updates.manifest as any)?.extra?.openaiApiKey;
+// ChatGPT's bulletproof solution: Use expo-constants for manifest embedding
+// Fallback to process.env for development
+const OPENAI_API_KEY = 
+  (Constants.expoConfig?.extra as any)?.openaiApiKey ?? 
+  process.env.EXPO_PUBLIC_OPENAI_API_KEY;
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
@@ -28,8 +27,8 @@ console.log('🔐 OpenAI Debug Info (ChatGPT Method):');
 console.log('  Key present?', !!OPENAI_API_KEY);
 console.log('  Key preview:', String(OPENAI_API_KEY || '').slice(0, 7) + '…');
 console.log('  Key source:', 
-  (Constants.expoConfig as any)?.extra?.openaiApiKey ? 'expoConfig' :
-  (Updates.manifest as any)?.extra?.openaiApiKey ? 'manifest' : 'none'
+  (Constants.expoConfig as any)?.extra?.openaiApiKey ? 'expoConfig' : 
+  process.env.EXPO_PUBLIC_OPENAI_API_KEY ? 'process.env' : 'none'
 );
 console.log('  Environment:', __DEV__ ? 'DEVELOPMENT' : 'PRODUCTION');
 
@@ -45,8 +44,7 @@ export const testOpenAIConnection = async (): Promise<{ success: boolean; error?
   
   try {
     const response = await fetch('https://api.openai.com/v1/models', {
-      headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` },
-      timeout: 10000, // 10 second timeout
+      headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` }
     });
     
     const status = response.ok ? 'SUCCESS' : `FAILED (${response.status})`;
@@ -59,7 +57,7 @@ export const testOpenAIConnection = async (): Promise<{ success: boolean; error?
     }
     
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     const errorMsg = `Network/Connection error: ${error.message}`;
     console.error('🔴 OpenAI API Test Error:', errorMsg);
     return { success: false, error: errorMsg };
