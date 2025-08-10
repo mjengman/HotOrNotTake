@@ -32,6 +32,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('hottest');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isAtTop, setIsAtTop] = useState(true);
   
   const [hottestTakes, setHottestTakes] = useState<Record<string, Take[]>>({});
   const [nottestTakes, setNottestTakes] = useState<Record<string, Take[]>>({});
@@ -75,9 +76,30 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   };
 
   const onRefresh = async () => {
+    console.log(`🔄 Pull-to-refresh triggered! isAtTop: ${isAtTop}`);
+    
+    // Only refresh if we're at the top
+    if (!isAtTop) {
+      console.log(`❌ Refresh blocked - not at top`);
+      return;
+    }
+    
+    console.log(`✅ Refresh allowed - loading leaderboards...`);
     setRefreshing(true);
     await loadLeaderboards();
     setRefreshing(false);
+  };
+
+  const handleScroll = (event: any) => {
+    const { contentOffset } = event.nativeEvent;
+    // Be very strict - only allow refresh at exactly the top
+    const newIsAtTop = contentOffset.y <= 1;
+    
+    // Only update if the state actually changed to avoid unnecessary re-renders
+    if (newIsAtTop !== isAtTop) {
+      console.log(`📜 Scroll position: ${contentOffset.y.toFixed(1)}px, isAtTop: ${newIsAtTop}, RefreshControl: ${newIsAtTop ? 'ENABLED' : 'DISABLED'}`);
+      setIsAtTop(newIsAtTop);
+    }
   };
 
   // Hidden dev feature: Handle hottest tab taps
@@ -274,9 +296,14 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       <ScrollView
         style={styles.scrollView}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+          />
         }
         showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         {loading ? (
           <View style={styles.loadingContainer}>
