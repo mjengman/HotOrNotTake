@@ -16,6 +16,7 @@ import {
   getMostSkippedTakesByCategory,
   getDatabaseStats,
 } from '../services/takeService';
+import { testOpenAIConnection } from '../services/aiModerationService';
 
 interface LeaderboardScreenProps {
   onClose: () => void;
@@ -46,6 +47,11 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     aiGenerated: number;
     userGenerated: number;
   } | null>(null);
+  
+  // Hidden AI debug feature - tap counter for Most Skipped
+  const [skippedTapCount, setSkippedTapCount] = useState(0);
+  const [showAIDebug, setShowAIDebug] = useState(false);
+  const [aiStatus, setAiStatus] = useState<{ success: boolean; error?: string; timestamp?: Date } | null>(null);
   
   const theme = isDarkMode ? colors.dark : colors.light;
 
@@ -92,6 +98,35 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     }
     
     setActiveTab('hottest');
+  };
+
+  const handleSkippedTabPress = async () => {
+    const newCount = skippedTapCount + 1;
+    setSkippedTapCount(newCount);
+    
+    if (newCount >= 5 && !showAIDebug) {
+      console.log('🔍 Testing OpenAI API (dev feature)...');
+      try {
+        const result = await testOpenAIConnection();
+        setAiStatus({
+          success: result.success,
+          error: result.error,
+          timestamp: new Date()
+        });
+        setShowAIDebug(true);
+        console.log('🔐 AI API test result:', result);
+      } catch (error) {
+        console.error('Error testing AI API:', error);
+        setAiStatus({
+          success: false,
+          error: error.message,
+          timestamp: new Date()
+        });
+        setShowAIDebug(true);
+      }
+    }
+    
+    setActiveTab('skipped');
   };
 
   useEffect(() => {
@@ -214,7 +249,11 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 backgroundColor: activeTab === tab.key ? theme.primary : theme.surface,
               },
             ]}
-            onPress={tab.key === 'hottest' ? handleHottestTabPress : () => setActiveTab(tab.key)}
+            onPress={
+              tab.key === 'hottest' ? handleHottestTabPress :
+              tab.key === 'skipped' ? handleSkippedTabPress :
+              () => setActiveTab(tab.key)
+            }
           >
             <Text style={styles.tabIcon}>{tab.icon}</Text>
             <Text
@@ -278,6 +317,55 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                   }}
                 >
                   <Text style={[styles.hideStatsText, { color: theme.primary }]}>Hide Stats</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* AI Debug - Hidden Dev Feature */}
+            {showAIDebug && aiStatus && (
+              <View style={[styles.dbStatsContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.dbStatsTitle, { color: theme.text }]}>🤖 AI Debug Status (Dev)</Text>
+                <Text style={[styles.dbStatsText, { 
+                  color: aiStatus.success ? '#4CAF50' : '#F44336' 
+                }]}>
+                  {aiStatus.success ? '✅ AI Ready - Everything working!' : `❌ AI Failed: ${aiStatus.error}`}
+                </Text>
+                <Text style={[styles.dbStatsText, { color: theme.textSecondary }]}>
+                  Last tested: {aiStatus.timestamp?.toLocaleTimeString()}
+                </Text>
+                <Text style={[styles.dbStatsText, { color: theme.textSecondary }]}>
+                  OpenAI API endpoint: https://api.openai.com/v1/models
+                </Text>
+                <TouchableOpacity 
+                  style={styles.hideStatsButton}
+                  onPress={async () => {
+                    // Re-test API when user taps
+                    try {
+                      const result = await testOpenAIConnection();
+                      setAiStatus({
+                        success: result.success,
+                        error: result.error,
+                        timestamp: new Date()
+                      });
+                    } catch (error) {
+                      setAiStatus({
+                        success: false,
+                        error: error.message,
+                        timestamp: new Date()
+                      });
+                    }
+                  }}
+                >
+                  <Text style={[styles.hideStatsText, { color: theme.primary }]}>Re-test AI</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.hideStatsButton}
+                  onPress={() => {
+                    setShowAIDebug(false);
+                    setSkippedTapCount(0);
+                  }}
+                >
+                  <Text style={[styles.hideStatsText, { color: theme.primary }]}>Hide AI Debug</Text>
                 </TouchableOpacity>
               </View>
             )}

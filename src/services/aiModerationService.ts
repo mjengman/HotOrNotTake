@@ -1,6 +1,9 @@
 // AI Moderation Service for user-submitted takes
 // Checks for hate speech, profanity, and inappropriate content
 
+import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
+
 interface ModerationResult {
   approved: boolean;
   reason?: string;
@@ -12,20 +15,63 @@ interface SemanticMatchResult {
   suggestedCategory?: string;
 }
 
-const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+// ChatGPT's bulletproof solution: Use expo-constants + manifest fallback
+const OPENAI_API_KEY =
+  (Constants.expoConfig?.extra as any)?.openaiApiKey ??
+  // When running an OTA update, use the manifest's extra:
+  (Updates.manifest as any)?.extra?.openaiApiKey;
+
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
-// Debug logging for ChatGPT's suggestion
-console.log('🔐 OpenAI Debug Info:');
+// ChatGPT's enhanced debug logging
+console.log('🔐 OpenAI Debug Info (ChatGPT Method):');
 console.log('  Key present?', !!OPENAI_API_KEY);
 console.log('  Key preview:', String(OPENAI_API_KEY || '').slice(0, 7) + '…');
+console.log('  Key source:', 
+  (Constants.expoConfig as any)?.extra?.openaiApiKey ? 'expoConfig' :
+  (Updates.manifest as any)?.extra?.openaiApiKey ? 'manifest' : 'none'
+);
 console.log('  Environment:', __DEV__ ? 'DEVELOPMENT' : 'PRODUCTION');
+
+// Test OpenAI API connection (Grok's suggestion)
+export const testOpenAIConnection = async (): Promise<{ success: boolean; error?: string }> => {
+  console.log('🧪 Testing OpenAI API connection...');
+  
+  if (!OPENAI_API_KEY) {
+    const error = '🔴 CRITICAL: OpenAI API key missing!';
+    console.error(error);
+    return { success: false, error };
+  }
+  
+  try {
+    const response = await fetch('https://api.openai.com/v1/models', {
+      headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+      timeout: 10000, // 10 second timeout
+    });
+    
+    const status = response.ok ? 'SUCCESS' : `FAILED (${response.status})`;
+    console.log(`🟢 OpenAI API Test: ${status}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error details');
+      console.error('🔴 API Error Details:', errorText);
+      return { success: false, error: `API returned ${response.status}: ${errorText}` };
+    }
+    
+    return { success: true };
+  } catch (error) {
+    const errorMsg = `Network/Connection error: ${error.message}`;
+    console.error('🔴 OpenAI API Test Error:', errorMsg);
+    return { success: false, error: errorMsg };
+  }
+};
 
 // Simple category validation using GPT prompt
 export const validateTakeCategory = async (takeText: string, category: string): Promise<{ matches: boolean; reason?: string }> => {
   if (!OPENAI_API_KEY) {
-    console.warn('⚠️ No OpenAI API key - auto-approving category match');
-    return { matches: true };
+    const error = '🔴 CRITICAL: OpenAI API key not configured for category validation';
+    console.error(error);
+    throw new Error('AI category validation unavailable - missing API key');
   }
 
   try {
@@ -89,9 +135,10 @@ Respond with ONLY "yes" or "no".`;
 
 export const moderateUserTake = async (takeText: string): Promise<ModerationResult> => {
   if (!OPENAI_API_KEY) {
-    console.warn('⚠️ No OpenAI API key - auto-approving take');
-    console.warn('⚠️ Make sure EXPO_PUBLIC_OPENAI_API_KEY is set in EAS secrets');
-    return { approved: true };
+    const error = '🔴 CRITICAL: OpenAI API key not configured for moderation';
+    console.error(error);
+    console.error('⚠️ Make sure EXPO_PUBLIC_OPENAI_API_KEY is set in EAS secrets');
+    throw new Error('AI moderation unavailable - missing API key');
   }
   
   // Additional debugging for device builds

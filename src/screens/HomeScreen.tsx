@@ -52,6 +52,7 @@ export const HomeScreen: React.FC = () => {
   }, [user, authLoading, signIn]);
 
 
+
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
       await submitVote(takeId, vote);
