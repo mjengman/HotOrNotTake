@@ -5,6 +5,7 @@ import {
   SafeAreaView,
   StatusBar,
   Text,
+  TouchableOpacity,
 } from 'react-native';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
 import { CategoryDropdown } from '../components/CategoryDropdown';
@@ -26,6 +27,7 @@ export const HomeScreen: React.FC = () => {
   const [showMyTakesModal, setShowMyTakesModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes } = useFirebaseTakes({
     category: selectedCategory
@@ -230,6 +232,10 @@ export const HomeScreen: React.FC = () => {
         }}>
           <SubmitTakeScreen
             onClose={() => setShowSubmitModal(false)}
+            onSuccess={() => {
+              // Trigger MyTakes refresh when a new take is submitted
+              setMyTakesRefreshTrigger(Date.now());
+            }}
             isDarkMode={isDarkMode}
           />
         </View>
@@ -251,6 +257,7 @@ export const HomeScreen: React.FC = () => {
             onClose={() => setShowMyTakesModal(false)}
             onOpenSubmit={() => setShowSubmitModal(true)}
             isDarkMode={isDarkMode}
+            refreshTrigger={myTakesRefreshTrigger}
           />
         </View>
       )}
@@ -273,6 +280,15 @@ export const HomeScreen: React.FC = () => {
           />
         </View>
       )}
+
+      {/* Floating Action Button for Submit */}
+      <TouchableOpacity
+        style={[styles.fabButton, { backgroundColor: theme.primary }]}
+        onPress={() => setShowSubmitModal(true)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabText}>✏️</Text>
+      </TouchableOpacity>
 
       {/* Ad Consent Modal */}
       <AdConsentModal isDarkMode={isDarkMode} />
@@ -320,14 +336,14 @@ const styles = StyleSheet.create({
     elevation: 5, // For Android shadow
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 45,
+    height: 45,
+    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerButtonIcon: {
-    fontSize: dimensions.fontSize.large,
+    fontSize: dimensions.fontSize.xlarge,
   },
   deckContainer: {
     flex: 1,
@@ -401,5 +417,26 @@ const styles = StyleSheet.create({
     fontSize: dimensions.fontSize.small,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  fabButton: {
+    position: 'absolute',
+    bottom: 110,
+    right: dimensions.spacing.lg,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+  },
+  fabText: {
+    fontSize: 24,
   },
 });

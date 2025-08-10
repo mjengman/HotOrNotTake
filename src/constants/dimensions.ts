@@ -9,7 +9,7 @@ export const dimensions = {
   },
   card: {
     width: width * 0.9,
-    height: height * 0.55,
+    height: height * 0.5,
     borderRadius: 16,
   },
   spacing: {

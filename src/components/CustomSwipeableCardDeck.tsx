@@ -280,6 +280,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
+    bottom: 110
   },
   nextCard: {
     transform: [{ scale: 0.95 }],
@@ -356,7 +357,7 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 65,
     backgroundColor: 'rgba(0,0,0,0.7)',
     paddingHorizontal: 20,
     paddingVertical: 10,

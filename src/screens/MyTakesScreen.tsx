@@ -17,12 +17,14 @@ interface MyTakesScreenProps {
   onClose: () => void;
   onOpenSubmit: () => void;
   isDarkMode?: boolean;
+  refreshTrigger?: number; // Timestamp to trigger refresh
 }
 
 export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
   onClose,
   onOpenSubmit,
   isDarkMode = false,
+  refreshTrigger,
 }) => {
   const { user } = useAuth();
   const [takes, setTakes] = useState<Take[]>([]);
@@ -54,6 +56,14 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
   useEffect(() => {
     loadUserTakes();
   }, [user]);
+
+  // Refresh when refreshTrigger changes (new take submitted)
+  useEffect(() => {
+    if (refreshTrigger && user) {
+      console.log(`📱 My Takes: Refreshing due to new submission (trigger: ${refreshTrigger})`);
+      loadUserTakes();
+    }
+  }, [refreshTrigger, user]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -434,7 +444,7 @@ const styles = StyleSheet.create({
   },
   fabButton: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 110,
     right: dimensions.spacing.lg,
     width: 56,
     height: 56,

@@ -255,6 +255,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Add take to interacted list (filtering effect will handle takes update)
       setInteractedTakeIds(prev => [...prev, takeId]);
     } catch (err) {
+      console.error('❌ Skip failed in hook:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to skip take');
     }
   }, [user, category, interactedTakeIds]);
@@ -275,6 +276,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       await incrementUserSubmissionCount(user.uid, takeId);
       
       // Force refresh takes list to show new submission immediately
+      // Add a small delay to ensure the database write has propagated
+      await new Promise(resolve => setTimeout(resolve, 500));
       const freshTakes = await getApprovedTakes();
       setAllTakes(freshTakes);
       

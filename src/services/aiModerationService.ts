@@ -12,8 +12,16 @@ const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 export const moderateUserTake = async (takeText: string): Promise<ModerationResult> => {
   if (!OPENAI_API_KEY) {
     console.warn('⚠️ No OpenAI API key - auto-approving take');
+    console.warn('⚠️ Make sure EXPO_PUBLIC_OPENAI_API_KEY is set in EAS secrets');
     return { approved: true };
   }
+  
+  // Additional debugging for device builds
+  console.log(`🔑 API Key exists: ${OPENAI_API_KEY ? 'YES' : 'NO'}`);
+  console.log(`🔑 API Key length: ${OPENAI_API_KEY ? OPENAI_API_KEY.length : 0}`);
+  console.log(`🔑 API Key starts with sk-: ${OPENAI_API_KEY ? OPENAI_API_KEY.startsWith('sk-') : 'NO'}`);
+  console.log(`📱 Environment: ${__DEV__ ? 'DEVELOPMENT' : 'PRODUCTION'}`);
+  console.log(`🌐 API URL: ${OPENAI_API_URL}`);
 
   try {
     console.log(`🛡️ Moderating take: "${takeText.substring(0, 50)}..."`);

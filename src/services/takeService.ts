@@ -317,14 +317,17 @@ export const getUserSubmittedTakes = async (userId: string): Promise<Take[]> => 
 export const skipTake = async (takeId: string, userId: string): Promise<void> => {
   try {
     const now = new Date();
-    await addDoc(collection(db, 'skips'), {
+    
+    const skipData = {
       takeId,
       userId,
       skippedAt: Timestamp.fromDate(now),
-    });
+    };
+    
+    await addDoc(collection(db, 'skips'), skipData);
   } catch (error) {
     console.error('Error recording skip:', error);
-    throw new Error('Failed to record skip');
+    // Don't throw for skips - they're analytics only
   }
 };
 

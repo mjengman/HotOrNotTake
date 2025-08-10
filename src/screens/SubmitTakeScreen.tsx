@@ -37,11 +37,13 @@ const MAX_LENGTH = 500;
 
 interface SubmitTakeScreenProps {
   onClose: () => void;
+  onSuccess?: () => void; // Called when take is successfully submitted
   isDarkMode?: boolean;
 }
 
 export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
   onClose,
+  onSuccess,
   isDarkMode = false,
 }) => {
   const { user } = useAuth();
@@ -74,6 +76,9 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
         text: text.trim(),
         category: selectedCategory,
       });
+
+      // Notify parent about successful submission
+      onSuccess?.();
 
       Alert.alert(
         'Take Submitted! 🎉',
