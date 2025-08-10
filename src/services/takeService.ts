@@ -183,7 +183,7 @@ export const submitTake = async (
           status = 'rejected';
           approvedAt = undefined;
           rejectedAt = now;
-          rejectionReason = `This doesn't belong in the ${takeData.category} category. ${categoryValidation.reason || 'Please choose a more appropriate category.'}`;
+          rejectionReason = categoryValidation.reason || 'Please choose a more appropriate category.';
         } else {
           console.log(`✅ Take matches category: ${takeData.category}`);
           // Keep default approved values (isApproved = true, status = 'approved', etc.)

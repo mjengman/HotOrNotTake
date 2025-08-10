@@ -75,13 +75,38 @@ export const validateTakeCategory = async (takeText: string, category: string): 
   try {
     console.log(`🎯 Validating take category: "${takeText.substring(0, 30)}..." in "${category}"`);
 
-    const categoryPrompt = `You are a content classifier. Decide if this hot take belongs in the given category.
+    const categoryPrompt = `You are a content classifier for a "Hot Takes" app. Be VERY GENEROUS with category matching.
+
 CATEGORY: ${category}
-HOT TAKE: ${takeText}
+HOT TAKE: "${takeText}"
+
+CATEGORY DEFINITIONS (be inclusive):
+- technology: Anything about computers, phones, gaming, software, AI, internet, tech companies, digital platforms, gadgets, etc
+- food: Meals, restaurants, cooking, eating habits, cuisines, drinks, etc
+- work: Jobs, careers, workplace, productivity, management, business, etc
+- life: General life advice, lifestyle, habits, personal growth, etc
+- entertainment: Movies, TV, music, celebrities, books, etc
+- politics: Government, politicians, policies, social issues, current events, etc
+- relationships: Dating, marriage, friendship, family, social interactions, etc
+- pets: Animals, pet care, animal behavior, etc
+- wellness: Health, fitness, mental health, self-care, etc
+- travel: Tourism, places, transportation, vacation, etc
+- society: Social issues, culture, generational topics, social norms, etc
+- environment: Climate, nature, sustainability, green issues, etc
+- sports: All sports, athletes, teams, competitions, fitness activities, games, leagues
+
+EXAMPLES OF GOOD MATCHES:
+- "Mac is better than PC" → technology ✓
+- "Google vs Apple" → technology ✓  
+- "Console vs PC gaming" → technology ✓
+- "Remote work is overrated" → work ✓
+- "Pineapple on pizza" → food ✓
+
+BE GENEROUS - if it relates AT ALL to the category, approve it.
 Respond with ONLY "yes" or "no".`;
 
     const requestPayload = {
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini', // More permissive model
       messages: [
         {
           role: 'user',
@@ -117,7 +142,7 @@ Respond with ONLY "yes" or "no".`;
       return { matches: true };
     } else if (cleanResponse === 'no' || cleanResponse?.includes('no')) {
       console.log(`❌ Take doesn't match category`);
-      return { matches: false, reason: "Content doesn't fit this category" };
+      return { matches: false, reason: `This doesn't belong in the ${category} category.` };
     } else {
       // Default to approval for unexpected responses
       console.warn(`⚠️ Unexpected validation response: "${validationResponse}" - defaulting to approval`);
@@ -149,38 +174,40 @@ export const moderateUserTake = async (takeText: string): Promise<ModerationResu
   try {
     console.log(`🛡️ Moderating take: "${takeText.substring(0, 50)}..."`);
 
-    const moderationPrompt = `You are a content moderator for a social "Hot or Not Takes" app where users share controversial opinions.
+    const moderationPrompt = `You are a content moderator for a "Hot or Not Takes" app where users share controversial opinions.
 
-REVIEW THIS USER SUBMISSION:
-"${takeText}"
+SUBMISSION: "${takeText}"
 
-MODERATION RULES - BE EXTREMELY LENIENT:
-✅ APPROVE: ALL political opinions (supporting any politician, party, or policy)
-✅ APPROVE: Controversial takes, strong disagreements, passionate opinions
-✅ APPROVE: Edgy humor, sarcasm, heated debates about any topic
-✅ APPROVE: Personal preferences, lifestyle choices, cultural opinions
-✅ APPROVE: Religious views, philosophical statements, moral arguments
-✅ APPROVE: Sports takes, entertainment opinions, food preferences
-✅ APPROVE: Economic views, social commentary, generational debates
+RULES:
+- Be EXTREMELY LENIENT and POLITICALLY NEUTRAL.
+- ALLOW ALL political opinions, factual claims, and controversial takes (e.g., immigration, politicians, economics, social issues, religion, conspiracies).
+- DO NOT fact-check or reject for "misinformation" or "inaccuracy."
+- ONLY REJECT for:
+  1. Direct personal threats (e.g., "I will kill [name]")
+  2. Doxxing (e.g., addresses, phone numbers)
+  3. Graphic sexual content involving minors
+  4. Explicit racial slurs (e.g., n-word)
+  5. Specific calls for violence (e.g., "Murder [name]")
+- DEFAULT TO APPROVAL when in doubt.
 
-EXAMPLES TO APPROVE:
-- "Trump is the best president ever!"
-- "Biden ruined America"
-- "Capitalism is evil"
-- "Religion is stupid"
-- "Gen Z is the worst generation"
-- Strong opinions about anything
+ALLOWED EXAMPLES:
+- "Immigrants should be deported"
+- "Open borders for all"
+- "Trump is the best/worst"
+- "Trump is a convicted felon"
+- "Climate change is fake"
+- "Vaccines cause autism"
+- "Socialism > capitalism"
+- "Religion is nonsense"
 
-❌ ONLY REJECT: Direct threats, doxxing, explicit sexual content, graphic violence descriptions, racial slurs
+Respond with EXACTLY:
+- "APPROVED"
+- "REJECTED: [specific reason]"
 
-Respond with EXACTLY one of these formats:
-"APPROVED" (if content is acceptable)
-"REJECTED: [brief reason]" (if content violates rules)
-
-When in doubt, APPROVE. This platform is for ALL opinions, no matter how controversial.`;
+APPROVE unless it clearly violates the 5 rules above.`;
 
     const requestPayload = {
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini', // More permissive model
       messages: [
         {
           role: 'system',
@@ -191,7 +218,7 @@ When in doubt, APPROVE. This platform is for ALL opinions, no matter how controv
           content: moderationPrompt
         }
       ],
-      max_tokens: 50,
+      max_tokens: 20,
       temperature: 0.1, // Low temperature for consistent moderation
     };
 
@@ -210,20 +237,21 @@ When in doubt, APPROVE. This platform is for ALL opinions, no matter how controv
     }
 
     const data = await response.json();
-    const moderationResponse = data.choices?.[0]?.message?.content?.trim();
+    const moderationResponse = data.choices?.[0]?.message?.content?.trim()?.toLowerCase();
 
     console.log(`🛡️ Moderation response: "${moderationResponse}"`);
 
     if (!moderationResponse) {
-      throw new Error('Empty moderation response');
+      console.warn('⚠️ Empty moderation response - defaulting to approval');
+      return { approved: true };
     }
 
-    // Parse the response
-    if (moderationResponse.startsWith('APPROVED')) {
+    // Robust response parsing (case-insensitive)
+    if (moderationResponse.includes('approved')) {
       console.log('✅ Take approved by AI moderation');
       return { approved: true };
-    } else if (moderationResponse.startsWith('REJECTED:')) {
-      const reason = moderationResponse.replace('REJECTED:', '').trim();
+    } else if (moderationResponse.includes('rejected')) {
+      const reason = moderationResponse.replace('rejected:', '').trim() || 'Unspecified violation';
       console.log(`❌ Take rejected by AI moderation: ${reason}`);
       return { approved: false, reason };
     } else {
