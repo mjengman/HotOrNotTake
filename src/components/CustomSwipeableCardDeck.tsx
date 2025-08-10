@@ -197,8 +197,18 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     );
 
     return {
-      transform: [{ scale: nextScale }],
-      opacity: nextOpacity,
+      transform: [{ 
+        scale: withSpring(nextScale, {
+          damping: 99,
+          stiffness: 0.1,
+          mass: 0.1
+        })
+      }],
+      opacity: withSpring(nextOpacity, {
+        damping: 90,
+        stiffness: 0.1,
+        mass: 0.1
+      }),
       zIndex: 1, // Keep below current card
     };
   });
