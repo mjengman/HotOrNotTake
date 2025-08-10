@@ -21,6 +21,8 @@ import { LeaderboardScreen } from './LeaderboardScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
 // AI seeding disabled for MVP launch
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
+// Removed class-based ad service (API issue)
+// import adService from '../services/adService';
 import { colors, dimensions } from '../constants';
 
 export const HomeScreen: React.FC = () => {
@@ -39,7 +41,7 @@ export const HomeScreen: React.FC = () => {
   
   // AI seeding is now manual-only via pull-to-refresh
   
-  // Use the interstitial ads hook
+  // Use the hook-based interstitial ads
   const { onUserSwipe, onSessionEnd } = useInterstitialAds();
   
   const theme = isDarkMode ? colors.dark : colors.light;

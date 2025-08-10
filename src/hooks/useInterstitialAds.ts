@@ -11,23 +11,19 @@ let hasLoggedAdConfig = false;
 
 // Get the correct ad unit ID  
 const getAdUnitId = (): string => {
-  if (IS_PRODUCTION_BUILD && !isDevelopment) {
-    const productionId = Platform.OS === 'android' 
-      ? 'ca-app-pub-1745058833253836/4423842963'
-      : TestIds.INTERSTITIAL; // iOS placeholder until you get the iOS ID
-    
-    if (!hasLoggedAdConfig) {
-      console.log('🚀 Using PRODUCTION ad ID:', productionId);
-      hasLoggedAdConfig = true;
-    }
-    return productionId;
-  }
+  // FIXED: Use production IDs in development too (like the class-based service did)
+  // This matches the working behavior you had before
+  const productionId = Platform.OS === 'android' 
+    ? 'ca-app-pub-1745058833253836/4423842963'
+    : TestIds.INTERSTITIAL; // iOS placeholder until you get the iOS ID
   
   if (!hasLoggedAdConfig) {
-    console.log('🧪 Using TEST ad ID:', TestIds.INTERSTITIAL);
+    console.log('🚀 Using PRODUCTION ad ID (fixed):', productionId);
+    console.log('📱 Platform:', Platform.OS);
+    console.log('🏗️ Development mode:', isDevelopment);
     hasLoggedAdConfig = true;
   }
-  return TestIds.INTERSTITIAL;
+  return productionId;
 };
 
 // Use the hook-based approach which should work better
@@ -37,19 +33,43 @@ export const useInterstitialAds = () => {
   
   const adUnitId = getAdUnitId();
 
+  console.log('🎬 Interstitial ads hook initialized with unit ID:', adUnitId);
+
   // Use the correct ad unit ID
   const { isLoaded, isClosed, load, show, error } = useInterstitialAd(adUnitId);
 
+  console.log('🎬 Ad hook state:', { isLoaded, isClosed, error: error?.message });
+
   useEffect(() => {
     // Start loading the interstitial ad
-    load();
+    console.log('🎬 Starting interstitial ad load...');
+    try {
+      load();
+      
+      // Set a timeout to detect if ad never loads (common with test ads)
+      const loadTimeout = setTimeout(() => {
+        if (!isLoaded) {
+          console.warn('⏰ Interstitial ad load timeout - this is common with test ads in development');
+          console.warn('⏰ The ad may work in production builds with real ad units');
+        }
+      }, 30000); // 30 seconds timeout
+      
+      return () => clearTimeout(loadTimeout);
+    } catch (loadError) {
+      console.error('🎬 Error calling load():', loadError);
+    }
   }, []); // Remove load dependency to prevent double loading
   
   useEffect(() => {
     if (error) {
       console.error('❌ Interstitial ad error:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      console.error('❌ Ad unit ID that failed:', adUnitId);
       // Retry loading after 5 seconds on error
-      setTimeout(() => load(), 5000);
+      setTimeout(() => {
+        console.log('🔄 Retrying interstitial ad load after error...');
+        load();
+      }, 5000);
     }
   }, [error, load]);
   
@@ -74,10 +94,16 @@ export const useInterstitialAds = () => {
     if (newCount >= SWIPES_UNTIL_AD) {
       if (isLoaded) {
         console.log('🎬 Showing interstitial ad NOW!');
-        show();
-        setSwipeCount(0);
+        try {
+          show();
+          setSwipeCount(0);
+        } catch (showError) {
+          console.error('🎬 Error showing ad:', showError);
+        }
       } else {
         console.log('⏳ Ad not loaded yet, will show when ready');
+        console.log('⏳ This is common with test ads in development mode');
+        console.log('⏳ Current ad state:', { isLoaded, error: error?.message });
         // Try to show as soon as it loads
         if (!isLoaded) {
           load();

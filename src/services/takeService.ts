@@ -161,31 +161,32 @@ export const submitTake = async (
     if (!isAIGenerated) {
       console.log(`🛡️ Moderating user-submitted take: "${takeData.text.substring(0, 50)}..."`);
       
-      // Step 1: Validate category match
-      const categoryValidation = await validateTakeCategory(takeData.text, takeData.category);
+      // Step 1: Content moderation (check for serious issues first)
+      const moderationResult = await moderateUserTake(takeData.text);
       
-      if (!categoryValidation.matches) {
-        console.log(`❌ Take rejected - wrong category: ${categoryValidation.reason}`);
+      if (!moderationResult.approved) {
+        console.log(`❌ Take rejected by AI moderation: ${moderationResult.reason}`);
         isApproved = false;
         status = 'rejected';
         approvedAt = undefined;
         rejectedAt = now;
-        rejectionReason = `This doesn't belong in the ${takeData.category} category. ${categoryValidation.reason || 'Please choose a more appropriate category.'}`;
+        rejectionReason = moderationResult.reason || 'Content violates community guidelines';
       } else {
-        console.log(`✅ Take matches category: ${takeData.category}`);
+        console.log(`✅ Take approved by AI moderation`);
         
-        // Step 2: Content moderation
-        const moderationResult = await moderateUserTake(takeData.text);
+        // Step 2: Validate category match (only if content is safe)
+        const categoryValidation = await validateTakeCategory(takeData.text, takeData.category);
         
-        if (!moderationResult.approved) {
-          console.log(`❌ Take rejected by AI moderation: ${moderationResult.reason}`);
+        if (!categoryValidation.matches) {
+          console.log(`❌ Take rejected - wrong category: ${categoryValidation.reason}`);
           isApproved = false;
           status = 'rejected';
           approvedAt = undefined;
           rejectedAt = now;
-          rejectionReason = moderationResult.reason || 'Content violates community guidelines';
+          rejectionReason = `This doesn't belong in the ${takeData.category} category. ${categoryValidation.reason || 'Please choose a more appropriate category.'}`;
         } else {
-          console.log(`✅ Take approved by AI moderation`);
+          console.log(`✅ Take matches category: ${takeData.category}`);
+          // Keep default approved values (isApproved = true, status = 'approved', etc.)
         }
       }
     } else {

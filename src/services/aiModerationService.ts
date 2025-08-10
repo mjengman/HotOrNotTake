@@ -154,20 +154,30 @@ export const moderateUserTake = async (takeText: string): Promise<ModerationResu
 REVIEW THIS USER SUBMISSION:
 "${takeText}"
 
-MODERATION RULES:
-✅ APPROVE: Controversial opinions, political views, strong disagreements, edgy humor
-✅ APPROVE: Passionate takes about any topic (even if many would disagree)  
-✅ APPROVE: Philosophical statements, life advice, personal reflections
-✅ APPROVE: Opinion pieces on any topic - controversial or not
-❌ REJECT: Hate speech targeting groups, explicit sexual content, graphic violence
-❌ REJECT: Personal harassment, doxxing, illegal activity promotion
-❌ REJECT: Excessive profanity (multiple f-words, racial slurs, etc.)
+MODERATION RULES - BE EXTREMELY LENIENT:
+✅ APPROVE: ALL political opinions (supporting any politician, party, or policy)
+✅ APPROVE: Controversial takes, strong disagreements, passionate opinions
+✅ APPROVE: Edgy humor, sarcasm, heated debates about any topic
+✅ APPROVE: Personal preferences, lifestyle choices, cultural opinions
+✅ APPROVE: Religious views, philosophical statements, moral arguments
+✅ APPROVE: Sports takes, entertainment opinions, food preferences
+✅ APPROVE: Economic views, social commentary, generational debates
+
+EXAMPLES TO APPROVE:
+- "Trump is the best president ever!"
+- "Biden ruined America"
+- "Capitalism is evil"
+- "Religion is stupid"
+- "Gen Z is the worst generation"
+- Strong opinions about anything
+
+❌ ONLY REJECT: Direct threats, doxxing, explicit sexual content, graphic violence descriptions, racial slurs
 
 Respond with EXACTLY one of these formats:
 "APPROVED" (if content is acceptable)
 "REJECTED: [brief reason]" (if content violates rules)
 
-Be very lenient - this is a platform for ALL types of takes and opinions, controversial or not.`;
+When in doubt, APPROVE. This platform is for ALL opinions, no matter how controversial.`;
 
     const requestPayload = {
       model: 'gpt-3.5-turbo',
