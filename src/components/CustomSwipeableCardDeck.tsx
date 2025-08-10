@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -45,6 +45,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   isDarkMode = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [nextIndex, setNextIndex] = useState(1); // Track next card explicitly
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
   
   const translateX = useSharedValue(0);
@@ -56,20 +57,23 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Ensure takes is always an array
   const safeTakes = takes || [];
 
+  // Update nextIndex when currentIndex changes
+  useEffect(() => {
+    setNextIndex(currentIndex + 1);
+  }, [currentIndex]);
+
   const handleVote = (vote: 'hot' | 'not') => {
     if (currentIndex < safeTakes.length) {
       const currentTake = safeTakes[currentIndex];
       onVote(currentTake.id, vote);
-      
-      // Clear vote indicator after showing it longer
-      setTimeout(() => setCurrentVote(null), 970); // Fine-tuned timing
-      
-      // Move to next card immediately
-      const nextIndex = currentIndex + 1;
-      setCurrentIndex(nextIndex);
-      
-      // Check if we've reached the end - no more content loading for MVP
+      setCurrentVote(vote);
+      // Clear vote indicator after animation
+      setTimeout(() => setCurrentVote(null), 800); // Matches animation duration
     }
+  };
+
+  const moveToNextCard = () => {
+    setCurrentIndex((prev) => prev + 1);
   };
 
   const handleSkip = () => {
@@ -115,35 +119,38 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
 
       if (shouldSwipeRight) {
-        // Immediate feedback - show indicator and haptic
-        runOnJS(setCurrentVote)('hot');
         runOnJS(Vibration.vibrate)(25);
-        
-        translateX.value = withSpring(width * 1.5, { damping: 15, stiffness: 120 }, () => {
-          runOnJS(handleVote)('hot');
-          // Reset position immediately for the next card
-          translateX.value = 0;
-          translateY.value = 0;
-        });
+        runOnJS(handleVote)('hot');
+        translateX.value = withSpring(
+          width * 1.5,
+          { damping: 15, stiffness: 120, mass: 0.8 }, // Smoother animation
+          () => {
+            translateX.value = 0;
+            translateY.value = 0;
+            scale.value = withSpring(1);
+            runOnJS(moveToNextCard)();
+          }
+        );
       } else if (shouldSwipeLeft) {
-        // Immediate feedback - show indicator and haptic
-        runOnJS(setCurrentVote)('not');
         runOnJS(Vibration.vibrate)(25);
-        
-        translateX.value = withSpring(-width * 1.5, { damping: 15, stiffness: 120 }, () => {
-          runOnJS(handleVote)('not');
-          // Reset position immediately for the next card
-          translateX.value = 0;
-          translateY.value = 0;
-        });
+        runOnJS(handleVote)('not');
+        translateX.value = withSpring(
+          -width * 1.5,
+          { damping: 15, stiffness: 120, mass: 0.8 },
+          () => {
+            translateX.value = 0;
+            translateY.value = 0;
+            scale.value = withSpring(1);
+            runOnJS(moveToNextCard)();
+          }
+        );
       } else {
         // Soft haptic feedback for bounce back
         runOnJS(Vibration.vibrate)(8);
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
+        scale.value = withSpring(1);
       }
-      
-      scale.value = withSpring(1);
     },
   });
 
@@ -170,6 +177,29 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         { scale: scale.value },
       ],
       opacity,
+      zIndex: 2, // Ensure current card is above next card
+    };
+  });
+
+  const nextCardStyle = useAnimatedStyle(() => {
+    // Scale up next card as current card swipes away
+    const nextScale = interpolate(
+      Math.abs(translateX.value),
+      [0, SWIPE_THRESHOLD],
+      [0.95, 1],
+      Extrapolate.CLAMP
+    );
+    const nextOpacity = interpolate(
+      Math.abs(translateX.value),
+      [0, SWIPE_THRESHOLD],
+      [0.5, 1],
+      Extrapolate.CLAMP
+    );
+
+    return {
+      transform: [{ scale: nextScale }],
+      opacity: nextOpacity,
+      zIndex: 1, // Keep below current card
     };
   });
 
@@ -228,7 +258,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   }
 
   const currentTake = safeTakes[currentIndex];
-  const nextTake = safeTakes[currentIndex + 1];
+  const nextTake = safeTakes[nextIndex];
 
   return (
     <View style={styles.container}>
@@ -236,9 +266,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       
       {/* Next card (background) */}
       {nextTake && (
-        <View style={[styles.cardContainer, styles.nextCard]}>
+        <Animated.View style={[styles.cardContainer, styles.nextCard, nextCardStyle]}>
           <TakeCard take={nextTake} isDarkMode={isDarkMode} />
-        </View>
+        </Animated.View>
       )}
       
       {/* Current card (foreground) */}
@@ -283,8 +313,7 @@ const styles = StyleSheet.create({
     bottom: 110
   },
   nextCard: {
-    transform: [{ scale: 0.95 }],
-    opacity: 0.5,
+    // Static styles moved to nextCardStyle for animation
   },
   endContainer: {
     alignItems: 'center',

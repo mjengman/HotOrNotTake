@@ -13,9 +13,9 @@ let hasLoggedAdConfig = false;
 const getAdUnitId = (): string => {
   // FIXED: Use production IDs in development too (like the class-based service did)
   // This matches the working behavior you had before
-  const productionId = Platform.OS === 'android' 
-    ? 'ca-app-pub-1745058833253836/4423842963'
-    : TestIds.INTERSTITIAL; // iOS placeholder until you get the iOS ID
+  const productionId = __DEV__ 
+    ? TestIds.INTERSTITIAL // Use test ads in development/preview builds
+    : (Platform.OS === 'android' ? 'ca-app-pub-1745058833253836/4423842963' : TestIds.INTERSTITIAL);
   
   if (!hasLoggedAdConfig) {
     console.log('🚀 Using PRODUCTION ad ID (fixed):', productionId);

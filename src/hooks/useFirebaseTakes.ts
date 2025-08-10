@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Take, TakeSubmission } from '../types/Take';
 import {
   getApprovedTakes,
@@ -32,90 +32,69 @@ interface UseFirebaseTakesOptions {
   category?: string;
 }
 
-// Global cache to preserve takes across category switches
-const globalTakesCache = new Map<string, Take[]>();
+// Cache to preserve takes across category switches
 const categoryStateCache = new Map<string, {
   takes: Take[];
-  currentIndex: number;
   interactedIds: string[];
 }>();
 
 export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFirebaseTakesResult => {
   const { user } = useAuth();
   const { category = 'all' } = options;
-  const [takes, setTakes] = useState<Take[]>([]);
+  // Removed takes state - will use useMemo instead
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [interactedTakeIds, setInteractedTakeIds] = useState<string[]>([]);
   const [allTakes, setAllTakes] = useState<Take[]>([]);
 
-  // Helper function to ensure variety in "all categories" mode
-  const ensureCategoryVariety = (takes: Take[]): Take[] => {
-    if (!takes || takes.length <= 2) return takes;
+  // Simplified category variety algorithm - O(n) complexity
+  const ensureCategoryVariety = useCallback((takesArray: Take[]): Take[] => {
+    if (category !== 'all' || takesArray.length <= 2) return takesArray;
     
     const result: Take[] = [];
-    const remaining = [...takes];
+    const availableTakes = [...takesArray];
     let lastCategory: string | null = null;
-    let sameCount = 0;
+    let consecutiveCount = 0;
+    const maxConsecutive = 2;
     
-    console.log(`🎯 Starting category variety for ${takes.length} takes`);
-    
-    while (remaining.length > 0) {
-      let nextIndex = 0;
+    while (availableTakes.length > 0) {
+      // Check if we need variety (already have 2 consecutive of same category)
+      const needsVariety = lastCategory && consecutiveCount >= maxConsecutive;
       
-      // If we would have 3 consecutive of the same category, MUST find a different one
-      if (sameCount >= 2 && lastCategory && remaining[0].category === lastCategory) {
-        console.log(`⚠️ Would have ${sameCount + 1} consecutive ${lastCategory}, forcing variety`);
-        const differentIndex = remaining.findIndex(take => take.category !== lastCategory);
+      let nextTakeIndex = 0;
+      if (needsVariety) {
+        // Try to find a different category
+        const differentIndex = availableTakes.findIndex(t => t.category !== lastCategory);
         if (differentIndex !== -1) {
-          nextIndex = differentIndex;
-          console.log(`✅ Found different category at index ${differentIndex}: ${remaining[differentIndex].category}`);
+          nextTakeIndex = differentIndex;
         } else {
-          console.log(`⚠️ No different categories available, using first available`);
-          // If no different category available, just take the first one
-          nextIndex = 0;
+          // No different categories available, just warn once and continue
+          if (consecutiveCount === maxConsecutive) {
+            console.log(`⚠️ Only ${lastCategory} remains, allowing consecutive takes`);
+          }
         }
       }
       
       // Take the selected item
-      const [selected] = remaining.splice(nextIndex, 1);
-      result.push(selected);
+      const nextTake = availableTakes[nextTakeIndex];
+      availableTakes.splice(nextTakeIndex, 1);
+      result.push(nextTake);
       
-      // Update tracking - this is the key fix!
-      if (selected.category === lastCategory) {
-        sameCount++;
+      // Update tracking
+      if (nextTake.category === lastCategory) {
+        consecutiveCount++;
       } else {
-        lastCategory = selected.category;
-        sameCount = 1; // Reset to 1 (not 0) because we just added one of this category
+        lastCategory = nextTake.category;
+        consecutiveCount = 1;
       }
-      
-      console.log(`📊 Added ${selected.category} (count: ${sameCount})`);
     }
     
-    // Final verification - count consecutive categories
-    let consecutive = 0;
-    let currentCat = '';
-    let maxConsecutive = 0;
-    
-    result.forEach((take, index) => {
-      if (take.category === currentCat) {
-        consecutive++;
-      } else {
-        maxConsecutive = Math.max(maxConsecutive, consecutive);
-        currentCat = take.category;
-        consecutive = 1;
-      }
-    });
-    maxConsecutive = Math.max(maxConsecutive, consecutive);
-    
-    console.log(`✅ Category variety complete: ${result.length} takes, max consecutive: ${maxConsecutive}`);
-    
-    // Log first 10 categories for verification
-    const first10 = result.slice(0, 10).map(t => t.category).join(' -> ');
-    console.log(`🔍 First 10 categories: ${first10}`);
+    // Log summary
+    const categories = result.slice(0, 10).map(t => t.category);
+    console.log(`✅ Category variety: ${result.length} takes, first 10: ${categories.join(' → ')}`);
     
     return result;
-  };
+  }, [category]);
 
   // Filtering logic is now inlined in effects to prevent circular dependencies
 
@@ -152,14 +131,12 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         // Load all takes (no category filtering here)
         const initialTakes = await getApprovedTakes();
         setAllTakes(initialTakes);
-        
-        // Cache all takes globally
-        globalTakesCache.set('all', initialTakes);
+        console.log(`✅ Loaded ${initialTakes.length} approved takes`);
 
         // Set up real-time subscription for all takes
         unsubscribe = subscribeToApprovedTakes((updatedTakes) => {
           setAllTakes(updatedTakes);
-          globalTakesCache.set('all', updatedTakes);
+          console.log(`🔄 Real-time update: ${updatedTakes.length} takes`);
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load takes');
@@ -179,45 +156,42 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         unsubscribe();
       }
     };
-  }, [user]); // Remove category from dependencies
+  }, [user]);
 
-  // Apply category filtering and preserve local state (with debouncing)
-  useEffect(() => {
-    if (allTakes.length === 0) {
-      setTakes([]);
-      return;
+  // Memoized filtering - replaces the old useEffect with proper memoization
+  const takes = useMemo(() => {
+    if (allTakes.length === 0) return [];
+
+    // Check cache first
+    const cacheKey = `${category}-${interactedTakeIds.join(',')}`;
+    const cached = categoryStateCache.get(cacheKey);
+    if (cached && JSON.stringify(cached.interactedIds) === JSON.stringify(interactedTakeIds)) {
+      console.log(`🗳️ Using cached takes for ${category}: ${cached.takes.length} takes`);
+      return cached.takes;
     }
 
-    // Debounce rapid successive calls (common during swipes)
-    const timeoutId = setTimeout(() => {
-      console.log(`🔄 Filtering ${allTakes.length} takes for category: ${category}`);
-      console.log(`🎯 User has interacted with ${interactedTakeIds.length} takes total`);
-      
-      // Clear cache to ensure fresh data when switching categories
-      categoryStateCache.clear();
-      
-      // Apply fresh filtering (inline to avoid dependency issues)
-      let filteredTakes = allTakes.filter(take => !interactedTakeIds.includes(take.id));
-      const removedByInteraction = allTakes.length - filteredTakes.length;
-      if (removedByInteraction > 0) {
-        console.log(`⚠️ Filtered out ${removedByInteraction} takes due to prior interactions`);
-      }
-      
-      // Apply category filter if specified (skip 'all' category)
-      if (category && category !== 'all') {
-        filteredTakes = filteredTakes.filter(take => take.category === category);
-      } else if (category === 'all') {
-        // Ensure variety when showing all categories
-        filteredTakes = ensureCategoryVariety(filteredTakes);
-      }
-      
-      setTakes(filteredTakes);
-      
-      console.log(`✅ Filtered to ${filteredTakes.length} takes for category: ${category}`);
-    }, 50); // 50ms debounce to prevent double calls
-
-    return () => clearTimeout(timeoutId);
-  }, [allTakes, category, interactedTakeIds]);
+    console.log(`🔄 Filtering ${allTakes.length} takes for category: ${category}`);
+    
+    // Apply filtering
+    let filteredTakes = allTakes.filter(take => !interactedTakeIds.includes(take.id));
+    const removedByInteraction = allTakes.length - filteredTakes.length;
+    if (removedByInteraction > 0) {
+      console.log(`⚠️ Filtered out ${removedByInteraction} takes due to prior interactions`);
+    }
+    
+    // Apply category filter
+    if (category && category !== 'all') {
+      filteredTakes = filteredTakes.filter(take => take.category === category);
+    } else if (category === 'all') {
+      filteredTakes = ensureCategoryVariety(filteredTakes);
+    }
+    
+    // Update cache
+    categoryStateCache.set(cacheKey, { takes: filteredTakes, interactedIds: interactedTakeIds });
+    console.log(`✅ Filtered to ${filteredTakes.length} takes for category: ${category}`);
+    
+    return filteredTakes;
+  }, [allTakes, category, interactedTakeIds, ensureCategoryVariety]);
 
   // Submit a vote
   const handleSubmitVote = useCallback(async (
@@ -229,18 +203,25 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
 
     try {
+      // Immediately update interacted IDs to prevent race conditions
+      setInteractedTakeIds(prev => {
+        if (prev.includes(takeId)) return prev;
+        return [...prev, takeId];
+      });
+      
       // Submit the vote to Firebase
       await submitVote(takeId, user.uid, vote);
       
       // Update user's vote count
       await incrementUserVoteCount(user.uid);
       
-      // Add take to interacted list (filtering effect will handle takes update)
-      setInteractedTakeIds(prev => [...prev, takeId]);
+      console.log(`🗳️ Voted ${vote} on take ${takeId}`);
     } catch (err) {
+      // Rollback on error
+      setInteractedTakeIds(prev => prev.filter(id => id !== takeId));
       throw new Error(err instanceof Error ? err.message : 'Failed to submit vote');
     }
-  }, [user, category, interactedTakeIds]);
+  }, [user]);
 
   // Skip a take
   const handleSkipTake = useCallback(async (takeId: string): Promise<void> => {
@@ -249,16 +230,23 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
 
     try {
+      // Immediately update interacted IDs to prevent race conditions
+      setInteractedTakeIds(prev => {
+        if (prev.includes(takeId)) return prev;
+        return [...prev, takeId];
+      });
+      
       // Record the skip in Firebase
       await skipTake(takeId, user.uid);
       
-      // Add take to interacted list (filtering effect will handle takes update)
-      setInteractedTakeIds(prev => [...prev, takeId]);
+      console.log(`⏭️ Skipped take ${takeId}`);
     } catch (err) {
+      // Rollback on error
+      setInteractedTakeIds(prev => prev.filter(id => id !== takeId));
       console.error('❌ Skip failed in hook:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to skip take');
     }
-  }, [user, category, interactedTakeIds]);
+  }, [user]);
 
   // Submit a new take
   const handleSubmitNewTake = useCallback(async (
@@ -313,66 +301,25 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
   }, [user]);
 
-  // Refresh takes manually (preserves current view)
+  // Refresh takes manually
   const refreshTakes = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       const freshTakes = await getApprovedTakes();
       setAllTakes(freshTakes);
       
-      // Clear cache for current category to force refresh
-      categoryStateCache.delete(category);
-      
-      // Apply filtering with fresh data (inline to match main effect)
-      let filteredFreshTakes = freshTakes.filter(take => !interactedTakeIds.includes(take.id));
-      
-      // Apply category filter if specified (skip 'all' category)
-      if (category && category !== 'all') {
-        filteredFreshTakes = filteredFreshTakes.filter(take => take.category === category);
-      } else if (category === 'all') {
-        // Ensure variety when showing all categories
-        filteredFreshTakes = ensureCategoryVariety(filteredFreshTakes);
-      }
-      
-      // Smart refresh: append new takes without disrupting current view
-      setTakes(currentTakes => {
-        if (currentTakes.length === 0) {
-          return filteredFreshTakes;
-        }
-        
-        // In "all categories" mode, don't preserve cards - use the full variety algorithm result
-        if (category === 'all') {
-          console.log('🔄 All categories refresh: Using full variety algorithm result');
-          return filteredFreshTakes;
-        }
-        
-        // For specific categories, keep first two cards unchanged
-        const preservedCards = currentTakes.slice(0, 2);
-        const preservedIds = new Set(preservedCards.map(t => t.id));
-        
-        // Get only new takes that aren't already preserved
-        const newTakes = filteredFreshTakes.filter(t => !preservedIds.has(t.id));
-        
-        const result = [...preservedCards, ...newTakes];
-        
-        // Update cache with new result
-        categoryStateCache.set(category, {
-          takes: result,
-          currentIndex: 0,
-          interactedIds: interactedTakeIds
-        });
-        
-        return result;
-      });
+      // Clear cache to force re-filtering with fresh data
+      categoryStateCache.clear();
+      console.log(`🔄 Refreshed ${freshTakes.length} takes for category: ${category}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh takes');
     } finally {
       setLoading(false);
     }
-  }, [category, interactedTakeIds]);
+  }, [category]);
 
   return {
-    takes,
+    takes, // Now computed via useMemo
     loading,
     error,
     submitVote: handleSubmitVote,
