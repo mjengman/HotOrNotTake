@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Take, TakeFirestore, TakeSubmission, TakeStatus } from '../types/Take';
-import { moderateUserTake } from './aiModerationService';
+import { moderateUserTake, validateTakeCategory } from './aiModerationService';
 
 // Collection references
 const TAKES_COLLECTION = 'takes';
@@ -161,20 +161,32 @@ export const submitTake = async (
     if (!isAIGenerated) {
       console.log(`🛡️ Moderating user-submitted take: "${takeData.text.substring(0, 50)}..."`);
       
-      const moderationResult = await moderateUserTake(takeData.text);
+      // Step 1: Validate category match
+      const categoryValidation = await validateTakeCategory(takeData.text, takeData.category);
       
-      if (!moderationResult.approved) {
-        console.log(`❌ Take rejected by AI moderation: ${moderationResult.reason}`);
+      if (!categoryValidation.matches) {
+        console.log(`❌ Take rejected - wrong category: ${categoryValidation.reason}`);
         isApproved = false;
         status = 'rejected';
         approvedAt = undefined;
         rejectedAt = now;
-        rejectionReason = moderationResult.reason || 'Content violates community guidelines';
-        
-        // Still save rejected takes for analytics/review
-        console.log(`📝 Saving rejected take for review purposes`);
+        rejectionReason = `This doesn't belong in the ${takeData.category} category. ${categoryValidation.reason || 'Please choose a more appropriate category.'}`;
       } else {
-        console.log(`✅ Take approved by AI moderation`);
+        console.log(`✅ Take matches category: ${takeData.category}`);
+        
+        // Step 2: Content moderation
+        const moderationResult = await moderateUserTake(takeData.text);
+        
+        if (!moderationResult.approved) {
+          console.log(`❌ Take rejected by AI moderation: ${moderationResult.reason}`);
+          isApproved = false;
+          status = 'rejected';
+          approvedAt = undefined;
+          rejectedAt = now;
+          rejectionReason = moderationResult.reason || 'Content violates community guidelines';
+        } else {
+          console.log(`✅ Take approved by AI moderation`);
+        }
       }
     } else {
       console.log(`🤖 Skipping moderation for AI-generated content`);

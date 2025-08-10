@@ -6,8 +6,86 @@ interface ModerationResult {
   reason?: string;
 }
 
+interface SemanticMatchResult {
+  matches: boolean;
+  confidence: number;
+  suggestedCategory?: string;
+}
+
 const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+
+// Debug logging for ChatGPT's suggestion
+console.log('🔐 OpenAI Debug Info:');
+console.log('  Key present?', !!OPENAI_API_KEY);
+console.log('  Key preview:', String(OPENAI_API_KEY || '').slice(0, 7) + '…');
+console.log('  Environment:', __DEV__ ? 'DEVELOPMENT' : 'PRODUCTION');
+
+// Simple category validation using GPT prompt
+export const validateTakeCategory = async (takeText: string, category: string): Promise<{ matches: boolean; reason?: string }> => {
+  if (!OPENAI_API_KEY) {
+    console.warn('⚠️ No OpenAI API key - auto-approving category match');
+    return { matches: true };
+  }
+
+  try {
+    console.log(`🎯 Validating take category: "${takeText.substring(0, 30)}..." in "${category}"`);
+
+    const categoryPrompt = `You are a content classifier. Decide if this hot take belongs in the given category.
+CATEGORY: ${category}
+HOT TAKE: ${takeText}
+Respond with ONLY "yes" or "no".`;
+
+    const requestPayload = {
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'user',
+          content: categoryPrompt
+        }
+      ],
+      max_tokens: 5,
+      temperature: 0.1,
+    };
+
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(requestPayload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const validationResponse = data.choices?.[0]?.message?.content?.trim();
+
+    console.log(`🎯 Category validation response: "${validationResponse}"`);
+
+    const cleanResponse = validationResponse?.toLowerCase().trim();
+    
+    if (cleanResponse === 'yes' || cleanResponse?.includes('yes')) {
+      console.log('✅ Take matches category');
+      return { matches: true };
+    } else if (cleanResponse === 'no' || cleanResponse?.includes('no')) {
+      console.log(`❌ Take doesn't match category`);
+      return { matches: false, reason: "Content doesn't fit this category" };
+    } else {
+      // Default to approval for unexpected responses
+      console.warn(`⚠️ Unexpected validation response: "${validationResponse}" - defaulting to approval`);
+      return { matches: true };
+    }
+
+  } catch (error) {
+    console.error('❌ Category validation failed:', error);
+    // Default to approval if validation fails
+    return { matches: true };
+  }
+};
 
 export const moderateUserTake = async (takeText: string): Promise<ModerationResult> => {
   if (!OPENAI_API_KEY) {
