@@ -102,7 +102,7 @@ EXAMPLES OF GOOD MATCHES:
 - "Remote work is overrated" → work ✓
 - "Pineapple on pizza" → food ✓
 
-BE GENEROUS - if it relates AT ALL to the category, approve it.
+BE GENEROUS but use common sense - approve takes that have a reasonable connection to the category. Reject obviously nonsensical submissions (e.g., "sex sex sex" in life, random words, spam, advertisements, promotional content).
 Respond with ONLY "yes" or "no".`;
 
     const requestPayload = {
