@@ -92,10 +92,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       // Give the indicator more time to show its full animation
       setTimeout(() => {
         onVote(currentTake.id, vote);
-      }, 850); // Increased delay
+      }, 750); // Increased delay
       
       // Clear vote indicator after animation completes
-      setTimeout(() => setCurrentVote(null), 900); // Extended timeout
+      setTimeout(() => setCurrentVote(null), 1000); // Extended timeout
       
       // IMPORTANT: Don't increment currentIndex - let parent's array removal handle advancing
     }
