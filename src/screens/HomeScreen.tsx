@@ -34,7 +34,7 @@ export const HomeScreen: React.FC = () => {
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const { user, loading: authLoading, signIn } = useAuth();
-  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes } = useFirebaseTakes({
+  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore } = useFirebaseTakes({
     category: selectedCategory
   });
   const { stats, refreshStats } = useUserStats();
@@ -216,21 +216,16 @@ export const HomeScreen: React.FC = () => {
               </Text>
             </AnimatedPressable>
           </View>
-        ) : takes && takes.length > 0 ? (
+        ) : (
           <CustomSwipeableCardDeck
             takes={takes}
             onVote={handleVote}
             onSkip={handleSkip}
             onSubmitTake={() => setShowSubmitModal(true)}
             isDarkMode={isDarkMode}
-          />
-        ) : (
-          <CustomSwipeableCardDeck
-            takes={[]}
-            onVote={handleVote}
-            onSkip={handleSkip}
-            onSubmitTake={() => setShowSubmitModal(true)}
-            isDarkMode={isDarkMode}
+            hasMore={hasMore}
+            loadMore={loadMore}
+            loading={takesLoading}
           />
         )}
       </View>

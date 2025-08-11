@@ -32,6 +32,9 @@ interface CustomSwipeableCardDeckProps {
   onSkip: (takeId: string) => void;
   onSubmitTake?: () => void;
   isDarkMode?: boolean;
+  hasMore?: boolean;
+  loadMore?: (count?: number) => Promise<void>;
+  loading?: boolean;
 }
 
 const { width } = Dimensions.get('window');
@@ -43,6 +46,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   onSkip,
   onSubmitTake,
   isDarkMode = false,
+  hasMore = true,
+  loadMore,
+  loading = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [nextIndex, setNextIndex] = useState(1); // Track next card explicitly
@@ -57,23 +63,42 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Ensure takes is always an array
   const safeTakes = takes || [];
 
+  // Clamp currentIndex when array size changes to prevent crashes
+  useEffect(() => {
+    if (safeTakes.length > 0 && currentIndex >= safeTakes.length) {
+      setCurrentIndex(Math.max(0, safeTakes.length - 1));
+    }
+  }, [safeTakes.length, currentIndex]);
+
   // Update nextIndex when currentIndex changes
   useEffect(() => {
     setNextIndex(currentIndex + 1);
   }, [currentIndex]);
 
+  // Auto-load more when getting low on cards
+  useEffect(() => {
+    if (loadMore && safeTakes.length - currentIndex <= 5 && hasMore && !loading) {
+      loadMore(20).catch(console.error);
+    }
+  }, [safeTakes.length, currentIndex, hasMore, loading, loadMore]);
+
   const handleVote = (vote: 'hot' | 'not') => {
     if (currentIndex < safeTakes.length) {
       const currentTake = safeTakes[currentIndex];
-      onVote(currentTake.id, vote);
+      
+      // Show vote indicator immediately
       setCurrentVote(vote);
-      // Clear vote indicator after animation
-      setTimeout(() => setCurrentVote(null), 800); // Matches animation duration
+      
+      // Give the indicator more time to show its full animation
+      setTimeout(() => {
+        onVote(currentTake.id, vote);
+      }, 850); // Increased delay
+      
+      // Clear vote indicator after animation completes
+      setTimeout(() => setCurrentVote(null), 900); // Extended timeout
+      
+      // IMPORTANT: Don't increment currentIndex - let parent's array removal handle advancing
     }
-  };
-
-  const moveToNextCard = () => {
-    setCurrentIndex((prev) => prev + 1);
   };
 
   const handleSkip = () => {
@@ -88,11 +113,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         onSkip(currentTake.id);
       }, 0);
       
-      // Move to next card immediately
-      const nextIndex = currentIndex + 1;
-      setCurrentIndex(nextIndex);
-      
-      // Check if we've reached the end - no more content loading for MVP
+      // IMPORTANT: Don't increment currentIndex - let parent's array removal handle advancing
     }
   };
 
@@ -118,18 +139,20 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
       const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
 
+      const finishSwipe = () => {
+        translateX.value = 0;
+        translateY.value = 0;
+        scale.value = withSpring(1);
+        // IMPORTANT: Don't call moveToNextCard - let parent handle index advancing
+      };
+
       if (shouldSwipeRight) {
         runOnJS(Vibration.vibrate)(25);
         runOnJS(handleVote)('hot');
         translateX.value = withSpring(
           width * 1.5,
           { damping: 15, stiffness: 120, mass: 0.8 }, // Smoother animation
-          () => {
-            translateX.value = 0;
-            translateY.value = 0;
-            scale.value = withSpring(1);
-            runOnJS(moveToNextCard)();
-          }
+          finishSwipe
         );
       } else if (shouldSwipeLeft) {
         runOnJS(Vibration.vibrate)(25);
@@ -137,19 +160,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         translateX.value = withSpring(
           -width * 1.5,
           { damping: 15, stiffness: 120, mass: 0.8 },
-          () => {
-            translateX.value = 0;
-            translateY.value = 0;
-            scale.value = withSpring(1);
-            runOnJS(moveToNextCard)();
-          }
+          finishSwipe
         );
       } else {
         // Soft haptic feedback for bounce back
         runOnJS(Vibration.vibrate)(8);
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
-        scale.value = withSpring(1);
+        finishSwipe();
       }
     },
   });
@@ -233,16 +249,20 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     return { opacity };
   });
 
-  if (currentIndex >= safeTakes.length) {
+  // Show end screen only when truly no more content
+  const noCards = safeTakes.length === 0;
+  const atEnd = currentIndex >= safeTakes.length;
+
+  if (noCards || (atEnd && !hasMore && !loading)) {
     return (
       <View style={styles.container}>
         <View style={styles.endContainer}>
           <Text style={styles.endEmoji}>🎉</Text>
           <Text style={[styles.endTitle, { color: theme.text }]}>
-            {safeTakes.length === 0 ? 'No takes available yet!' : 'You\'ve reached the end!'}
+            {noCards ? 'No takes available yet!' : 'You\'ve reached the end!'}
           </Text>
           <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
-            {safeTakes.length === 0 
+            {noCards 
               ? 'Be the first to submit a hot take!'
               : 'Submit more takes to keep the conversation going!'
             }
@@ -265,6 +285,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         </View>
       </View>
     );
+  }
+
+  // If at end but still has more or loading, show empty container (loading happens in background)
+  if (atEnd && (loading || hasMore)) {
+    if (loadMore && !loading) loadMore(20).catch(console.error);
+    return <View style={styles.container} />;
   }
 
   const currentTake = safeTakes[currentIndex];

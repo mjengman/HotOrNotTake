@@ -12,6 +12,7 @@ import {
   Timestamp,
   writeBatch,
   increment,
+  startAfter,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Take, TakeFirestore, TakeSubmission, TakeStatus } from '../types/Take';
@@ -363,6 +364,27 @@ export const getUserInteractedTakeIds = async (userId: string): Promise<string[]
   }
 };
 
+// Get takes user has voted on vs skipped (separate lists)
+export const getUserVotedAndSkippedTakeIds = async (userId: string): Promise<{
+  voted: string[];
+  skipped: string[];
+}> => {
+  try {
+    const [votesSnapshot, skipsSnapshot] = await Promise.all([
+      getDocs(query(collection(db, 'votes'), where('userId', '==', userId))),
+      getDocs(query(collection(db, 'skips'), where('userId', '==', userId))),
+    ]);
+
+    const voted = votesSnapshot.docs.map(doc => doc.data().takeId);
+    const skipped = skipsSnapshot.docs.map(doc => doc.data().takeId);
+
+    return { voted, skipped };
+  } catch (error) {
+    console.error('Error fetching user interactions:', error);
+    throw new Error('Failed to load user interactions');
+  }
+};
+
 // Leaderboard: Get hottest takes (most HOT votes) by category
 export const getHottestTakesByCategory = async (): Promise<Record<string, Take[]>> => {
   try {
@@ -505,5 +527,98 @@ export const getMostSkippedTakesByCategory = async (): Promise<Record<string, { 
   } catch (error) {
     console.error('Error fetching most skipped takes:', error);
     throw new Error('Failed to load most skipped takes');
+  }
+};
+
+// Cursor management for pagination
+const feedCursors: Record<string, any | null> = {};
+
+export const resetFeedCursor = (category?: string) => {
+  const key = category ? `category:${category.toLowerCase()}` : 'all';
+  feedCursors[key] = null;
+};
+
+const setCursor = (key: string, docSnap: any) => {
+  feedCursors[key] = docSnap;
+};
+
+const getCursor = (key: string) => {
+  return feedCursors[key] || null;
+};
+
+// Paginated fetch that fills the list with non-interacted takes
+export const fetchMoreTakesFilled = async ({
+  category,
+  targetCount = 30,
+  pageSize = 50,
+  interactedIds,
+}: {
+  category?: string;
+  targetCount?: number;
+  pageSize?: number;
+  interactedIds: Set<string>;
+}): Promise<{ items: Take[]; gotAny: boolean }> => {
+  try {
+    const cursorKey = category ? `category:${category.toLowerCase()}` : 'all';
+    const results: Take[] = [];
+    let keepGoing = true;
+    let guardPages = 0; // Prevent infinite loops
+
+    while (keepGoing && results.length < targetCount && guardPages < 10) {
+      guardPages++;
+
+      // Build base query
+      let baseQuery;
+      if (category && category !== 'all') {
+        baseQuery = query(
+          collection(db, TAKES_COLLECTION),
+          where('isApproved', '==', true),
+          where('category', '==', category.toLowerCase()),
+          orderBy('createdAt', 'desc'),
+          limit(pageSize)
+        );
+      } else {
+        baseQuery = query(
+          collection(db, TAKES_COLLECTION),
+          where('isApproved', '==', true),
+          orderBy('createdAt', 'desc'),
+          limit(pageSize)
+        );
+      }
+
+      // Add cursor if we have one
+      const cursor = getCursor(cursorKey);
+      const finalQuery = cursor ? query(baseQuery, startAfter(cursor)) : baseQuery;
+
+      const snapshot = await getDocs(finalQuery);
+      if (snapshot.empty) {
+        // No more docs in this feed
+        keepGoing = false;
+        break;
+      }
+
+      // Update cursor to last doc of this page
+      const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+      setCursor(cursorKey, lastDoc);
+
+      // Convert & filter out interacted takes
+      const pageTakes = snapshot.docs
+        .map(doc => convertFirestoreTake(doc.id, doc.data()))
+        .filter(take => !interactedIds.has(take.id));
+
+      results.push(...pageTakes);
+
+      // If page didn't add anything (because filtering removed all), loop again
+      console.log(`📄 Page ${guardPages}: fetched ${snapshot.docs.length}, after filtering: +${pageTakes.length} (total: ${results.length}/${targetCount})`);
+    }
+
+    console.log(`✅ Pagination complete: ${results.length} takes found, guardPages: ${guardPages}`);
+    return { 
+      items: results.slice(0, targetCount), 
+      gotAny: results.length > 0 
+    };
+  } catch (error) {
+    console.error('Error in fetchMoreTakesFilled:', error);
+    throw new Error('Failed to fetch more takes');
   }
 };
