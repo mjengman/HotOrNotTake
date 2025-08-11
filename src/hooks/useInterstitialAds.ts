@@ -1,123 +1,94 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
-import { useInterstitialAd, TestIds, AdEventType } from 'react-native-google-mobile-ads';
+import mobileAds, { useInterstitialAd, TestIds } from 'react-native-google-mobile-ads';
 
-// PRODUCTION AD CONFIGURATION
-const IS_PRODUCTION_BUILD = true;
-const isDevelopment = __DEV__;
+const PROD_ANDROID = 'ca-app-pub-1745058833253836/4423842963';
+const PROD_IOS = TestIds.INTERSTITIAL; // TODO: replace with your real iOS unit
 
-// One-time logging to prevent spam
-let hasLoggedAdConfig = false;
+const getAdUnitId = () =>
+  __DEV__
+    ? TestIds.INTERSTITIAL
+    : Platform.select({ android: PROD_ANDROID, ios: PROD_IOS }) || TestIds.INTERSTITIAL;
 
-// Get the correct ad unit ID  
-const getAdUnitId = (): string => {
-  // FIXED: Use production IDs in development too (like the class-based service did)
-  // This matches the working behavior you had before
-  const productionId = __DEV__ 
-    ? TestIds.INTERSTITIAL // Use test ads in development/preview builds
-    : (Platform.OS === 'android' ? 'ca-app-pub-1745058833253836/4423842963' : TestIds.INTERSTITIAL);
-  
-  if (!hasLoggedAdConfig) {
-    console.log('🚀 Using PRODUCTION ad ID (fixed):', productionId);
-    console.log('📱 Platform:', Platform.OS);
-    console.log('🏗️ Development mode:', isDevelopment);
-    hasLoggedAdConfig = true;
-  }
-  return productionId;
-};
-
-// Use the hook-based approach which should work better
 export const useInterstitialAds = () => {
-  const [swipeCount, setSwipeCount] = useState(0);
-  const SWIPES_UNTIL_AD = 12;
-  
-  const adUnitId = getAdUnitId();
+  const SWIPES_UNTIL_AD = 2;
 
-  console.log('🎬 Interstitial ads hook initialized with unit ID:', adUnitId);
+  // initialize once (safe to call multiple times; lib ignores repeats)
+  useEffect(() => {
+    mobileAds()
+      .initialize()
+      .catch(() => {}); // ignore init errors in dev
+  }, []);
 
-  // Use the correct ad unit ID
+  const adUnitId = useMemo(getAdUnitId, []);
   const { isLoaded, isClosed, load, show, error } = useInterstitialAd(adUnitId);
 
-  console.log('🎬 Ad hook state:', { isLoaded, isClosed, error: error?.message });
+  const [swipeCount, setSwipeCount] = useState(0);
+  const oweAdRef = useRef(false);      // we hit threshold before load finished
+  const showingRef = useRef(false);    // prevent double show()
 
+  // load one on mount
   useEffect(() => {
-    // Start loading the interstitial ad
-    console.log('🎬 Starting interstitial ad load...');
-    try {
-      load();
-      
-      // Set a timeout to detect if ad never loads (common with test ads)
-      const loadTimeout = setTimeout(() => {
-        if (!isLoaded) {
-          console.warn('⏰ Interstitial ad load timeout - this is common with test ads in development');
-          console.warn('⏰ The ad may work in production builds with real ad units');
-        }
-      }, 30000); // 30 seconds timeout
-      
-      return () => clearTimeout(loadTimeout);
-    } catch (loadError) {
-      console.error('🎬 Error calling load():', loadError);
-    }
-  }, []); // Remove load dependency to prevent double loading
-  
+    load();
+  }, [load]);
+
+  // if ad failed, retry after a short delay (simple backoff)
   useEffect(() => {
-    if (error) {
-      console.error('❌ Interstitial ad error:', error);
-      console.error('❌ Error details:', JSON.stringify(error, null, 2));
-      console.error('❌ Ad unit ID that failed:', adUnitId);
-      // Retry loading after 5 seconds on error
-      setTimeout(() => {
-        console.log('🔄 Retrying interstitial ad load after error...');
-        load();
-      }, 5000);
-    }
+    if (!error) return;
+    const id = setTimeout(() => load(), 3000);
+    return () => clearTimeout(id);
   }, [error, load]);
-  
-  useEffect(() => {
-    if (isLoaded) {
-      console.log('✅ Interstitial ad loaded successfully!');
-    }
-  }, [isLoaded]);
 
+  // after an ad closes, load next
   useEffect(() => {
-    if (isClosed) {
-      // Reload ad after it was shown
-      load();
-    }
+    if (!isClosed) return;
+    showingRef.current = false;
+    oweAdRef.current = false;
+    load();
   }, [isClosed, load]);
 
+  // if we owed an ad and it finally loaded, show now
+  useEffect(() => {
+    if (isLoaded && oweAdRef.current && !showingRef.current) {
+      showingRef.current = true;
+      show();
+      oweAdRef.current = false;
+      setSwipeCount(0);
+    }
+  }, [isLoaded, show]);
+
   const onUserSwipe = () => {
-    const newCount = swipeCount + 1;
-    setSwipeCount(newCount);
-    console.log(`📊 Swipe count: ${newCount}/${SWIPES_UNTIL_AD}`);
-    
-    if (newCount >= SWIPES_UNTIL_AD) {
-      if (isLoaded) {
-        console.log('🎬 Showing interstitial ad NOW!');
-        try {
-          show();
-          setSwipeCount(0);
-        } catch (showError) {
-          console.error('🎬 Error showing ad:', showError);
-        }
+    const next = swipeCount + 1;
+    setSwipeCount(next);
+
+    if (next >= SWIPES_UNTIL_AD) {
+      if (isLoaded && !showingRef.current) {
+        showingRef.current = true;
+        show();
+        setSwipeCount(0);
       } else {
-        console.log('⏳ Ad not loaded yet, will show when ready');
-        console.log('⏳ This is common with test ads in development mode');
-        console.log('⏳ Current ad state:', { isLoaded, error: error?.message });
-        // Try to show as soon as it loads
-        if (!isLoaded) {
-          load();
-        }
+        // not loaded yet → remember to show when ready
+        oweAdRef.current = true;
+        // make sure a load is in flight
+        load();
       }
+    } else {
+      // keep pipeline warm
+      if (!isLoaded) load();
     }
   };
 
   const onSessionEnd = () => {
-    console.log('🔚 Session ended');
-    if (swipeCount > 6 && isLoaded) {
-      console.log('🎬 Showing interstitial ad on session end');
-      show();
-      setSwipeCount(0);
+    // optional: show at end if user was close to threshold
+    if (swipeCount >= Math.ceil(SWIPES_UNTIL_AD / 2)) {
+      if (isLoaded && !showingRef.current) {
+        showingRef.current = true;
+        show();
+        setSwipeCount(0);
+      } else {
+        oweAdRef.current = true;
+        load();
+      }
     }
   };
 
