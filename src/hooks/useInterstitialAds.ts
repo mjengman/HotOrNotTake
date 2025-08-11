@@ -11,7 +11,7 @@ const getAdUnitId = () =>
     : Platform.select({ android: PROD_ANDROID, ios: PROD_IOS }) || TestIds.INTERSTITIAL;
 
 export const useInterstitialAds = () => {
-  const SWIPES_UNTIL_AD = 2;
+  const SWIPES_UNTIL_AD = 12;
 
   // initialize once (safe to call multiple times; lib ignores repeats)
   useEffect(() => {
