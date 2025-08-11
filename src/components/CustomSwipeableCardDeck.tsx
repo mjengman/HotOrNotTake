@@ -313,11 +313,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           <TakeCard take={currentTake} isDarkMode={isDarkMode} />
           
           {/* Overlay indicators */}
-          <Animated.View style={[styles.overlayLeft, notOverlayStyle]}>
+          <Animated.View style={[styles.overlayLeft, { backgroundColor: theme.not }, notOverlayStyle]}>
             <Text style={styles.overlayText}>NOT</Text>
           </Animated.View>
           
-          <Animated.View style={[styles.overlayRight, hotOverlayStyle]}>
+          <Animated.View style={[styles.overlayRight, { backgroundColor: theme.hot }, hotOverlayStyle]}>
             <Text style={styles.overlayText}>HOT</Text>
           </Animated.View>
         </Animated.View>
@@ -399,7 +399,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     right: 20,
-    backgroundColor: '#FF3838',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -409,7 +408,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     left: 20,
-    backgroundColor: '#FF4757',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
