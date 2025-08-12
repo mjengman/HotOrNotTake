@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   Dimensions,
+  TouchableOpacity,
 } from 'react-native';
 import { Take } from '../types';
 import { colors, dimensions } from '../constants';
@@ -11,13 +12,17 @@ import { colors, dimensions } from '../constants';
 interface TakeCardProps {
   take: Take;
   isDarkMode?: boolean;
+  onNotPress?: () => void;
+  onHotPress?: () => void;
 }
 
 const { width, height } = Dimensions.get('window');
 
 export const TakeCard: React.FC<TakeCardProps> = ({ 
   take, 
-  isDarkMode = false 
+  isDarkMode = false,
+  onNotPress,
+  onHotPress,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
 
@@ -39,25 +44,35 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       
       <View style={styles.footer}>
         <View style={styles.voteStats}>
-          <View style={styles.statItem}>
+          <TouchableOpacity 
+            style={styles.statItem}
+            onPress={onNotPress}
+            disabled={!onNotPress}
+            activeOpacity={0.7}
+          >
             <Text style={[styles.statNumber, { color: theme.not }]}>
               {take.notVotes.toLocaleString()}
             </Text>
             <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
               ❄️ NOT
             </Text>
-          </View>
+          </TouchableOpacity>
           
           <View style={styles.statDivider} />
           
-          <View style={styles.statItem}>
+          <TouchableOpacity 
+            style={styles.statItem}
+            onPress={onHotPress}
+            disabled={!onHotPress}
+            activeOpacity={0.7}
+          >
             <Text style={[styles.statNumber, { color: theme.hot }]}>
               {take.hotVotes.toLocaleString()}
             </Text>
             <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
               🔥 HOT
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -119,6 +134,8 @@ const styles = StyleSheet.create({
   statItem: {
     alignItems: 'center',
     flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   statNumber: {
     fontSize: dimensions.fontSize.large,

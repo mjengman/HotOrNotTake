@@ -101,6 +101,31 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }
   };
 
+  // Handle button press with swipe animation
+  const handleButtonVote = (vote: 'hot' | 'not') => {
+    if (currentIndex < safeTakes.length) {
+      // Haptic feedback
+      Vibration.vibrate(25);
+      
+      // Show vote indicator
+      handleVote(vote);
+      
+      // Animate card swipe away
+      const direction = vote === 'hot' ? 1 : -1;
+      translateX.value = withSpring(
+        width * 1.5 * direction,
+        { damping: 15, stiffness: 120, mass: 0.8 },
+        () => {
+          'worklet';
+          // Reset after animation  
+          translateX.value = 0;
+          translateY.value = 0;
+          scale.value = withSpring(1);
+        }
+      );
+    }
+  };
+
   const handleSkip = () => {
     if (currentIndex < safeTakes.length) {
       // Immediate haptic feedback for skip action
@@ -310,7 +335,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       {/* Current card (foreground) */}
       <PanGestureHandler onGestureEvent={gestureHandler}>
         <Animated.View style={[styles.cardContainer, animatedStyle]}>
-          <TakeCard take={currentTake} isDarkMode={isDarkMode} />
+          <TakeCard 
+            take={currentTake} 
+            isDarkMode={isDarkMode}
+            onNotPress={() => handleButtonVote('not')}
+            onHotPress={() => handleButtonVote('hot')}
+          />
           
           {/* Overlay indicators */}
           <Animated.View style={[styles.overlayLeft, { backgroundColor: theme.not }, notOverlayStyle]}>
