@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Take, TakeSubmission } from '../types/Take';
 import {
   submitTake,
@@ -48,6 +48,9 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const [interactedTakeIds, setInteractedTakeIds] = useState<string[]>([]);
   const [feed, setFeed] = useState<Take[]>([]);
   const [hasMore, setHasMore] = useState(true);
+
+  // Atomic guard against concurrent duplicate submits
+  const inFlightVotesRef = useRef<Set<string>>(new Set());
 
   // Stable category variety algorithm - freezes prefix to prevent reshuffling
   const ensureCategoryVariety = useCallback((takesArray: Take[], freezePrefixCount: number = 0): Take[] => {
@@ -137,13 +140,20 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setLoading(true);
 
       try {
-        // Use current interacted IDs at the time of initialization
-        const interacted = new Set(interactedTakeIds);
+        // Wait for fresh interacted IDs if user exists
+        let freshInteractedIds = new Set<string>();
+        if (user) {
+          const { voted } = await getUserVotedAndSkippedTakeIds(user.uid);
+          freshInteractedIds = new Set(voted);
+          setInteractedTakeIds(voted); // Sync state
+          console.log(`🔄 Refreshed user interactions: ${voted.length} voted takes`);
+        }
+
         const { items, gotAny } = await fetchMoreTakesFilled({
           category,
           targetCount: 30,
           pageSize: 50,
-          interactedIds: interacted,
+          interactedIds: freshInteractedIds,
         });
         
         // Apply variety once on initial load
@@ -163,7 +173,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     if (user !== undefined) {
       initializeFeed();
     }
-  }, [category, user]);
+  }, [category, user, ensureCategoryVariety]);
 
   // Load more takes function
   const loadMore = useCallback(async (count: number = 20) => {
@@ -213,12 +223,21 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       throw new Error('User must be signed in to vote');
     }
 
+    // Atomic guard against concurrent duplicate submits
+    if (inFlightVotesRef.current.has(takeId)) {
+      console.log('⚠️ Vote already in progress for take:', takeId);
+      return; // Silent return, don't throw
+    }
+
     try {
       // Check if we've already voted on this take
       if (interactedTakeIds.includes(takeId)) {
         console.log('⚠️ Attempted to vote on already voted take:', takeId);
         throw new Error('You have already voted on this take');
       }
+
+      // Mark as in-flight
+      inFlightVotesRef.current.add(takeId);
 
       // Optimistically update interacted IDs and remove from feed
       setInteractedTakeIds(prev => {
@@ -248,6 +267,9 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Rollback on error
       setInteractedTakeIds(prev => prev.filter(id => id !== takeId));
       throw new Error(err instanceof Error ? err.message : 'Failed to submit vote');
+    } finally {
+      // Always clear in-flight flag
+      inFlightVotesRef.current.delete(takeId);
     }
   }, [user, feed.length, hasMore, loadMore]);
 

@@ -54,11 +54,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   loading = false,
 }) => {
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
-  const [isAnimating, setIsAnimating] = useState(false);
   
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
+  const isAnimating = useSharedValue(false);
 
   const theme = isDarkMode ? colors.dark : colors.light;
 
@@ -83,8 +83,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // Handle button press with swipe animation
   const handleButtonVote = (vote: 'hot' | 'not') => {
-    if (!currentTake) return;
-    const id = currentTake.id; // snapshot now
+    if (!currentTake || isAnimating.value) return;
+    isAnimating.value = true;
+    const id = currentTake.id;
     Vibration.vibrate(25);
     setCurrentVote(vote);
     const dir = vote === 'hot' ? 1 : -1;
@@ -97,17 +98,18 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         translateX.value = 0;
         translateY.value = 0;
         scale.value = withSpring(1);
-        // call JS safely
         runOnJS(jsSetVote)(null);
         runOnJS(jsOnVote)(id, vote);
+        isAnimating.value = false; // release
       }
     );
   };
 
   // Handle skip with animation (for both button press and swipe down)
   const handleSkipWithAnimation = () => {
-    if (!currentTake) return;
-    const id = currentTake.id; // snapshot
+    if (!currentTake || isAnimating.value) return;
+    isAnimating.value = true;
+    const id = currentTake.id;
     Vibration.vibrate(15);
     translateY.value = withSpring(
       height * 0.8,
@@ -118,17 +120,19 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         translateY.value = 0;
         scale.value = withSpring(1);
         runOnJS(jsOnSkip)(id);
+        isAnimating.value = false; // release
       }
     );
   };
 
   const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
     onStart: () => {
+      if (isAnimating.value) return; // ignore new gestures mid-flight
       scale.value = withSpring(0.95);
-      // Light haptic feedback on touch start
       runOnJS(Vibration.vibrate)(10);
     },
     onActive: (event) => {
+      if (isAnimating.value) return;
       translateX.value = event.translationX;
       translateY.value = event.translationY;
       
@@ -148,6 +152,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       }
     },
     onEnd: (event) => {
+      if (isAnimating.value) return;
+      
       const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
       const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
       const shouldSwipeDown = event.translationY > SWIPE_DOWN_THRESHOLD;
@@ -161,33 +167,36 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       };
 
       if (shouldSwipeDown && id) {
+        isAnimating.value = true;
         runOnJS(Vibration.vibrate)(25);
         translateY.value = withSpring(
           height * 0.8,
           { damping: 15, stiffness: 120, mass: 0.8 },
-          () => { 'worklet'; reset(); runOnJS(jsOnSkip)(id); }
+          () => { 'worklet'; reset(); runOnJS(jsOnSkip)(id); isAnimating.value = false; }
         );
         return;
       }
 
       if (shouldSwipeRight && id) {
+        isAnimating.value = true;
         runOnJS(jsSetVote)('hot');
         runOnJS(Vibration.vibrate)(25);
         translateX.value = withSpring(
           width * 1.5,
           { damping: 15, stiffness: 120, mass: 0.8 },
-          () => { 'worklet'; reset(); runOnJS(jsSetVote)(null); runOnJS(jsOnVote)(id, 'hot'); }
+          () => { 'worklet'; reset(); runOnJS(jsSetVote)(null); runOnJS(jsOnVote)(id, 'hot'); isAnimating.value = false; }
         );
         return;
       }
 
       if (shouldSwipeLeft && id) {
+        isAnimating.value = true;
         runOnJS(jsSetVote)('not');
         runOnJS(Vibration.vibrate)(25);
         translateX.value = withSpring(
           -width * 1.5,
           { damping: 15, stiffness: 120, mass: 0.8 },
-          () => { 'worklet'; reset(); runOnJS(jsSetVote)(null); runOnJS(jsOnVote)(id, 'not'); }
+          () => { 'worklet'; reset(); runOnJS(jsSetVote)(null); runOnJS(jsOnVote)(id, 'not'); isAnimating.value = false; }
         );
         return;
       }
