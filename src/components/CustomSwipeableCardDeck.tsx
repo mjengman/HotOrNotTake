@@ -39,7 +39,7 @@ interface CustomSwipeableCardDeckProps {
 }
 
 const { width, height } = Dimensions.get('window');
-const SWIPE_THRESHOLD = width * 0.3;
+const SWIPE_THRESHOLD = width * 0.2;
 const SWIPE_DOWN_THRESHOLD = height * 0.2; // 20% of screen height
 
 export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = ({
