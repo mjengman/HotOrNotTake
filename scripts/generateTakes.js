@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 
 /**
- * 🔥 Premium Hot Takes Generator v2.0
+ * 🔥 Premium Hot Takes Generator v3.0 - UNIVERSAL EDITION
  * 
- * Advanced content generation with D20 roll system
+ * Generate hot takes about ANYTHING - predefined categories or custom topics!
  * Includes personality archetypes, focused prompts, and NUCLEAR spicy mode
  * 
  * Usage: 
- *   node scripts/generateTakes.js [category|all] [count] [mode]
+ *   node scripts/generateTakes.js [topic/category] [count] [mode]
+ *   
+ * Topic options:
+ *   - Any predefined category: food, politics, technology, etc.
+ *   - Any custom topic: "star wars", "donald trump", "minecraft", literally anything!
+ *   - "all" for all predefined categories
  *   
  * Mode options:
  *   - auto (default): D20 roll determines prompt type
@@ -16,9 +21,11 @@
  *   - generic: Basic prompts
  * 
  * Examples:
- *   node scripts/generateTakes.js food 5            # 5 food takes with auto mode
- *   node scripts/generateTakes.js politics 3 spicy  # 3 NUCLEAR political takes
- *   node scripts/generateTakes.js all 10 auto       # 10 auto takes across all
+ *   node scripts/generateTakes.js food 5                # 5 food takes with auto mode
+ *   node scripts/generateTakes.js "star wars" 5 auto    # 5 Star Wars takes 
+ *   node scripts/generateTakes.js "Donald Trump" 3 spicy # 3 NUCLEAR Trump takes
+ *   node scripts/generateTakes.js minecraft 10 focused   # 10 focused Minecraft takes
+ *   node scripts/generateTakes.js all 10 auto           # 10 auto takes across predefined categories
  */
 
 require('dotenv').config();
@@ -503,8 +510,56 @@ function choose(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function getPrompt(category, mode = 'auto') {
-  const cat = ENHANCED_PROMPTS[category];
+// Generate dynamic prompts for custom topics
+function generateDynamicPrompts(topic) {
+  const capitalizedTopic = topic.charAt(0).toUpperCase() + topic.slice(1);
+  
+  return {
+    generic: [
+      `Generate a controversial hot take about ${topic}`,
+      `Share an unpopular opinion about ${topic}`,
+      `Create a divisive statement about ${topic}`
+    ],
+    focused: [
+      `Pick a specific aspect of ${topic} and generate a controversial take about it`,
+      `Choose something everyone loves about ${topic} and argue why it's actually terrible`,
+      `Select something everyone hates about ${topic} and defend it passionately`,
+      `Share a take about ${topic} that would make fans extremely angry`,
+      `Generate a bold prediction about the future of ${topic}`,
+      `Compare ${topic} to something unexpected and defend the comparison`,
+      `Argue why ${topic} is either completely overrated or criminally underrated`
+    ],
+    rngSpice: {
+      1: `NUCLEAR: Argue that ${topic} is either humanity's greatest achievement or biggest mistake`,
+      2: `NUCLEAR: Defend or destroy ${topic} as either essential to society or completely worthless`,
+      3: `NUCLEAR: Argue that people who like ${topic} are either enlightened or completely delusional`,
+      4: `NUCLEAR: Claim that ${topic} should either be mandatory for everyone or banned entirely`,
+      5: `NUCLEAR: Argue that ${topic} is either saving civilization or destroying it`,
+      6: `NUCLEAR: Defend ${topic} as morally superior or condemn it as morally bankrupt`,
+      7: `NUCLEAR: Argue that ${topic} peaked years ago or hasn't even begun to reach its potential`,
+      8: `NUCLEAR: Claim that ${topic} is either a conspiracy by elites or the only truth that matters`,
+      9: `NUCLEAR: Argue that ${topic} proves humanity is either evolving or devolving`,
+      10: `NUCLEAR: Defend or attack the most controversial aspect of ${topic} as genius or insanity`,
+      11: `NUCLEAR: Argue that ${topic} is either the solution to all problems or the cause of them`,
+      12: `NUCLEAR: Claim that only intelligent people appreciate ${topic} or only idiots fall for it`,
+      13: `NUCLEAR: Argue that ${topic} should replace everything else or be erased from history`,
+      14: `NUCLEAR: Defend the worst thing about ${topic} or attack the best thing about it`,
+      15: `NUCLEAR: Argue that ${topic} is either underappreciated genius or overhyped garbage`,
+      16: `NUCLEAR: Claim that ${topic} defines this generation positively or negatively`,
+      17: `NUCLEAR: Argue that critics of ${topic} are either jealous or the only sane ones left`,
+      18: `NUCLEAR: Defend or condemn the most extreme position possible about ${topic}`,
+      19: `NUCLEAR: Argue that ${topic} is either too mainstream or not mainstream enough`,
+      20: `NUCLEAR: Take the most contrarian possible stance about ${topic} and defend it aggressively`
+    }
+  };
+}
+
+function getPrompt(category, mode = 'auto', customTopic = null) {
+  // If it's a custom topic, generate dynamic prompts
+  const cat = customTopic 
+    ? generateDynamicPrompts(customTopic)
+    : ENHANCED_PROMPTS[category];
+    
   if (!cat) throw new Error(`Unknown category: ${category}`);
 
   if (mode === 'generic') return choose(cat.generic);
@@ -535,11 +590,15 @@ function getPrompt(category, mode = 'auto') {
 }
 
 // Generate a single premium take
-async function generateTake(category, mode = 'auto', personaIndex = null) {
-  const prompt = getPrompt(category, mode);
+async function generateTake(topicOrCategory, mode = 'auto', personaIndex = null, isCustomTopic = false) {
+  const prompt = getPrompt(topicOrCategory, mode, isCustomTopic ? topicOrCategory : null);
   const persona = personaIndex !== null 
     ? PERSONALITY_ARCHETYPES[personaIndex]
     : choose(PERSONALITY_ARCHETYPES);
+
+  const topicDescription = isCustomTopic 
+    ? `CUSTOM TOPIC: ${topicOrCategory}`
+    : `CATEGORY: ${topicOrCategory}`;
 
   const systemPrompt = `You generate short, controversial "hot takes" for a social voting app.
 
@@ -555,7 +614,7 @@ REQUIREMENTS:
 • If the prompt includes "NUCLEAR", pick a clear side (FOR or AGAINST) and go all in
 • Keep it punchy and memorable
 
-CATEGORY: ${category}
+${topicDescription}
 TOPIC PROMPT: ${prompt}
 
 Generate ONE hot take that will get people arguing:`;
@@ -590,7 +649,7 @@ Generate ONE hot take that will get people arguing:`;
     
     return {
       text,
-      category,
+      category: isCustomTopic ? `custom: ${topicOrCategory}` : topicOrCategory,
       persona: persona.name,
       mode,
       promptUsed: prompt.length > 90 ? prompt.slice(0, 90) + '...' : prompt,
@@ -605,7 +664,7 @@ Generate ONE hot take that will get people arguing:`;
 
 // Main generation function with premium features
 async function main() {
-  const [categoryArg = 'all', countArg = '5', modeArg = 'auto'] = process.argv.slice(2);
+  const [topicArg = 'all', countArg = '5', modeArg = 'auto'] = process.argv.slice(2);
   const count = Math.max(1, parseInt(countArg, 10) || 5);
   const mode = ['auto', 'generic', 'focused', 'spicy'].includes(modeArg) ? modeArg : 'auto';
 
@@ -615,37 +674,52 @@ async function main() {
     process.exit(1);
   }
 
-  const categories = categoryArg === 'all' ? CATEGORIES : [categoryArg];
-  for (const cat of categories) {
-    if (!ENHANCED_PROMPTS[cat]) {
-      console.error(`❌ Unknown category: ${cat}`);
-      console.error(`   Available: ${CATEGORIES.join(', ')}`);
-      process.exit(1);
+  // Determine if it's a custom topic or predefined category
+  const isCustomTopic = topicArg !== 'all' && !CATEGORIES.includes(topicArg.toLowerCase());
+  const topics = topicArg === 'all' 
+    ? CATEGORIES 
+    : [topicArg];
+
+  // Validate predefined categories if not custom
+  if (!isCustomTopic && topicArg !== 'all') {
+    const lowerTopic = topicArg.toLowerCase();
+    if (!ENHANCED_PROMPTS[lowerTopic]) {
+      // It's actually a custom topic, not an error
+      // Mark it as custom
     }
   }
 
-  console.log('\n🔥 PREMIUM HOT TAKES GENERATOR v2.0 🔥');
-  console.log('═══════════════════════════════════════════════════════');
+  const topicType = isCustomTopic ? 'CUSTOM TOPIC' : (topicArg === 'all' ? 'ALL CATEGORIES' : 'CATEGORY');
+  
+  console.log('\n🔥 PREMIUM HOT TAKES GENERATOR v3.0 - UNIVERSAL EDITION 🔥');
+  console.log('═══════════════════════════════════════════════════════════════');
   console.log(`📊 Generating: ${count} take(s)`);
-  console.log(`🎯 Category:   ${categoryArg}`);
+  console.log(`🎯 ${topicType}: ${topicArg}`);
   console.log(`🎲 Mode:       ${mode.toUpperCase()}${mode === 'spicy' ? ' (NUCLEAR)' : mode === 'auto' ? ' (D20 ROLL)' : ''}`);
   console.log(`🤖 Model:      ${MODEL}`);
   console.log(`🎭 Personas:   ${PERSONALITY_ARCHETYPES.length} archetypes`);
-  console.log('═══════════════════════════════════════════════════════\n');
+  console.log('═══════════════════════════════════════════════════════════════\n');
 
   const allTakes = [];
   let totalGenerated = 0;
   
-  for (const category of categories) {
-    const perCategory = categoryArg === 'all' 
-      ? Math.ceil(count / categories.length)
+  for (const topic of topics) {
+    const isThisCustom = !CATEGORIES.includes(topic.toLowerCase());
+    const perTopic = topicArg === 'all' 
+      ? Math.ceil(count / topics.length)
       : count;
 
-    console.log(`\n🏷️  CATEGORY: ${category.toUpperCase()}`);
+    const displayLabel = isThisCustom ? 'CUSTOM TOPIC' : 'CATEGORY';
+    console.log(`\n🏷️  ${displayLabel}: ${topic.toUpperCase()}`);
     console.log('─'.repeat(60));
 
-    for (let i = 0; i < perCategory; i++) {
-      const take = await generateTake(category, mode);
+    for (let i = 0; i < perTopic; i++) {
+      const take = await generateTake(
+        isThisCustom ? topic : topic.toLowerCase(), 
+        mode, 
+        null, 
+        isThisCustom
+      );
       
       if (take) {
         totalGenerated++;
@@ -653,7 +727,7 @@ async function main() {
         
         const icon = mode === 'spicy' ? '🌶️' : mode === 'auto' ? '🎲' : '📝';
         console.log(`\n${totalGenerated}. ${icon} "${take.text}"`);
-        console.log(`   📂 Category: ${take.category}`);
+        console.log(`   📂 ${isThisCustom ? 'Topic' : 'Category'}: ${take.category}`);
         console.log(`   🎭 Persona: ${take.persona}`);
         console.log(`   📏 Length: ${take.length} chars`);
         console.log(`   💡 Prompt: ${take.promptUsed}`);
@@ -678,10 +752,12 @@ async function main() {
     
     console.log('\n💡 TIPS:');
     console.log('─'.repeat(60));
+    console.log('• Generate takes about ANYTHING: "star wars", "donald trump", "minecraft"');
     console.log('• Use "spicy" mode for guaranteed NUCLEAR prompts');
     console.log('• Use "auto" mode for D20 variety (10% nuclear, 45% focused, 45% generic)');
     console.log('• Run multiple times to vary personas and prompts');
     console.log('• Cherry-pick the best ones for your app');
+    console.log('• Custom topics work with all modes: auto, focused, spicy, generic');
   }
 }
 
