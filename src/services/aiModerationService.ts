@@ -75,34 +75,37 @@ export const validateTakeCategory = async (takeText: string, category: string): 
   try {
     console.log(`🎯 Validating take category: "${takeText.substring(0, 30)}..." in "${category}"`);
 
-    const categoryPrompt = `You are a content classifier for a "Hot Takes" app. Be VERY GENEROUS with category matching.
+    const categoryPrompt = `You are a content classifier for a "Hot Takes" app. Be EXTREMELY LENIENT with category matching.
 
 CATEGORY: ${category}
 HOT TAKE: "${takeText}"
 
-CATEGORY DEFINITIONS (be inclusive):
+CATEGORY DEFINITIONS (be VERY inclusive):
 - technology: Anything about computers, phones, gaming, software, AI, internet, tech companies, digital platforms, gadgets, etc
-- food: Meals, restaurants, cooking, eating habits, cuisines, drinks, etc
-- work: Jobs, careers, workplace, productivity, management, business, etc
-- life: General life advice, lifestyle, habits, personal growth, etc
-- entertainment: Movies, TV, music, celebrities, books, etc
-- politics: Government, politicians, policies, social issues, current events, etc
-- relationships: Dating, marriage, friendship, family, social interactions, etc
-- pets: Animals, pet care, animal behavior, etc
-- wellness: Health, fitness, mental health, self-care, etc
-- travel: Tourism, places, transportation, vacation, etc
-- society: Social issues, culture, generational topics, social norms, etc
-- environment: Climate, nature, sustainability, green issues, etc
-- sports: All sports, athletes, teams, competitions, fitness activities, games, leagues
+- food: Meals, restaurants, cooking, eating habits, cuisines, drinks, diets, nutrition, etc
+- work: Jobs, careers, workplace, productivity, management, business, money, success, etc
+- life: General life advice, lifestyle, habits, personal growth, philosophy, wisdom, etc
+- entertainment: Movies, TV, music, celebrities, books, media, content, etc
+- politics: Government, politicians, policies, social issues, current events, ideologies, etc
+- relationships: Dating, marriage, friendship, family, social interactions, love, etc
+- pets: Animals, pet care, animal behavior, wildlife, etc
+- wellness: Health, fitness, mental health, therapy, self-care, medicine, doctors, hospitals, healing, wellness culture, etc
+- travel: Tourism, places, transportation, vacation, exploration, etc
+- society: Social issues, culture, generational topics, social norms, trends, etc
+- environment: Climate, nature, sustainability, green issues, pollution, etc
+- sports: All sports, athletes, teams, competitions, fitness activities, games, leagues, exercise, etc
 
-EXAMPLES OF GOOD MATCHES:
-- "Mac is better than PC" → technology ✓
-- "Google vs Apple" → technology ✓  
-- "Console vs PC gaming" → technology ✓
-- "Remote work is overrated" → work ✓
-- "Pineapple on pizza" → food ✓
+IMPORTANT WELLNESS EXAMPLES (ALL VALID):
+- "Therapy is BS" → wellness ✓ (criticism of mental health treatment)
+- "I don't believe in therapy" → wellness ✓ (mental health opinion)
+- "Doctors are scammers" → wellness ✓ (healthcare criticism)
+- "Exercise is overrated" → wellness ✓ (fitness opinion)
+- "Mental health is a scam" → wellness ✓ (controversial wellness take)
+- "Meditation is stupid" → wellness ✓ (self-care criticism)
+- "Vaccines are dangerous" → wellness ✓ (medical opinion)
 
-BE GENEROUS but use common sense - approve takes that have a reasonable connection to the category. Reject obviously nonsensical submissions (e.g., "sex sex sex" in life, random words, spam, advertisements, promotional content).
+DEFAULT TO YES - Only reject if completely unrelated (e.g., "I love pizza" in sports, "Buy my product" spam).
+Any criticism, praise, or opinion about the category topic should be approved.
 Respond with ONLY "yes" or "no".`;
 
     const requestPayload = {
