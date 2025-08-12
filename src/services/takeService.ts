@@ -613,9 +613,13 @@ export const fetchMoreTakesFilled = async ({
     }
 
     console.log(`✅ Pagination complete: ${results.length} takes found, guardPages: ${guardPages}`);
+    
+    // Shuffle the results to randomize order for each user
+    const shuffledResults = [...results].sort(() => Math.random() - 0.5);
+    
     return { 
-      items: results.slice(0, targetCount), 
-      gotAny: results.length > 0 
+      items: shuffledResults.slice(0, targetCount), 
+      gotAny: shuffledResults.length > 0 
     };
   } catch (error) {
     console.error('Error in fetchMoreTakesFilled:', error);
