@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,12 +9,14 @@ import {
   ScrollView,
   RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
 import { CategoryDropdown } from '../components/CategoryDropdown';
 import { AdBanner } from '../components/AdBanner';
 import { AdConsentModal } from '../components/AdConsentModal';
 import { LoadingSkeleton } from '../components/loading/LoadingSkeleton';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
+import { InstructionsModal } from '../components/InstructionsModal';
 import { SubmitTakeScreen } from './SubmitTakeScreen';
 import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
@@ -30,6 +32,8 @@ export const HomeScreen: React.FC = () => {
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [showMyTakesModal, setShowMyTakesModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+  const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+  const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,6 +49,29 @@ export const HomeScreen: React.FC = () => {
   const { onUserSwipe, onSessionEnd } = useInterstitialAds();
   
   const theme = isDarkMode ? colors.dark : colors.light;
+
+  // Check if this is the first launch
+  useEffect(() => {
+    const checkFirstLaunch = async () => {
+      try {
+        const hasLaunchedBefore = await AsyncStorage.getItem('hasLaunchedBefore');
+        if (!hasLaunchedBefore) {
+          // First launch - show instructions and mark as launched
+          setIsFirstLaunch(true);
+          setShowInstructionsModal(true);
+          await AsyncStorage.setItem('hasLaunchedBefore', 'true');
+        } else {
+          // Not first launch
+          setIsFirstLaunch(false);
+        }
+      } catch (error) {
+        console.error('Error checking first launch:', error);
+        setIsFirstLaunch(false); // Default to not showing instructions on error
+      }
+    };
+
+    checkFirstLaunch();
+  }, []);
 
   // Auto sign-in on first load
   React.useEffect(() => {
@@ -222,6 +249,7 @@ export const HomeScreen: React.FC = () => {
             onVote={handleVote}
             onSkip={handleSkip}
             onSubmitTake={() => setShowSubmitModal(true)}
+            onShowInstructions={() => setShowInstructionsModal(true)}
             isDarkMode={isDarkMode}
             hasMore={hasMore}
             loadMore={loadMore}
@@ -315,6 +343,13 @@ export const HomeScreen: React.FC = () => {
         <Text style={styles.fabText}>✏️</Text>
       </TouchableOpacity>
       </ScrollView>
+
+      {/* Instructions Modal */}
+      <InstructionsModal
+        visible={showInstructionsModal}
+        onClose={() => setShowInstructionsModal(false)}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Ad Consent Modal */}
       <AdConsentModal isDarkMode={isDarkMode} />

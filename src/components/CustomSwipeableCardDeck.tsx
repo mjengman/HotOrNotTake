@@ -31,20 +31,23 @@ interface CustomSwipeableCardDeckProps {
   onVote: (takeId: string, vote: 'hot' | 'not') => void;
   onSkip: (takeId: string) => void;
   onSubmitTake?: () => void;
+  onShowInstructions?: () => void;
   isDarkMode?: boolean;
   hasMore?: boolean;
   loadMore?: (count?: number) => Promise<void>;
   loading?: boolean;
 }
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.3;
+const SWIPE_DOWN_THRESHOLD = height * 0.2; // 20% of screen height
 
 export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = ({
   takes,
   onVote,
   onSkip,
   onSubmitTake,
+  onShowInstructions,
   isDarkMode = false,
   hasMore = true,
   loadMore,
@@ -142,6 +145,30 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }
   };
 
+  // Handle skip with animation (for both button press and swipe down)
+  const handleSkipWithAnimation = () => {
+    if (currentIndex < safeTakes.length) {
+      // Haptic feedback
+      Vibration.vibrate(15);
+      
+      // Call the skip logic
+      handleSkip();
+      
+      // Animate card down
+      translateY.value = withSpring(
+        height * 0.8, // Animate card down off screen
+        { damping: 15, stiffness: 120, mass: 0.8 },
+        () => {
+          'worklet';
+          // Reset after animation  
+          translateX.value = 0;
+          translateY.value = 0;
+          scale.value = withSpring(1);
+        }
+      );
+    }
+  };
+
   const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
     onStart: () => {
       scale.value = withSpring(0.95);
@@ -150,19 +177,27 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     },
     onActive: (event) => {
       translateX.value = event.translationX;
-      translateY.value = event.translationY * 0.1; // Subtle vertical movement
+      translateY.value = event.translationY;
       
-      // Provide haptic feedback when reaching swipe threshold
+      // Provide haptic feedback when reaching swipe thresholds
       const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
       const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
+      const shouldSwipeDown = event.translationY > SWIPE_DOWN_THRESHOLD;
       
+      // Horizontal swipe feedback
       if ((shouldSwipeRight || shouldSwipeLeft) && Math.abs(event.translationX) > SWIPE_THRESHOLD && Math.abs(event.translationX) < SWIPE_THRESHOLD + 20) {
         runOnJS(Vibration.vibrate)(15);
+      }
+      
+      // Down swipe feedback
+      if (shouldSwipeDown && Math.abs(event.translationY) > SWIPE_DOWN_THRESHOLD && Math.abs(event.translationY) < SWIPE_DOWN_THRESHOLD + 30) {
+        runOnJS(Vibration.vibrate)(12);
       }
     },
     onEnd: (event) => {
       const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
       const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
+      const shouldSwipeDown = event.translationY > SWIPE_DOWN_THRESHOLD;
 
       const finishSwipe = () => {
         translateX.value = 0;
@@ -171,7 +206,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         // IMPORTANT: Don't call moveToNextCard - let parent handle index advancing
       };
 
-      if (shouldSwipeRight) {
+      if (shouldSwipeDown) {
+        // Swipe down to skip
+        runOnJS(handleSkipWithAnimation)();
+      } else if (shouldSwipeRight) {
         runOnJS(Vibration.vibrate)(25);
         runOnJS(handleVote)('hot');
         translateX.value = withSpring(
@@ -274,6 +312,16 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     return { opacity };
   });
 
+  const skipOverlayStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      translateY.value,
+      [0, SWIPE_DOWN_THRESHOLD],
+      [0, 1],
+      Extrapolate.CLAMP
+    );
+    return { opacity };
+  });
+
   // Show end screen only when truly no more content
   const noCards = safeTakes.length === 0;
   const atEnd = currentIndex >= safeTakes.length;
@@ -350,18 +398,36 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           <Animated.View style={[styles.overlayRight, { backgroundColor: theme.hot }, hotOverlayStyle]}>
             <Text style={styles.overlayText}>HOT</Text>
           </Animated.View>
+
+          <Animated.View style={[styles.overlayBottom, { backgroundColor: 'rgba(0,0,0,0.8)' }, skipOverlayStyle]}>
+            <Text style={styles.overlayText}>SKIP</Text>
+          </Animated.View>
         </Animated.View>
       </PanGestureHandler>
       
       {/* Skip Button */}
       <AnimatedPressable 
         style={styles.skipButton} 
-        onPress={handleSkip}
+        onPress={handleSkipWithAnimation}
         scaleValue={0.9}
         hapticIntensity={12}
       >
         <Text style={styles.skipButtonText}>Skip</Text>
       </AnimatedPressable>
+
+      {/* Instructions Button */}
+      {onShowInstructions && (
+        <AnimatedPressable 
+          style={[styles.skipButton, styles.instructionsButton]} 
+          onPress={onShowInstructions}
+          scaleValue={0.9}
+          hapticIntensity={8}
+        >
+          <Text style={[styles.skipButtonText, styles.instructionsButtonText]}>
+            ❓ Instructions
+          </Text>
+        </AnimatedPressable>
+      )}
     </View>
   );
 };
@@ -443,6 +509,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     transform: [{ rotate: '-15deg' }],
   },
+  overlayBottom: {
+    position: 'absolute',
+    bottom: 120,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
   overlayText: {
     color: 'white',
     fontSize: 18,
@@ -462,5 +537,12 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  instructionsButton: {
+    bottom: 15, // Position below skip button
+    backgroundColor: 'rgba(255, 107, 107, 0.95)', // More vibrant - less transparency
+  },
+  instructionsButtonText: {
+    fontSize: 14,
   },
 });
