@@ -48,7 +48,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             </Text>
           </View>
 
-          <View style={[styles.exampleBox, { backgroundColor: isDarkMode ? theme.surface : '#F5F5F5' }]}>
+          <View style={[styles.exampleBox, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
             <Text style={[styles.exampleTitle, { color: theme.text }]}>Examples:</Text>
             <Text style={[styles.exampleText, { color: theme.textSecondary }]}>• "Pineapple belongs on pizza"</Text>
             <Text style={[styles.exampleText, { color: theme.textSecondary }]}>• "The book is always better than the movie"</Text>
@@ -61,23 +61,25 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
       title: "How to Vote 🗳️",
       content: (
         <>
-          <View style={styles.voteSection}>
+          <View style={[styles.voteSection, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
             <View style={styles.voteOption}>
               <Text style={styles.voteEmoji}>🔥</Text>
-              <Text style={styles.voteLabel}>HOT</Text>
-              <Text style={styles.voteDescription}>
+              <Text style={[styles.voteLabel, { color: theme.text }]}>HOT</Text>
+              <Text style={[styles.voteDescription, { color: theme.textSecondary }]}>
                 I AGREE with this take{'\n'}
                 YES, this is true{'\n'}
                 This opinion is VALID
               </Text>
             </View>
 
-            <View style={styles.voteDivider} />
+            <View style={styles.orDivider}>
+              <Text style={[styles.orText, { color: theme.textSecondary }]}>- OR -</Text>
+            </View>
 
             <View style={styles.voteOption}>
               <Text style={styles.voteEmoji}>❄️</Text>
-              <Text style={styles.voteLabel}>NOT</Text>
-              <Text style={styles.voteDescription}>
+              <Text style={[styles.voteLabel, { color: theme.text }]}>NOT</Text>
+              <Text style={[styles.voteDescription, { color: theme.textSecondary }]}>
                 I DISAGREE with this take{'\n'}
                 NO, this is wrong{'\n'}
                 This opinion is TRASH
@@ -85,7 +87,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             </View>
           </View>
 
-          <Text style={styles.footnote}>
+          <Text style={[styles.footnote, { color: theme.textSecondary }]}>
             Remember: It's all about opinions - there's no right or wrong answer!
           </Text>
         </>
@@ -95,31 +97,31 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
       title: "How to Play 🎮",
       content: (
         <>
-          <View style={styles.instructionItem}>
+          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
             <Text style={styles.instructionEmoji}>👆</Text>
-            <Text style={styles.instructionText}>
-              <Text style={styles.bold}>TAP</Text> the vote buttons at the bottom of each card
+            <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+              <Text style={[styles.bold, { color: theme.text }]}>TAP</Text> the vote buttons at the bottom of each card
             </Text>
           </View>
 
-          <View style={styles.instructionItem}>
+          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
             <Text style={styles.instructionEmoji}>👉</Text>
-            <Text style={styles.instructionText}>
-              <Text style={styles.bold}>SWIPE RIGHT</Text> to vote 🔥 HOT (agree)
+            <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+              <Text style={[styles.bold, { color: theme.text }]}>SWIPE RIGHT</Text> to vote 🔥 HOT (agree)
             </Text>
           </View>
 
-          <View style={styles.instructionItem}>
+          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
             <Text style={styles.instructionEmoji}>👈</Text>
-            <Text style={styles.instructionText}>
-              <Text style={styles.bold}>SWIPE LEFT</Text> to vote ❄️ NOT (disagree)
+            <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+              <Text style={[styles.bold, { color: theme.text }]}>SWIPE LEFT</Text> to vote ❄️ NOT (disagree)
             </Text>
           </View>
 
-          <View style={styles.instructionItem}>
+          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
             <Text style={styles.instructionEmoji}>⬇️</Text>
-            <Text style={styles.instructionText}>
-              <Text style={styles.bold}>SWIPE DOWN</Text> to skip if you're unsure
+            <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+              <Text style={[styles.bold, { color: theme.text }]}>SWIPE DOWN</Text> to skip if you're unsure
             </Text>
           </View>
 
@@ -262,7 +264,6 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   exampleBox: {
-    backgroundColor: '#F5F5F5',
     borderRadius: 12,
     padding: 15,
     marginBottom: 20,
@@ -280,16 +281,14 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   voteSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: '#F8F8F8',
+    flexDirection: 'column',
     borderRadius: 15,
     padding: 20,
     marginBottom: 20,
   },
   voteOption: {
-    flex: 1,
     alignItems: 'center',
+    paddingVertical: 10,
   },
   voteEmoji: {
     fontSize: 50,
@@ -299,30 +298,30 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 10,
-    color: '#333',
   },
   voteDescription: {
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 20,
-    color: '#666',
   },
-  voteDivider: {
-    width: 1,
-    backgroundColor: '#DDD',
-    marginHorizontal: 15,
+  orDivider: {
+    alignItems: 'center',
+    paddingVertical: 15,
+  },
+  orText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
   footnote: {
     fontSize: 14,
     fontStyle: 'italic',
     textAlign: 'center',
-    color: '#888',
     marginTop: 10,
   },
   instructionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
     borderRadius: 12,
     padding: 15,
     marginBottom: 15,
@@ -335,11 +334,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     lineHeight: 22,
-    color: '#555',
   },
   bold: {
     fontWeight: 'bold',
-    color: '#333',
   },
   tipBox: {
     backgroundColor: '#FFF3CD',

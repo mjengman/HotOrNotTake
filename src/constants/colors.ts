@@ -5,8 +5,8 @@ export const colors = {
     secondary: '#3742FA',    // Cool blue
     background: '#FFFFFF',
     surface: '#F8F9FA',
-    text: '#2C3E50',
-    textSecondary: '#7F8C8D',
+    text: '#1A1A1A',
+    textSecondary: '#333333',
     accent: '#FFA502',       // Orange accent
     success: '#2ED573',
     error: '#FF3838',
