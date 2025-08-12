@@ -215,7 +215,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             const take = item as Take;
             const subtitle = activeTab === 'hottest' 
               ? `${take.hotVotes} 🔥 votes`
-              : `${take.notVotes} 🗑️ votes`;
+              : `${take.notVotes} ❄️ votes`;
             return renderTakeItem(take, index + 1, subtitle);
           }
         })}
@@ -238,7 +238,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
   const tabs: { key: LeaderboardTab; label: string; icon: string }[] = [
     { key: 'hottest', label: 'Hottest', icon: '🔥' },
-    { key: 'nottest', label: 'Nottest', icon: '🗑️' },
+    { key: 'nottest', label: 'Nottest', icon: '❄️' },
     { key: 'skipped', label: 'Most Skipped', icon: '⏭️' },
   ];
 

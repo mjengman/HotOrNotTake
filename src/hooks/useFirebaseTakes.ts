@@ -274,13 +274,9 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Update user's submission count
       await incrementUserSubmissionCount(user.uid, takeId);
       
-      // Force refresh takes list to show new submission immediately
-      // Add a small delay to ensure the database write has propagated
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const freshTakes = await getApprovedTakes();
-      setAllTakes(freshTakes);
-      
-      console.log(`✅ Take submitted, approved, and list refreshed - new take should appear`);
+      // The take is now live in the database
+      // Feed will refresh automatically on next navigation or pull
+      console.log(`✅ Take submitted and approved successfully`);
     } catch (err) {
       // If the error message contains "Take rejected:", it's a moderation rejection
       const errorMessage = err instanceof Error ? err.message : 'Failed to submit take';

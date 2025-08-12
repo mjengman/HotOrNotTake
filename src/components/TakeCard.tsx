@@ -44,7 +44,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               {take.notVotes.toLocaleString()}
             </Text>
             <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-              🗑️ NOT
+              ❄️ NOT
             </Text>
           </View>
           

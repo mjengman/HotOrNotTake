@@ -233,7 +233,7 @@ export const HomeScreen: React.FC = () => {
       <View style={styles.footer}>
         <View style={styles.instructions}>
           <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-            Swipe right for 🔥 HOT • Swipe left for 🗑️ NOT
+            Swipe right for 🔥 HOT • Swipe left for ❄️ NOT
           </Text>
         </View>
         

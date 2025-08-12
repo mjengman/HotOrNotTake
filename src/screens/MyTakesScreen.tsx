@@ -140,7 +140,7 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
                 {take.notVotes}
               </Text>
               <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-                🗑️ Not ({formatPercentage(take.notVotes, take.totalVotes)})
+                ❄️ Not ({formatPercentage(take.notVotes, take.totalVotes)})
               </Text>
             </View>
             

@@ -10,7 +10,6 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withSequence,
-  withDelay,
   withTiming,
   Easing,
 } from 'react-native-reanimated';
@@ -86,7 +85,7 @@ export const VoteIndicator: React.FC<VoteIndicatorProps> = ({
 
   const isHot = vote === 'hot';
   const backgroundColor = isHot ? theme.hot : theme.not;
-  const icon = isHot ? '🔥' : '🗑️';
+  const icon = isHot ? '🔥' : '❄️';
   const label = isHot ? 'HOT' : 'NOT';
 
   return (

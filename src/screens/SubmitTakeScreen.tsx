@@ -14,6 +14,7 @@ import {
 import { useAuth, useFirebaseTakes } from '../hooks';
 import { colors, dimensions } from '../constants';
 import { TakeCard } from '../components/TakeCard';
+import { SubmissionSuccessModal } from '../components/SubmissionSuccessModal';
 import { Take } from '../types';
 
 const CATEGORIES = [
@@ -54,6 +55,7 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [moderationError, setModerationError] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   
   const theme = isDarkMode ? colors.dark : colors.light;
   
@@ -64,6 +66,19 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
   const characterCount = text.length;
   const isNearLimit = characterCount > MAX_LENGTH * 0.8;
   const isOverLimit = characterCount > MAX_LENGTH;
+
+  const handleSubmitAnother = () => {
+    setText('');
+    setSelectedCategory('');
+    setShowPreview(false);
+    setModerationError(null);
+    setShowSuccessModal(false);
+  };
+
+  const handleDone = () => {
+    setShowSuccessModal(false);
+    onClose();
+  };
 
   const handleSubmit = async () => {
     if (!canSubmit || !user) return;
@@ -80,26 +95,8 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
       // Notify parent about successful submission
       onSuccess?.();
 
-      Alert.alert(
-        'Take Submitted! 🎉',
-        'Your hot take is now live and ready for voting!',
-        [
-          {
-            text: 'Submit Another',
-            onPress: () => {
-              setText('');
-              setSelectedCategory('');
-              setShowPreview(false);
-              setModerationError(null);
-            },
-          },
-          {
-            text: 'Done',
-            onPress: onClose,
-            style: 'default',
-          },
-        ]
-      );
+      // Show success modal
+      setShowSuccessModal(true);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Submission error:', error);
@@ -337,6 +334,14 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      {/* Success Modal */}
+      <SubmissionSuccessModal
+        visible={showSuccessModal}
+        onSubmitAnother={handleSubmitAnother}
+        onDone={handleDone}
+        isDarkMode={isDarkMode}
+      />
     </SafeAreaView>
   );
 };
