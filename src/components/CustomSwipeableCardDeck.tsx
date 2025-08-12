@@ -53,9 +53,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   loadMore,
   loading = false,
 }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [nextIndex, setNextIndex] = useState(1); // Track next card explicitly
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
   
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -63,110 +62,64 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   const theme = isDarkMode ? colors.dark : colors.light;
 
+  // JS-thread helpers for runOnJS
+  const jsSetVote = (val: 'hot' | 'not' | null) => setCurrentVote(val);
+  const jsOnVote = (id: string, v: 'hot' | 'not') => onVote(id, v);
+  const jsOnSkip = (id: string) => onSkip(id);
+
   // Ensure takes is always an array
   const safeTakes = takes || [];
 
-  // Clamp currentIndex when array size changes to prevent crashes
-  useEffect(() => {
-    if (safeTakes.length > 0 && currentIndex >= safeTakes.length) {
-      setCurrentIndex(Math.max(0, safeTakes.length - 1));
-    }
-  }, [safeTakes.length, currentIndex]);
-
-  // Update nextIndex when currentIndex changes
-  useEffect(() => {
-    setNextIndex(currentIndex + 1);
-  }, [currentIndex]);
+  // Always use first two items for smooth transitions
+  const currentTake = safeTakes[0];
+  const nextTake = safeTakes[1];
 
   // Auto-load more when getting low on cards
   useEffect(() => {
-    if (loadMore && safeTakes.length - currentIndex <= 5 && hasMore && !loading) {
+    if (loadMore && safeTakes.length <= 5 && hasMore && !loading) {
       loadMore(20).catch(console.error);
     }
-  }, [safeTakes.length, currentIndex, hasMore, loading, loadMore]);
-
-  const handleVote = (vote: 'hot' | 'not') => {
-    if (currentIndex < safeTakes.length) {
-      const currentTake = safeTakes[currentIndex];
-      
-      // Show vote indicator immediately
-      setCurrentVote(vote);
-      
-      // Give the indicator more time to show its full animation
-      setTimeout(() => {
-        onVote(currentTake.id, vote);
-      }, 750); // Increased delay
-      
-      // Clear vote indicator after animation completes
-      setTimeout(() => setCurrentVote(null), 1000); // Extended timeout
-      
-      // IMPORTANT: Don't increment currentIndex - let parent's array removal handle advancing
-    }
-  };
+  }, [safeTakes.length, hasMore, loading, loadMore]);
 
   // Handle button press with swipe animation
   const handleButtonVote = (vote: 'hot' | 'not') => {
-    if (currentIndex < safeTakes.length) {
-      // Haptic feedback
-      Vibration.vibrate(25);
-      
-      // Show vote indicator
-      handleVote(vote);
-      
-      // Animate card swipe away
-      const direction = vote === 'hot' ? 1 : -1;
-      translateX.value = withSpring(
-        width * 1.5 * direction,
-        { damping: 15, stiffness: 120, mass: 0.8 },
-        () => {
-          'worklet';
-          // Reset after animation  
-          translateX.value = 0;
-          translateY.value = 0;
-          scale.value = withSpring(1);
-        }
-      );
-    }
-  };
+    if (!currentTake) return;
+    const id = currentTake.id; // snapshot now
+    Vibration.vibrate(25);
+    setCurrentVote(vote);
+    const dir = vote === 'hot' ? 1 : -1;
 
-  const handleSkip = () => {
-    if (currentIndex < safeTakes.length) {
-      // Immediate haptic feedback for skip action
-      Vibration.vibrate(12);
-      
-      const currentTake = safeTakes[currentIndex];
-      
-      // Call onSkip asynchronously so it doesn't block the UI
-      setTimeout(() => {
-        onSkip(currentTake.id);
-      }, 0);
-      
-      // IMPORTANT: Don't increment currentIndex - let parent's array removal handle advancing
-    }
+    translateX.value = withSpring(
+      width * 1.5 * dir,
+      { damping: 15, stiffness: 120, mass: 0.8 },
+      () => {
+        'worklet';
+        translateX.value = 0;
+        translateY.value = 0;
+        scale.value = withSpring(1);
+        // call JS safely
+        runOnJS(jsSetVote)(null);
+        runOnJS(jsOnVote)(id, vote);
+      }
+    );
   };
 
   // Handle skip with animation (for both button press and swipe down)
   const handleSkipWithAnimation = () => {
-    if (currentIndex < safeTakes.length) {
-      // Haptic feedback
-      Vibration.vibrate(15);
-      
-      // Call the skip logic
-      handleSkip();
-      
-      // Animate card down
-      translateY.value = withSpring(
-        height * 0.8, // Animate card down off screen
-        { damping: 15, stiffness: 120, mass: 0.8 },
-        () => {
-          'worklet';
-          // Reset after animation  
-          translateX.value = 0;
-          translateY.value = 0;
-          scale.value = withSpring(1);
-        }
-      );
-    }
+    if (!currentTake) return;
+    const id = currentTake.id; // snapshot
+    Vibration.vibrate(15);
+    translateY.value = withSpring(
+      height * 0.8,
+      { damping: 15, stiffness: 120, mass: 0.8 },
+      () => {
+        'worklet';
+        translateX.value = 0;
+        translateY.value = 0;
+        scale.value = withSpring(1);
+        runOnJS(jsOnSkip)(id);
+      }
+    );
   };
 
   const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
@@ -199,37 +152,51 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
       const shouldSwipeDown = event.translationY > SWIPE_DOWN_THRESHOLD;
 
-      const finishSwipe = () => {
+      const id = currentTake?.id; // snapshot (may be undefined)
+      const reset = () => {
+        'worklet';
         translateX.value = 0;
         translateY.value = 0;
         scale.value = withSpring(1);
-        // IMPORTANT: Don't call moveToNextCard - let parent handle index advancing
       };
 
-      if (shouldSwipeDown) {
-        // Swipe down to skip
-        runOnJS(handleSkipWithAnimation)();
-      } else if (shouldSwipeRight) {
+      if (shouldSwipeDown && id) {
         runOnJS(Vibration.vibrate)(25);
-        runOnJS(handleVote)('hot');
+        translateY.value = withSpring(
+          height * 0.8,
+          { damping: 15, stiffness: 120, mass: 0.8 },
+          () => { 'worklet'; reset(); runOnJS(jsOnSkip)(id); }
+        );
+        return;
+      }
+
+      if (shouldSwipeRight && id) {
+        runOnJS(jsSetVote)('hot');
+        runOnJS(Vibration.vibrate)(25);
         translateX.value = withSpring(
           width * 1.5,
-          { damping: 15, stiffness: 120, mass: 0.8 }, // Smoother animation
-          finishSwipe
+          { damping: 15, stiffness: 120, mass: 0.8 },
+          () => { 'worklet'; reset(); runOnJS(jsSetVote)(null); runOnJS(jsOnVote)(id, 'hot'); }
         );
-      } else if (shouldSwipeLeft) {
+        return;
+      }
+
+      if (shouldSwipeLeft && id) {
+        runOnJS(jsSetVote)('not');
         runOnJS(Vibration.vibrate)(25);
-        runOnJS(handleVote)('not');
         translateX.value = withSpring(
           -width * 1.5,
           { damping: 15, stiffness: 120, mass: 0.8 },
-          finishSwipe
+          () => { 'worklet'; reset(); runOnJS(jsSetVote)(null); runOnJS(jsOnVote)(id, 'not'); }
         );
-      } else {
-        // Soft haptic feedback for bounce back
-        runOnJS(Vibration.vibrate)(8);
-        finishSwipe();
+        return;
       }
+
+      // bounce back
+      runOnJS(Vibration.vibrate)(8);
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+      scale.value = withSpring(1);
     },
   });
 
@@ -261,36 +228,21 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   });
 
   const nextCardStyle = useAnimatedStyle(() => {
-    // Scale up next card as current card swipes away
-    const nextScale = interpolate(
-      Math.abs(translateX.value),
-      [0, SWIPE_THRESHOLD],
-      [0.95, 1],
-      Extrapolate.CLAMP
-    );
-    const nextOpacity = interpolate(
-      Math.abs(translateX.value),
-      [0, SWIPE_THRESHOLD],
-      [0.5, 1],
-      Extrapolate.CLAMP
-    );
+    // Subtle scale + parallax, NO opacity changes
+    const progress = Math.min(Math.abs(translateX.value) / SWIPE_THRESHOLD, 1);
+    const nextScale = 0.98 + 0.02 * progress;       // 0.98 → 1.0
+    const nextTranslateY = 8 * (1 - progress);      // 8px → 0px
 
     return {
-      transform: [{ 
-        scale: withSpring(nextScale, {
-          damping: 99,
-          stiffness: 0.1,
-          mass: 0.1
-        })
-      }],
-      opacity: withSpring(nextOpacity, {
-        damping: 90,
-        stiffness: 0.1,
-        mass: 0.1
-      }),
-      zIndex: 1, // Keep below current card
+      transform: [
+        { scale: nextScale },
+        { translateY: nextTranslateY },
+      ],
+      opacity: 1, // Keep fully visible so you see the face immediately
+      zIndex: 1,
     };
   });
+
 
   const hotOverlayStyle = useAnimatedStyle(() => {
     const opacity = interpolate(
@@ -324,7 +276,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // Show end screen only when truly no more content
   const noCards = safeTakes.length === 0;
-  const atEnd = currentIndex >= safeTakes.length;
+  const atEnd = !currentTake; // No current card means we're at the end
 
   if (noCards || (atEnd && !hasMore && !loading)) {
     return (
@@ -366,23 +318,26 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     return <View style={styles.container} />;
   }
 
-  const currentTake = safeTakes[currentIndex];
-  const nextTake = safeTakes[nextIndex];
 
   return (
     <View style={styles.container}>
       <VoteIndicator vote={currentVote} isDarkMode={isDarkMode} />
       
-      {/* Next card (background) */}
+      
+      {/* Next card (background - always visible) */}
       {nextTake && (
-        <Animated.View style={[styles.cardContainer, styles.nextCard, nextCardStyle]}>
+        <Animated.View 
+          key={`next-${nextTake.id}`} 
+          style={[styles.cardContainer, styles.nextCard, nextCardStyle]}
+          pointerEvents="none"
+        >
           <TakeCard take={nextTake} isDarkMode={isDarkMode} />
         </Animated.View>
       )}
       
       {/* Current card (foreground) */}
       <PanGestureHandler onGestureEvent={gestureHandler}>
-        <Animated.View style={[styles.cardContainer, animatedStyle]}>
+        <Animated.View key={`current-${currentTake?.id}`} style={[styles.cardContainer, animatedStyle]}>
           <TakeCard 
             take={currentTake} 
             isDarkMode={isDarkMode}

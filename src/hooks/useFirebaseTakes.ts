@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Take, TakeSubmission } from '../types/Take';
 import {
   submitTake,
@@ -49,13 +49,16 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const [feed, setFeed] = useState<Take[]>([]);
   const [hasMore, setHasMore] = useState(true);
 
-  // Simplified category variety algorithm - O(n) complexity
-  const ensureCategoryVariety = useCallback((takesArray: Take[]): Take[] => {
-    if (category !== 'all' || takesArray.length <= 2) return takesArray;
-    
-    const result: Take[] = [];
-    const availableTakes = [...takesArray];
-    let lastCategory: string | null = null;
+  // Stable category variety algorithm - freezes prefix to prevent reshuffling
+  const ensureCategoryVariety = useCallback((takesArray: Take[], freezePrefixCount: number = 0): Take[] => {
+    // Don't touch the already-present prefix
+    const prefix = takesArray.slice(0, freezePrefixCount);
+    const tail = takesArray.slice(freezePrefixCount);
+    if (category !== 'all' || tail.length <= 2) return takesArray;
+
+    const result: Take[] = [...prefix];
+    const availableTakes = [...tail];
+    let lastCategory: string | null = prefix.length ? prefix[prefix.length - 1]?.category ?? null : null;
     let consecutiveCount = 0;
     const maxConsecutive = 2;
     
@@ -93,7 +96,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     
     // Log summary
     const categories = result.slice(0, 10).map(t => t.category);
-    console.log(`✅ Category variety: ${result.length} takes, first 10: ${categories.join(' → ')}`);
+    console.log(`✅ Category variety: ${result.length} takes, first 10: ${categories.join(' → ')}, froze prefix: ${freezePrefixCount}`);
     
     return result;
   }, [category]);
@@ -134,6 +137,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setLoading(true);
 
       try {
+        // Use current interacted IDs at the time of initialization
         const interacted = new Set(interactedTakeIds);
         const { items, gotAny } = await fetchMoreTakesFilled({
           category,
@@ -142,8 +146,10 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           interactedIds: interacted,
         });
         
-        setFeed(items);
-        setHasMore(gotAny && items.length > 0);
+        // Apply variety once on initial load
+        const ordered = category === 'all' ? ensureCategoryVariety(items, 0) : items;
+        setFeed(ordered);
+        setHasMore(gotAny && ordered.length > 0);
         console.log(`✅ Initial feed loaded: ${items.length} takes, hasMore: ${gotAny}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load takes');
@@ -157,7 +163,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     if (user !== undefined) {
       initializeFeed();
     }
-  }, [category, user, interactedTakeIds]);
+  }, [category, user]);
 
   // Load more takes function
   const loadMore = useCallback(async (count: number = 20) => {
@@ -179,7 +185,12 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         interactedIds: interacted,
       });
 
-      setFeed(prev => ensureCategoryVariety([...prev, ...items]));
+      setFeed(prev => {
+        const combined = [...prev, ...items];
+        if (category !== 'all') return combined;
+        // Freeze the existing length so we only variety-shuffle the newly appended tail
+        return ensureCategoryVariety(combined, prev.length);
+      });
       setHasMore(gotAny && items.length > 0);
       console.log(`📝 Loaded ${items.length} more takes, hasMore: ${gotAny}, total feed: ${feed.length + items.length}`);
     } catch (err) {
@@ -190,13 +201,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
   }, [category, feed, hasMore, loading, interactedTakeIds, ensureCategoryVariety]);
 
-  // Memoized takes with category variety applied
-  const takes = useMemo(() => {
-    if (feed.length === 0) return [];
-    
-    // Apply category variety algorithm
-    return ensureCategoryVariety(feed);
-  }, [feed, ensureCategoryVariety]);
+  // Return feed directly - variety is applied once during load, not on every render
+  const takes = feed;
 
   // Submit a vote
   const handleSubmitVote = useCallback(async (
@@ -208,12 +214,23 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
 
     try {
+      // Check if we've already voted on this take
+      if (interactedTakeIds.includes(takeId)) {
+        console.log('⚠️ Attempted to vote on already voted take:', takeId);
+        throw new Error('You have already voted on this take');
+      }
+
       // Optimistically update interacted IDs and remove from feed
       setInteractedTakeIds(prev => {
-        if (prev.includes(takeId)) return prev;
+        console.log('🗳️ Adding take to voted list:', takeId);
         return [...prev, takeId];
       });
-      setFeed(prev => prev.filter(take => take.id !== takeId));
+      setFeed(prev => {
+        console.log('🗑️ Removing take from feed:', takeId, 'Feed length before:', prev.length);
+        const newFeed = prev.filter(take => take.id !== takeId);
+        console.log('🗑️ Feed length after:', newFeed.length);
+        return newFeed;
+      });
       
       // Submit the vote to Firebase
       await submitVote(takeId, user.uid, vote);
@@ -329,8 +346,10 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         interactedIds: interacted,
       });
       
-      setFeed(items);
-      setHasMore(gotAny && items.length > 0);
+      // Apply variety once to the fresh list
+      const ordered = category === 'all' ? ensureCategoryVariety(items, 0) : items;
+      setFeed(ordered);
+      setHasMore(gotAny && ordered.length > 0);
       console.log(`🔄 Refreshed feed: ${items.length} takes, hasMore: ${gotAny}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh takes');

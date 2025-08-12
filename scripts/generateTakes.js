@@ -105,13 +105,20 @@ const ENHANCED_PROMPTS = {
   },
   
   food: {
-    generic: ['Generate a hot take about food'],
+    generic: [
+      'Generate a hot take about food',
+      'Express a popular food opinion in a clever way',
+      'Take a widely accepted food truth and make it sound fresh'
+    ],
     focused: [
       'Pick any popular restaurant chain and generate a controversial take',
       'Choose a specific cuisine and share a hot take',
       'Select any famous chef and create a divisive opinion',
       'Pick a controversial food and generate a bold take',
-      'Choose any food trend and share a divisive opinion'
+      'Choose any food trend and share a divisive opinion',
+      'Take something everyone agrees about food and express it wittily',
+      'Present a popular food preference with an unexpected angle',
+      'Express a common food sentiment in a clever or humorous way'
     ],
     rngSpice: {
       1: 'NUCLEAR: Defend (or destroy) pineapple pizza as either perfect or an abomination',
@@ -138,13 +145,20 @@ const ENHANCED_PROMPTS = {
   },
 
   technology: {
-    generic: ['Generate a hot take about technology'],
+    generic: [
+      'Generate a hot take about technology',
+      'Celebrate something amazing about modern tech',
+      'Express why technology makes life better in a clever way'
+    ],
     focused: [
       'Pick any major tech company and generate a controversial take',
       'Choose any tech CEO and share a divisive opinion',
       'Select any trending technology and create a hot take',
       'Pick any social media platform and generate a bold opinion',
-      'Choose any tech product and share a controversial take'
+      'Choose any tech product and share a controversial take',
+      'Express appreciation for a tech innovation that changed everything',
+      'Celebrate why smartphones are actually incredible when you think about it',
+      'Share what you love about the internet in a witty way'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) smartphones making humans stupider or smarter',
@@ -171,13 +185,20 @@ const ENHANCED_PROMPTS = {
   },
 
   work: {
-    generic: ['Generate a hot take about work'],
+    generic: [
+      'Generate a hot take about work',
+      'Express why you love your job in a clever way',
+      'Celebrate something great about modern work culture'
+    ],
     focused: [
       'Share a controversial opinion about remote work',
       'Create a hot take about hustle culture',
       'Generate a bold opinion about work-life balance',
       'Make a divisive claim about corporate culture',
-      'Write a hot take about job interviews'
+      'Write a hot take about job interviews',
+      'Celebrate why remote work is amazing in a witty way',
+      'Express why your coworkers are actually great',
+      'Share what you love about modern careers cleverly'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) working from home making employees productive or lazy',
@@ -204,13 +225,20 @@ const ENHANCED_PROMPTS = {
   },
 
   life: {
-    generic: ['Generate a hot take about life'],
+    generic: [
+      'Generate a hot take about life',
+      'Express a positive life truth in a clever way',
+      'Celebrate something about being alive today'
+    ],
     focused: [
       'Share controversial life advice nobody wants to hear',
       'Create a hot take about modern lifestyle choices',
       'Generate a bold opinion about success and happiness',
       'Make a divisive claim about social norms',
-      'Write a hot take about generational differences'
+      'Write a hot take about generational differences',
+      'Celebrate why life is actually pretty great right now',
+      'Express gratitude for something modern in a witty way',
+      'Share what makes you happy in an unexpected way'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) adulting being harder now or every generation\'s excuse',
@@ -237,13 +265,20 @@ const ENHANCED_PROMPTS = {
   },
 
   entertainment: {
-    generic: ['Generate a hot take about entertainment'],
+    generic: [
+      'Generate a hot take about entertainment',
+      'Celebrate something great about modern entertainment',
+      'Express why you love your favorite genre in a clever way'
+    ],
     focused: [
       'Pick any celebrity and generate a controversial take',
       'Choose any movie/TV show and share a divisive opinion',
       'Select any streaming platform and create a hot take',
       'Pick any entertainment genre and generate a bold opinion',
-      'Choose any viral personality and share a controversial take'
+      'Choose any viral personality and share a controversial take',
+      'Defend why reality TV is actually brilliant entertainment',
+      'Celebrate the golden age of streaming with a witty observation',
+      'Express appreciation for a widely loved movie/show in a fresh way'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) superhero movies being inspiring or fascist propaganda',
@@ -270,13 +305,20 @@ const ENHANCED_PROMPTS = {
   },
 
   relationships: {
-    generic: ['Generate a hot take about relationships'],
+    generic: [
+      'Generate a hot take about relationships',
+      'Celebrate something beautiful about love and connection',
+      'Express why relationships are worth it in a clever way'
+    ],
     focused: [
       'Share a controversial dating opinion',
       'Create a hot take about modern relationships',
       'Generate a bold opinion about marriage',
       'Make a divisive claim about friendship',
-      'Write a hot take about family dynamics'
+      'Write a hot take about family dynamics',
+      'Celebrate why long-term relationships are underrated',
+      'Express appreciation for friendship in a witty way',
+      'Share what makes healthy relationships amazing'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) ghosting being cowardly or merciful way to end things',
@@ -303,13 +345,20 @@ const ENHANCED_PROMPTS = {
   },
 
   pets: {
-    generic: ['Generate a hot take about pets'],
+    generic: [
+      'Generate a hot take about pets',
+      'Celebrate how amazing pets are for our lives',
+      'Express why animals make everything better in a clever way'
+    ],
     focused: [
       'Generate a controversial opinion about pet ownership',
       'Create a hot take about cats vs dogs',
       'Share a divisive opinion about exotic pets',
       'Make a bold claim about pet training',
-      'Write a hot take about animal behavior'
+      'Write a hot take about animal behavior',
+      'Celebrate why dogs are actually perfect beings',
+      'Express appreciation for cats being independent royalty',
+      'Share what makes the human-pet bond so special'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) cat people being more independent or antisocial than dog people',
@@ -336,13 +385,20 @@ const ENHANCED_PROMPTS = {
   },
 
   wellness: {
-    generic: ['Generate a hot take about wellness'],
+    generic: [
+      'Generate a hot take about wellness',
+      'Celebrate something positive about taking care of yourself',
+      'Express why self-care is actually important in a clever way'
+    ],
     focused: [
       'Generate a controversial health opinion',
       'Create a hot take about fitness culture',
       'Share a divisive opinion about mental health',
       'Make a bold claim about diet trends',
-      'Write a hot take about wellness industry'
+      'Write a hot take about wellness industry',
+      'Celebrate why therapy is actually amazing for everyone',
+      'Express appreciation for mental health awareness progress',
+      'Share what you love about staying healthy in a witty way'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) gym memberships being health investment or corporate scam',
@@ -369,13 +425,20 @@ const ENHANCED_PROMPTS = {
   },
 
   travel: {
-    generic: ['Generate a hot take about travel'],
+    generic: [
+      'Generate a hot take about travel',
+      'Celebrate something amazing about exploring the world',
+      'Express why travel is life-changing in a clever way'
+    ],
     focused: [
       'Generate a controversial opinion about tourism',
       'Create a hot take about popular destinations',
       'Share a divisive opinion about travel culture',
       'Make a bold claim about vacation styles',
-      'Write a hot take about travel influencers'
+      'Write a hot take about travel influencers',
+      'Celebrate why budget travel is actually the best way to see the world',
+      'Express appreciation for how travel opens your mind',
+      'Share what makes exploring new cultures so rewarding'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) TSA security being necessary protection or theater',
@@ -402,13 +465,20 @@ const ENHANCED_PROMPTS = {
   },
 
   society: {
-    generic: ['Generate a hot take about society'],
+    generic: [
+      'Generate a hot take about society',
+      'Celebrate something positive about modern society',
+      'Express why humans are actually getting better over time'
+    ],
     focused: [
       'Generate a controversial opinion about social issues',
       'Create a hot take about cultural trends',
       'Share a divisive opinion about generations',
       'Make a bold claim about social media',
-      'Write a hot take about modern society'
+      'Write a hot take about modern society',
+      'Celebrate why this generation is actually amazing',
+      'Express appreciation for how connected we all are now',
+      'Share what makes modern communities stronger than ever'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) Karen stereotype being legitimate concern or misogynistic meme',
@@ -435,13 +505,20 @@ const ENHANCED_PROMPTS = {
   },
 
   environment: {
-    generic: ['Generate a hot take about the environment'],
+    generic: [
+      'Generate a hot take about the environment',
+      'Celebrate progress in environmental protection',
+      'Express hope for the planet in a clever way'
+    ],
     focused: [
       'Generate a controversial opinion about climate change',
       'Create a hot take about environmental policies',
       'Share a divisive opinion about green energy',
       'Make a bold claim about conservation',
-      'Write a hot take about environmental activism'
+      'Write a hot take about environmental activism',
+      'Celebrate the amazing environmental progress we\'re actually making',
+      'Express optimism about renewable energy revolution',
+      'Share why young environmental activists give you hope'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) paper vs plastic straws being meaningful or distraction',
@@ -468,13 +545,20 @@ const ENHANCED_PROMPTS = {
   },
 
   sports: {
-    generic: ['Generate a hot take about sports'],
+    generic: [
+      'Generate a hot take about sports',
+      'Celebrate something amazing about athletic achievement',
+      'Express why sports bring out the best in humanity'
+    ],
     focused: [
       'Generate a controversial opinion about popular sports',
       'Create a hot take about famous athletes',
       'Share a divisive opinion about team loyalty',
       'Make a bold claim about sports culture',
-      'Write a hot take about competitive gaming'
+      'Write a hot take about competitive gaming',
+      'Celebrate why team sports teach the best life lessons',
+      'Express appreciation for incredible athletic dedication',
+      'Share what makes sports fandom so beautifully unifying'
     ],
     rngSpice: {
       1: 'NUCLEAR: Argue (for or against) participation trophies building confidence or creating entitlement',
@@ -512,13 +596,14 @@ function choose(arr) {
 
 // Generate dynamic prompts for custom topics
 function generateDynamicPrompts(topic) {
-  const capitalizedTopic = topic.charAt(0).toUpperCase() + topic.slice(1);
   
   return {
     generic: [
       `Generate a controversial hot take about ${topic}`,
       `Share an unpopular opinion about ${topic}`,
-      `Create a divisive statement about ${topic}`
+      `Create a divisive statement about ${topic}`,
+      `Express a popular opinion about ${topic} in a clever or unexpected way`,
+      `Take a widely accepted view about ${topic} and present it with a fresh angle`
     ],
     focused: [
       `Pick a specific aspect of ${topic} and generate a controversial take about it`,
@@ -527,7 +612,10 @@ function generateDynamicPrompts(topic) {
       `Share a take about ${topic} that would make fans extremely angry`,
       `Generate a bold prediction about the future of ${topic}`,
       `Compare ${topic} to something unexpected and defend the comparison`,
-      `Argue why ${topic} is either completely overrated or criminally underrated`
+      `Argue why ${topic} is either completely overrated or criminally underrated`,
+      `Take a popular opinion about ${topic} and express it in a witty, clever way`,
+      `Find a widely accepted truth about ${topic} and present it with humor or insight`,
+      `Express something most people agree about ${topic} but make it sound fresh and interesting`
     ],
     rngSpice: {
       1: `NUCLEAR: Argue that ${topic} is either humanity's greatest achievement or biggest mistake`,
@@ -600,18 +688,23 @@ async function generateTake(topicOrCategory, mode = 'auto', personaIndex = null,
     ? `CUSTOM TOPIC: ${topicOrCategory}`
     : `CATEGORY: ${topicOrCategory}`;
 
-  const systemPrompt = `You generate short, controversial "hot takes" for a social voting app.
+  const systemPrompt = `You generate short, engaging "hot takes" for a social voting app.
 
 PERSONALITY: You are a ${persona.name} — ${persona.style}
 
+BALANCE GOAL: Create a healthy mix of controversial AND positive/clever takes to keep the app engaging but not overly negative.
+
 REQUIREMENTS:
 • Maximum ${MAX_LENGTH} characters
-• Be EXTREMELY divisive; people should strongly agree OR disagree
+• Create takes that get strong reactions - either agreement OR disagreement
 • Take a firm, absolute stance (no hedging, no disclaimers)
-• Be provocative but do NOT include hate speech, slurs, or target protected classes
+• Can be controversial OR express popular/positive opinions in clever/witty/unexpected ways
+• POSITIVE takes should be witty, clever, or have a fresh angle on widely accepted truths
+• CONTROVERSIAL takes should be provocative but do NOT include hate speech, slurs, or target protected classes
 • Do not include threats or explicit calls for violence
 • No explanations, no hashtags, no quotes — output ONLY the take
 • If the prompt includes "NUCLEAR", pick a clear side (FOR or AGAINST) and go all in
+• If expressing popular opinions, make them memorable with humor, insight, or unexpected angles
 • Keep it punchy and memorable
 
 ${topicDescription}
