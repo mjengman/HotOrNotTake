@@ -254,7 +254,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         </TouchableOpacity>
         
         <Text style={[styles.title, { color: theme.text }]}>
-          📊 Leaderboards
+          🏆 Leaderboards
         </Text>
         
         <View style={styles.placeholder} />

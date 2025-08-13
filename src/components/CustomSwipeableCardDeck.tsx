@@ -17,6 +17,7 @@ import Animated, {
   useAnimatedGestureHandler,
   runOnJS,
   withSpring,
+  withTiming,
   interpolate,
   Extrapolate,
 } from 'react-native-reanimated';
@@ -54,6 +55,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   loading = false,
 }) => {
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
+  const [isCardFlipped, setIsCardFlipped] = useState(false);
+  const [lastVote, setLastVote] = useState<'hot' | 'not' | null>(null);
   
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -66,6 +69,49 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const jsSetVote = (val: 'hot' | 'not' | null) => setCurrentVote(val);
   const jsOnVote = (id: string, v: 'hot' | 'not') => onVote(id, v);
   const jsOnSkip = (id: string) => onSkip(id);
+  
+  // Flip the card to reveal stats
+  const flipCard = (vote: 'hot' | 'not') => {
+    setLastVote(vote);
+    // Simple fade transition - much simpler!
+    scale.value = withSpring(0.9, {}, () => {
+      'worklet';
+      runOnJS(setIsCardFlipped)(true);
+      scale.value = withSpring(1);
+    });
+  };
+  
+  // Continue to next card after reveal - now with fly-away animation
+  const continueToNext = () => {
+    if (!currentTake || isAnimating.value) return;
+    
+    isAnimating.value = true;
+    const voteToSubmit = lastVote;
+    const takeId = currentTake.id;
+    
+    // Fly away animation (like old voting animation)
+    const direction = voteToSubmit === 'hot' ? 1 : -1;
+    translateX.value = withSpring(
+      width * 1.5 * direction,
+      { damping: 15, stiffness: 120, mass: 0.8 },
+      () => {
+        'worklet';
+        // Reset everything for next card
+        translateX.value = 0;
+        translateY.value = 0;
+        scale.value = 1;
+        runOnJS(setIsCardFlipped)(false);
+        runOnJS(setLastVote)(null);
+        runOnJS(setCurrentVote)(null);
+        isAnimating.value = false;
+        
+        // Submit vote to advance deck
+        if (voteToSubmit && takeId) {
+          runOnJS(onVote)(takeId, voteToSubmit);
+        }
+      }
+    );
+  };
 
   // Ensure takes is always an array
   const safeTakes = takes || [];
@@ -81,28 +127,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }
   }, [safeTakes.length, hasMore, loading, loadMore]);
 
-  // Handle button press with swipe animation
+  // Handle button press - now triggers flip animation
   const handleButtonVote = (vote: 'hot' | 'not') => {
-    if (!currentTake || isAnimating.value) return;
-    isAnimating.value = true;
-    const id = currentTake.id;
+    if (!currentTake || isAnimating.value || isCardFlipped) return;
     Vibration.vibrate(25);
-    setCurrentVote(vote);
-    const dir = vote === 'hot' ? 1 : -1;
-
-    translateX.value = withSpring(
-      width * 1.5 * dir,
-      { damping: 15, stiffness: 120, mass: 0.8 },
-      () => {
-        'worklet';
-        translateX.value = 0;
-        translateY.value = 0;
-        scale.value = withSpring(1);
-        runOnJS(jsSetVote)(null);
-        runOnJS(jsOnVote)(id, vote);
-        isAnimating.value = false; // release
-      }
-    );
+    flipCard(vote);
   };
 
   // Handle skip with animation (for both button press and swipe down)
@@ -128,11 +157,16 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
     onStart: () => {
       if (isAnimating.value) return; // ignore new gestures mid-flight
+      // If card is flipped, any gesture continues to next
+      if (isCardFlipped) {
+        runOnJS(continueToNext)();
+        return;
+      }
       scale.value = withSpring(0.95);
       runOnJS(Vibration.vibrate)(10);
     },
     onActive: (event) => {
-      if (isAnimating.value) return;
+      if (isAnimating.value || isCardFlipped) return;
       translateX.value = event.translationX;
       translateY.value = event.translationY;
       
@@ -177,27 +211,23 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         return;
       }
 
-      if (shouldSwipeRight && id) {
-        isAnimating.value = true;
-        runOnJS(jsSetVote)('hot');
+      if (shouldSwipeRight && id && !isCardFlipped) {
+        // Front side: Bounce back and flip to reveal
         runOnJS(Vibration.vibrate)(25);
-        translateX.value = withSpring(
-          width * 1.5,
-          { damping: 15, stiffness: 120, mass: 0.8 },
-          () => { 'worklet'; reset(); runOnJS(jsSetVote)(null); runOnJS(jsOnVote)(id, 'hot'); isAnimating.value = false; }
-        );
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        scale.value = withSpring(1);
+        runOnJS(flipCard)('hot');
         return;
       }
 
-      if (shouldSwipeLeft && id) {
-        isAnimating.value = true;
-        runOnJS(jsSetVote)('not');
+      if (shouldSwipeLeft && id && !isCardFlipped) {
+        // Front side: Bounce back and flip to reveal
         runOnJS(Vibration.vibrate)(25);
-        translateX.value = withSpring(
-          -width * 1.5,
-          { damping: 15, stiffness: 120, mass: 0.8 },
-          () => { 'worklet'; reset(); runOnJS(jsSetVote)(null); runOnJS(jsOnVote)(id, 'not'); isAnimating.value = false; }
-        );
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        scale.value = withSpring(1);
+        runOnJS(flipCard)('not');
         return;
       }
 
@@ -340,18 +370,34 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           style={[styles.cardContainer, styles.nextCard, nextCardStyle]}
           pointerEvents="none"
         >
-          <TakeCard take={nextTake} isDarkMode={isDarkMode} />
+          <TakeCard 
+            take={nextTake} 
+            isDarkMode={isDarkMode} 
+            showStats={false}
+          />
         </Animated.View>
       )}
       
-      {/* Current card (foreground) */}
+      {/* Current card (foreground) - Front and Back views */}
       <PanGestureHandler onGestureEvent={gestureHandler}>
-        <Animated.View key={`current-${currentTake?.id}`} style={[styles.cardContainer, animatedStyle]}>
+        <Animated.View 
+          key={`current-${currentTake?.id}`} 
+          style={[styles.cardContainer, animatedStyle]}
+          onTouchEnd={() => {
+            if (isCardFlipped) {
+              continueToNext();
+            }
+          }}
+        >
+          {/* Single card that changes content based on flip state */}
           <TakeCard 
             take={currentTake} 
             isDarkMode={isDarkMode}
             onNotPress={() => handleButtonVote('not')}
             onHotPress={() => handleButtonVote('hot')}
+            showStats={false}
+            userVote={lastVote}
+            isFlipped={isCardFlipped}
           />
           
           {/* Overlay indicators */}
@@ -410,6 +456,9 @@ const styles = StyleSheet.create({
   },
   nextCard: {
     // Static styles moved to nextCardStyle for animation
+  },
+  cardBack: {
+    backfaceVisibility: 'hidden',
   },
   endContainer: {
     alignItems: 'center',

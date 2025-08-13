@@ -14,6 +14,9 @@ interface TakeCardProps {
   isDarkMode?: boolean;
   onNotPress?: () => void;
   onHotPress?: () => void;
+  showStats?: boolean;
+  userVote?: 'hot' | 'not' | null;
+  isFlipped?: boolean;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -23,8 +26,16 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   isDarkMode = false,
   onNotPress,
   onHotPress,
+  showStats = true,
+  userVote = null,
+  isFlipped = false,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
+  
+  // Calculate percentages for the reveal
+  const totalVotes = take.totalVotes || 0;
+  const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
+  const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
 
   return (
     <View style={[styles.card, { backgroundColor: theme.card }]}>
@@ -43,37 +54,74 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       </View>
       
       <View style={styles.footer}>
-        <View style={styles.voteStats}>
-          <TouchableOpacity 
-            style={styles.statItem}
-            onPress={onNotPress}
-            disabled={!onNotPress}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.statNumber, { color: theme.not }]}>
-              {take.notVotes.toLocaleString()}
+        {!isFlipped ? (
+          // Front of card - voting buttons
+          <View style={styles.voteStats}>
+            <TouchableOpacity 
+              style={styles.statItem}
+              onPress={onNotPress}
+              disabled={!onNotPress}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.statNumber, { color: theme.not }]}>
+                {showStats ? take.notVotes.toLocaleString() : '?'}
+              </Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                ❄️ NOT
+              </Text>
+            </TouchableOpacity>
+            
+            <View style={styles.statDivider} />
+            
+            <TouchableOpacity 
+              style={styles.statItem}
+              onPress={onHotPress}
+              disabled={!onHotPress}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.statNumber, { color: theme.hot }]}>
+                {showStats ? take.hotVotes.toLocaleString() : '?'}
+              </Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                🔥 HOT
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          // Back of card - stats reveal
+          <View style={styles.revealContainer}>
+            {userVote && (
+              <Text style={[styles.yourVote, { color: theme.text }]}>
+                You voted {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
+              </Text>
+            )}
+            <View style={styles.percentageContainer}>
+              <View style={styles.percentageItem}>
+                <Text style={[styles.bigPercentage, { color: theme.not }]}>
+                  {notPercentage}%
+                </Text>
+                <Text style={[styles.percentageLabel, { color: theme.textSecondary }]}>
+                  NOT
+                </Text>
+              </View>
+              <View style={styles.percentageDivider} />
+              <View style={styles.percentageItem}>
+                <Text style={[styles.bigPercentage, { color: theme.hot }]}>
+                  {hotPercentage}%
+                </Text>
+                <Text style={[styles.percentageLabel, { color: theme.textSecondary }]}>
+                  HOT
+                </Text>
+              </View>
+            </View>
+            <Text style={[styles.totalVotes, { color: theme.textSecondary }]}>
+              {totalVotes.toLocaleString()} total votes
             </Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-              ❄️ NOT
+            <Text style={[styles.continueHint, { color: theme.textSecondary }]}>
+              Tap or swipe to continue
             </Text>
-          </TouchableOpacity>
-          
-          <View style={styles.statDivider} />
-          
-          <TouchableOpacity 
-            style={styles.statItem}
-            onPress={onHotPress}
-            disabled={!onHotPress}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.statNumber, { color: theme.hot }]}>
-              {take.hotVotes.toLocaleString()}
-            </Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-              🔥 HOT
-            </Text>
-          </TouchableOpacity>
-        </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -151,5 +199,51 @@ const styles = StyleSheet.create({
     height: 40,
     backgroundColor: '#E1E8ED',
     opacity: 0.5,
+  },
+  // Reveal styles
+  revealContainer: {
+    alignItems: 'center',
+    paddingVertical: dimensions.spacing.md,
+  },
+  yourVote: {
+    fontSize: dimensions.fontSize.medium,
+    fontWeight: '600',
+    marginBottom: dimensions.spacing.md,
+  },
+  percentageContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: dimensions.spacing.sm,
+  },
+  percentageItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  bigPercentage: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  percentageLabel: {
+    fontSize: dimensions.fontSize.medium,
+    fontWeight: '600',
+  },
+  percentageDivider: {
+    width: 1,
+    height: 50,
+    backgroundColor: '#E1E8ED',
+    opacity: 0.5,
+  },
+  totalVotes: {
+    fontSize: dimensions.fontSize.small,
+    fontStyle: 'italic',
+    marginTop: dimensions.spacing.xs,
+  },
+  continueHint: {
+    fontSize: dimensions.fontSize.small,
+    marginTop: dimensions.spacing.md,
+    fontStyle: 'italic',
   },
 });
