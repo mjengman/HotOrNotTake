@@ -6,6 +6,7 @@ import {
   Alert,
   Text,
   Vibration,
+  Platform,
 } from 'react-native';
 import {
   PanGestureHandler,
@@ -20,6 +21,7 @@ import Animated, {
   withTiming,
   interpolate,
   Extrapolate,
+  Easing,
 } from 'react-native-reanimated';
 import { Take } from '../types';
 import { TakeCard } from './TakeCard';
@@ -43,6 +45,12 @@ const { width, height } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.2;
 const SWIPE_DOWN_THRESHOLD = height * 0.2; // 20% of screen height
 
+// Safe flip for Android - no 3D to avoid compositor crashes
+const ANDROID_SAFE_FLIP = Platform.OS === 'android';
+
+// Stable style object to avoid reparenting during 3D flips
+const absoluteFill = StyleSheet.absoluteFillObject;
+
 export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = ({
   takes,
   onVote,
@@ -62,21 +70,26 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
   const isAnimating = useSharedValue(false);
+  
+  // 0 = front, 1 = back (stats)
+  const flipSV = useSharedValue(0);
 
   const theme = isDarkMode ? colors.dark : colors.light;
 
   // JS-thread helpers for runOnJS
   const jsSetVote = (val: 'hot' | 'not' | null) => setCurrentVote(val);
-  const jsOnVote = (id: string, v: 'hot' | 'not') => onVote(id, v);
   const jsOnSkip = (id: string) => onSkip(id);
   
   // Flip the card to reveal stats
   const flipCard = (vote: 'hot' | 'not') => {
     setLastVote(vote);
-    // Simple fade transition - much simpler!
-    scale.value = withSpring(0.9, {}, () => {
+    
+    // Bounce micro-scale then flip
+    scale.value = withSpring(0.96, {}, () => {
       'worklet';
-      runOnJS(setIsCardFlipped)(true);
+      flipSV.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }, (finished) => {
+        if (finished) runOnJS(setIsCardFlipped)(true); // set after flip completes
+      });
       scale.value = withSpring(1);
     });
   };
@@ -100,6 +113,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         translateX.value = 0;
         translateY.value = 0;
         scale.value = 1;
+        flipSV.value = 0;
         runOnJS(setIsCardFlipped)(false);
         runOnJS(setLastVote)(null);
         runOnJS(setCurrentVote)(null);
@@ -170,10 +184,21 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       translateX.value = event.translationX;
       translateY.value = event.translationY;
       
-      // Provide haptic feedback when reaching swipe thresholds
+      // Vote indicator based on swipe direction
       const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
       const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
       const shouldSwipeDown = event.translationY > SWIPE_DOWN_THRESHOLD;
+      
+      // Update vote indicator
+      if (shouldSwipeRight) {
+        runOnJS(jsSetVote)('hot');
+      } else if (shouldSwipeLeft) {
+        runOnJS(jsSetVote)('not');
+      } else if (shouldSwipeDown) {
+        runOnJS(jsSetVote)(null); // Clear vote for skip
+      } else {
+        runOnJS(jsSetVote)(null); // Clear vote when not at threshold
+      }
       
       // Horizontal swipe feedback
       if ((shouldSwipeRight || shouldSwipeLeft) && Math.abs(event.translationX) > SWIPE_THRESHOLD && Math.abs(event.translationX) < SWIPE_THRESHOLD + 20) {
@@ -231,15 +256,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         return;
       }
 
-      // bounce back
+      // bounce back - clear vote indicator
       runOnJS(Vibration.vibrate)(8);
+      runOnJS(jsSetVote)(null); // Clear vote indicator
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);
       scale.value = withSpring(1);
     },
   });
 
-  const animatedStyle = useAnimatedStyle(() => {
+  // Outer card gets perspective so the 3D reads nicely
+  const card3DStyle = useAnimatedStyle(() => {
     const rotate = interpolate(
       translateX.value,
       [-width, 0, width],
@@ -256,13 +283,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
     return {
       transform: [
+        { perspective: 1000 }, // 3D space
         { translateX: translateX.value },
         { translateY: translateY.value },
         { rotate: `${rotate}deg` },
         { scale: scale.value },
       ],
       opacity,
-      zIndex: 2, // Ensure current card is above next card
+      zIndex: 2,
     };
   });
 
@@ -279,6 +307,37 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       ],
       opacity: 1, // Keep fully visible so you see the face immediately
       zIndex: 1,
+    };
+  });
+
+  // 3D flip animations
+  const frontFaceStyle = useAnimatedStyle(() => {
+    if (ANDROID_SAFE_FLIP) {
+      return { opacity: 1 - flipSV.value };
+    }
+    const deg = interpolate(flipSV.value, [0, 1], [0, 180]);
+    const opacity = interpolate(flipSV.value, [0, 0.45, 0.5], [1, 1, 0], Extrapolate.CLAMP);
+    return {
+      transform: [{ perspective: 1000 }, { rotateY: `${deg}deg` }],
+      opacity,
+      backfaceVisibility: 'hidden' as const,
+    };
+  });
+  
+  const backFaceStyle = useAnimatedStyle(() => {
+    if (ANDROID_SAFE_FLIP) {
+      return { 
+        opacity: flipSV.value,
+        ...absoluteFill,
+      };
+    }
+    const deg = interpolate(flipSV.value, [0, 1], [180, 360]);
+    const opacity = interpolate(flipSV.value, [0.5, 0.55, 1], [0, 1, 1], Extrapolate.CLAMP);
+    return {
+      transform: [{ perspective: 1000 }, { rotateY: `${deg}deg` }],
+      opacity,
+      backfaceVisibility: 'hidden' as const,
+      ...absoluteFill,
     };
   });
 
@@ -382,36 +441,80 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       <PanGestureHandler onGestureEvent={gestureHandler}>
         <Animated.View 
           key={`current-${currentTake?.id}`} 
-          style={[styles.cardContainer, animatedStyle]}
+          style={[styles.cardContainer, card3DStyle]}
           onTouchEnd={() => {
             if (isCardFlipped) {
               continueToNext();
             }
           }}
         >
-          {/* Single card that changes content based on flip state */}
-          <TakeCard 
-            take={currentTake} 
-            isDarkMode={isDarkMode}
-            onNotPress={() => handleButtonVote('not')}
-            onHotPress={() => handleButtonVote('hot')}
-            showStats={false}
-            userVote={lastVote}
-            isFlipped={isCardFlipped}
-          />
+          {/* 👻 Invisible sizer only when we actually have a card */}
+          {!!currentTake && (
+            <View pointerEvents="none" style={styles.ghostSizer}>
+              <TakeCard
+                take={currentTake}
+                isDarkMode={isDarkMode}
+                showStats={false}
+              />
+            </View>
+          )}
           
-          {/* Overlay indicators */}
-          <Animated.View style={[styles.overlayLeft, { backgroundColor: theme.not }, notOverlayStyle]}>
-            <Text style={styles.overlayText}>NOT</Text>
-          </Animated.View>
-          
-          <Animated.View style={[styles.overlayRight, { backgroundColor: theme.hot }, hotOverlayStyle]}>
-            <Text style={styles.overlayText}>HOT</Text>
-          </Animated.View>
+          {/* FRONT */}
+          {!!currentTake && (
+            <Animated.View
+              style={[absoluteFill, frontFaceStyle]}
+              pointerEvents={isCardFlipped ? 'none' : 'auto'}
+            >
+              <TakeCard
+                take={currentTake}
+                isDarkMode={isDarkMode}
+                onNotPress={() => handleButtonVote('not')}
+                onHotPress={() => handleButtonVote('hot')}
+                showStats={false}
+                userVote={null}
+                isFlipped={false}
+              />
+            </Animated.View>
+          )}
 
-          <Animated.View style={[styles.overlayBottom, { backgroundColor: 'rgba(0,0,0,0.8)' }, skipOverlayStyle]}>
-            <Text style={styles.overlayText}>SKIP</Text>
-          </Animated.View>
+          {/* BACK (stats) */}
+          {!!currentTake && (
+            <Animated.View
+              style={[absoluteFill, backFaceStyle]}
+              pointerEvents={isCardFlipped ? 'auto' : 'none'}
+            >
+              <TakeCard
+                take={{
+                  ...currentTake,
+                  // optional: optimistic single-vote bump so stats include user's vote
+                  hotVotes: currentTake.hotVotes + (lastVote === 'hot' ? 1 : 0),
+                  notVotes: currentTake.notVotes + (lastVote === 'not' ? 1 : 0),
+                  totalVotes: currentTake.totalVotes + (lastVote ? 1 : 0),
+                }}
+                isDarkMode={isDarkMode}
+                showStats={true}
+                userVote={lastVote}
+                isFlipped={true}
+              />
+            </Animated.View>
+          )}
+          
+          {/* Overlay indicators - hidden when flipped */}
+          {!isCardFlipped && (
+            <>
+              <Animated.View style={[styles.overlayLeft, { backgroundColor: theme.not }, notOverlayStyle]}>
+                <Text style={styles.overlayText}>NOT</Text>
+              </Animated.View>
+              
+              <Animated.View style={[styles.overlayRight, { backgroundColor: theme.hot }, hotOverlayStyle]}>
+                <Text style={styles.overlayText}>HOT</Text>
+              </Animated.View>
+
+              <Animated.View style={[styles.overlayBottom, { backgroundColor: 'rgba(0,0,0,0.8)' }, skipOverlayStyle]}>
+                <Text style={styles.overlayText}>SKIP</Text>
+              </Animated.View>
+            </>
+          )}
         </Animated.View>
       </PanGestureHandler>
       
@@ -459,6 +562,9 @@ const styles = StyleSheet.create({
   },
   cardBack: {
     backfaceVisibility: 'hidden',
+  },
+  ghostSizer: {
+    opacity: 0, // invisible, but participates in layout
   },
   endContainer: {
     alignItems: 'center',

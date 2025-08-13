@@ -11,7 +11,7 @@ export const colors = {
     success: '#2ED573',
     error: '#FF3838',
     hot: '#FF4757',
-    not: '#747D8C',
+    not: '#74B9FF',
     card: '#FFFFFF',
     border: '#E1E8ED',
   },
