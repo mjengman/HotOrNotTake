@@ -32,40 +32,40 @@ export const VoteIndicator: React.FC<VoteIndicatorProps> = ({
 
   React.useEffect(() => {
     if (vote) {
-      // Enhanced entrance animation with rotation and glow
+      // Enhanced entrance animation with rotation and glow (slower, more satisfying)
       scale.value = withSequence(
-        withSpring(0.3, { damping: 10 }),
-        withSpring(1.4, { damping: 6 }),
-        withSpring(1.0, { damping: 12 })
+        withSpring(0.3, { damping: 12 }),
+        withSpring(1.3, { damping: 8 }),
+        withSpring(1.0, { damping: 15 })
       );
       
       opacity.value = withTiming(1, { 
-        duration: 150, 
+        duration: 250, 
         easing: Easing.out(Easing.quad) 
       });
       
       rotation.value = withSequence(
-        withTiming(vote === 'hot' ? -5 : 5, { duration: 100 }),
-        withSpring(0, { damping: 8 })
+        withTiming(vote === 'hot' ? -5 : 5, { duration: 150 }),
+        withSpring(0, { damping: 10 })
       );
       
-      // Glow effect
+      // Glow effect (more gentle)
       glowScale.value = withSequence(
-        withSpring(1.3, { damping: 8 }),
-        withSpring(1.0, { damping: 10 })
+        withSpring(1.2, { damping: 10 }),
+        withSpring(1.0, { damping: 12 })
       );
       
       // Enhanced haptic feedback based on vote type
       const vibrationPattern = vote === 'hot' ? [0, 20, 40, 20] : [0, 15, 30, 15];
       Vibration.vibrate(vibrationPattern);
       
-      // Auto-hide after a short delay
+      // Auto-hide after a longer delay to let user appreciate the animation
       const hideTimeout = setTimeout(() => {
-        scale.value = withSpring(0, { damping: 15 });
-        opacity.value = withSpring(0, { damping: 15 });
-        rotation.value = withSpring(0, { damping: 15 });
-        glowScale.value = withSpring(0, { damping: 15 });
-      }, 800); // Hide after 800ms
+        scale.value = withSpring(0, { damping: 18 });
+        opacity.value = withSpring(0, { damping: 18 });
+        rotation.value = withSpring(0, { damping: 18 });
+        glowScale.value = withSpring(0, { damping: 18 });
+      }, 1100); // Hide after 1.4s
       
       return () => clearTimeout(hideTimeout);
     } else {

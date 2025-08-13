@@ -73,6 +73,19 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   
   // 0 = front, 1 = back (stats)
   const flipSV = useSharedValue(0);
+  
+  // Freeze system to prevent promotion flicker
+  const frozenCurrent = React.useRef<Take | null>(null);
+  const frozenNext = React.useRef<Take | null>(null);
+  const [useFrozen, setUseFrozen] = useState(false);
+  
+  // Drives the local promotion animation of the next card
+  const promoteSV = useSharedValue(0);
+  
+  // Reactive shared values for worklets (prevents stale boolean capture)
+  const frozenSV = useSharedValue(0);
+
+  useEffect(() => { frozenSV.value = useFrozen ? 1 : 0; }, [useFrozen]);
 
   const theme = isDarkMode ? colors.dark : colors.light;
 
@@ -84,6 +97,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const flipCard = (vote: 'hot' | 'not') => {
     setLastVote(vote);
     
+    // Let VoteIndicator handle its own auto-hide timing
+    
     // Bounce micro-scale then flip
     scale.value = withSpring(0.96, {}, () => {
       'worklet';
@@ -94,32 +109,44 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     });
   };
   
-  // Continue to next card after reveal - now with fly-away animation
+  // Continue to next card after reveal - now with freeze-and-promote
   const continueToNext = () => {
-    if (!currentTake || isAnimating.value) return;
+    if (!renderCurrent || isAnimating.value) return;
     
     isAnimating.value = true;
     const voteToSubmit = lastVote;
-    const takeId = currentTake.id;
+    const takeId = renderCurrent.id;
     
-    // Fly away animation (like old voting animation)
+    // 🧊 FREEZE: Capture current state to prevent flicker
+    frozenCurrent.current = renderCurrent;
+    frozenNext.current = renderNext;
+    setUseFrozen(true);
+    
+    // Fly away animation (like old voting animation)  
     const direction = voteToSubmit === 'hot' ? 1 : -1;
     translateX.value = withSpring(
       width * 1.5 * direction,
       { damping: 15, stiffness: 120, mass: 0.8 },
       () => {
         'worklet';
-        // Reset everything for next card
-        translateX.value = 0;
-        translateY.value = 0;
-        scale.value = 1;
-        flipSV.value = 0;
-        runOnJS(setIsCardFlipped)(false);
-        runOnJS(setLastVote)(null);
-        runOnJS(setCurrentVote)(null);
-        isAnimating.value = false;
+        // 🚀 PROMOTE: Animate next card into current position
+        promoteSV.value = withTiming(1, { duration: 200 }, (finished) => {
+          if (!finished) return;
+          
+          // Reset everything for next card
+          translateX.value = 0;
+          translateY.value = 0;
+          scale.value = 1;
+          flipSV.value = 0;
+          promoteSV.value = 0;
+          runOnJS(setIsCardFlipped)(false);
+          runOnJS(setLastVote)(null);
+          runOnJS(setCurrentVote)(null);
+          runOnJS(setUseFrozen)(false); // 🔓 UNFREEZE
+          isAnimating.value = false;
+        });
         
-        // Submit vote to advance deck
+        // Submit vote to advance deck immediately (snappy UX)
         if (voteToSubmit && takeId) {
           runOnJS(onVote)(takeId, voteToSubmit);
         }
@@ -133,6 +160,21 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Always use first two items for smooth transitions
   const currentTake = safeTakes[0];
   const nextTake = safeTakes[1];
+  
+  // Derive what to render - frozen data during promotion or live props
+  const renderCurrent = useFrozen && frozenCurrent.current ? frozenCurrent.current : currentTake;
+  const renderNext = useFrozen && frozenNext.current ? frozenNext.current : nextTake;
+
+  // If we run out of takes, clean up frozen state to prevent crashes
+  useEffect(() => {
+    if (!currentTake && !nextTake && useFrozen) {
+      console.log('🚨 No more takes - cleaning up frozen state');
+      setUseFrozen(false);
+      frozenCurrent.current = null;
+      frozenNext.current = null;
+      promoteSV.value = 0;
+    }
+  }, [currentTake, nextTake, useFrozen]);
 
   // Auto-load more when getting low on cards
   useEffect(() => {
@@ -144,6 +186,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Handle button press - now triggers flip animation
   const handleButtonVote = (vote: 'hot' | 'not') => {
     if (!currentTake || isAnimating.value || isCardFlipped) return;
+    
+    // Show vote indicator just like swipe gestures do
+    setCurrentVote(vote);
+    
     Vibration.vibrate(25);
     flipCard(vote);
   };
@@ -295,17 +341,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   });
 
   const nextCardStyle = useAnimatedStyle(() => {
-    // Subtle scale + parallax, NO opacity changes
-    const progress = Math.min(Math.abs(translateX.value) / SWIPE_THRESHOLD, 1);
-    const nextScale = 0.98 + 0.02 * progress;       // 0.98 → 1.0
-    const nextTranslateY = 8 * (1 - progress);      // 8px → 0px
+    // When frozen, animate by promoteSV only (0 -> 1), otherwise use drag progress
+    const p = frozenSV.value ? promoteSV.value : Math.min(Math.abs(translateX.value) / SWIPE_THRESHOLD, 1);
+    const nextScale = 0.98 + 0.02 * p;
+    const nextTranslateY = 8 * (1 - p);
 
     return {
       transform: [
         { scale: nextScale },
         { translateY: nextTranslateY },
       ],
-      opacity: 1, // Keep fully visible so you see the face immediately
+      opacity: 1,
       zIndex: 1,
     };
   });
@@ -372,11 +418,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     return { opacity };
   });
 
-  // Show end screen only when truly no more content
+  // Show end screen only when truly no more content and not in frozen state
   const noCards = safeTakes.length === 0;
-  const atEnd = !currentTake; // No current card means we're at the end
-
-  if (noCards || (atEnd && !hasMore && !loading)) {
+  const atEnd = !currentTake && !renderCurrent; // No current card means we're at the end
+  
+  const shouldShowEnd = !useFrozen && (noCards || (atEnd && !hasMore && !loading));
+  if (shouldShowEnd) {
     return (
       <View style={styles.container}>
         <View style={styles.endContainer}>
@@ -411,8 +458,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   }
 
   // If at end but still has more or loading, show empty container (loading happens in background)
-  if (atEnd && (loading || hasMore)) {
+  if (atEnd && (loading || hasMore) && !useFrozen) {
     if (loadMore && !loading) loadMore(20).catch(console.error);
+    return <View style={styles.container} />;
+  }
+  
+  // Safety fallback: if we have no current card to render but are frozen, show empty container
+  if (!renderCurrent && useFrozen) {
+    console.log('⚠️ No renderCurrent but frozen - showing empty container');
     return <View style={styles.container} />;
   }
 
@@ -422,26 +475,30 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       <VoteIndicator vote={currentVote} isDarkMode={isDarkMode} />
       
       
-      {/* Next card (background - always visible) */}
-      {nextTake && (
-        <Animated.View 
-          key={`next-${nextTake.id}`} 
-          style={[styles.cardContainer, styles.nextCard, nextCardStyle]}
-          pointerEvents="none"
-        >
+      {/* Next card (background - always mounted) */}
+      <Animated.View 
+        key="next-slot" 
+        style={[styles.cardContainer, styles.nextCard, nextCardStyle]}
+        pointerEvents="none"
+        collapsable={false}
+      >
+        {renderNext ? (
           <TakeCard 
-            take={nextTake} 
+            take={renderNext} 
             isDarkMode={isDarkMode} 
             showStats={false}
           />
-        </Animated.View>
-      )}
+        ) : (
+          <View style={{ width: 1, height: 1 }} />
+        )}
+      </Animated.View>
       
       {/* Current card (foreground) - Front and Back views */}
       <PanGestureHandler onGestureEvent={gestureHandler}>
         <Animated.View 
-          key={`current-${currentTake?.id}`} 
+          key="current-slot" 
           style={[styles.cardContainer, card3DStyle]}
+          collapsable={false}
           onTouchEnd={() => {
             if (isCardFlipped) {
               continueToNext();
@@ -449,10 +506,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           }}
         >
           {/* 👻 Invisible sizer only when we actually have a card */}
-          {!!currentTake && (
+          {!!renderCurrent && (
             <View pointerEvents="none" style={styles.ghostSizer}>
               <TakeCard
-                take={currentTake}
+                take={renderCurrent}
                 isDarkMode={isDarkMode}
                 showStats={false}
               />
@@ -460,13 +517,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           )}
           
           {/* FRONT */}
-          {!!currentTake && (
+          {!!renderCurrent && (
             <Animated.View
               style={[absoluteFill, frontFaceStyle]}
               pointerEvents={isCardFlipped ? 'none' : 'auto'}
             >
               <TakeCard
-                take={currentTake}
+                take={renderCurrent}
                 isDarkMode={isDarkMode}
                 onNotPress={() => handleButtonVote('not')}
                 onHotPress={() => handleButtonVote('hot')}
@@ -478,18 +535,18 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           )}
 
           {/* BACK (stats) */}
-          {!!currentTake && (
+          {!!renderCurrent && (
             <Animated.View
               style={[absoluteFill, backFaceStyle]}
               pointerEvents={isCardFlipped ? 'auto' : 'none'}
             >
               <TakeCard
                 take={{
-                  ...currentTake,
+                  ...renderCurrent,
                   // optional: optimistic single-vote bump so stats include user's vote
-                  hotVotes: currentTake.hotVotes + (lastVote === 'hot' ? 1 : 0),
-                  notVotes: currentTake.notVotes + (lastVote === 'not' ? 1 : 0),
-                  totalVotes: currentTake.totalVotes + (lastVote ? 1 : 0),
+                  hotVotes: renderCurrent.hotVotes + (lastVote === 'hot' ? 1 : 0),
+                  notVotes: renderCurrent.notVotes + (lastVote === 'not' ? 1 : 0),
+                  totalVotes: renderCurrent.totalVotes + (lastVote ? 1 : 0),
                 }}
                 isDarkMode={isDarkMode}
                 showStats={true}
@@ -541,6 +598,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           </Text>
         </AnimatedPressable>
       )}
+      
+      {/* One-frame blocker to avoid any compositor seam */}
+      {useFrozen && <View pointerEvents="none" style={StyleSheet.absoluteFill} />}
     </View>
   );
 };
