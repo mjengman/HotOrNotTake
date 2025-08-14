@@ -7,11 +7,12 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useAuth } from '../hooks';
 import { colors, dimensions } from '../constants';
 import { Take } from '../types';
-import { getUserSubmittedTakes } from '../services/takeService';
+import { getUserSubmittedTakes, deleteTake } from '../services/takeService';
 
 interface MyTakesScreenProps {
   onClose: () => void;
@@ -94,16 +95,57 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
     return `${Math.round((votes / total) * 100)}%`;
   };
 
+  const handleDeleteTake = (take: Take) => {
+    Alert.alert(
+      'Delete Take?',
+      `Are you sure you want to delete this take?\n\n"${take.text}"\n\nThis action cannot be undone and all votes will be lost.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (!user) return;
+              await deleteTake(take.id, user.uid);
+              // Remove the take from local state immediately
+              setTakes(prevTakes => prevTakes.filter(t => t.id !== take.id));
+            } catch (error) {
+              console.error('Error deleting take:', error);
+              Alert.alert(
+                'Delete Failed',
+                'There was an error deleting your take. Please try again.',
+                [{ text: 'OK' }]
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderTakeCard = (take: Take) => (
     <View key={take.id} style={[styles.takeCard, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
       {/* Status Header */}
       <View style={styles.statusHeader}>
-        <Text style={[styles.statusText, { color: getStatusColor(take.status) }]}>
-          {getStatusText(take.status)}
-        </Text>
-        <Text style={[styles.dateText, { color: theme.textSecondary }]}>
-          {take.submittedAt.toLocaleDateString()}
-        </Text>
+        <View style={styles.statusLeft}>
+          <Text style={[styles.statusText, { color: getStatusColor(take.status) }]}>
+            {getStatusText(take.status)}
+          </Text>
+          <Text style={[styles.dateText, { color: theme.textSecondary }]}>
+            {take.submittedAt.toLocaleDateString()}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => handleDeleteTake(take)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.deleteButtonText}>🗑️</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Take Text */}
@@ -172,9 +214,6 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
 
   const stats = {
     total: takes.length,
-    approved: takes.filter(t => t.status === 'approved').length,
-    pending: takes.filter(t => t.status === 'pending').length,
-    rejected: takes.filter(t => t.status === 'rejected').length,
     totalVotes: takes.reduce((sum, t) => sum + t.totalVotes, 0),
   };
 
@@ -205,24 +244,6 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
             </Text>
             <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>
               Submitted
-            </Text>
-          </View>
-          
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: '#4CAF50' }]}>
-              {stats.approved}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-              Approved
-            </Text>
-          </View>
-          
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: theme.accent }]}>
-              {stats.pending}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-              Pending
             </Text>
           </View>
           
@@ -348,8 +369,11 @@ const styles = StyleSheet.create({
   statusHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: dimensions.spacing.md,
+  },
+  statusLeft: {
+    flex: 1,
   },
   statusText: {
     fontSize: dimensions.fontSize.medium,
@@ -358,6 +382,13 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: dimensions.fontSize.small,
     fontWeight: '500',
+  },
+  deleteButton: {
+    padding: 8,
+    marginTop: -4, // Align with status text
+  },
+  deleteButtonText: {
+    fontSize: 18,
   },
   takeText: {
     fontSize: dimensions.fontSize.medium,

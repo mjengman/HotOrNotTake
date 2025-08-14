@@ -49,6 +49,9 @@ service cloud.firestore {
                    // Only allow updating vote counts
                    (request.resource.data.diff(resource.data).affectedKeys()
                     .hasOnly(['hotVotes', 'notVotes', 'totalVotes', 'reportCount']));
+      
+      // Users can delete their own takes
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
     }
     
     // Votes collection

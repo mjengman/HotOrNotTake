@@ -4,6 +4,7 @@ import {
   getDocs,
   addDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -324,6 +325,26 @@ export const getUserSubmittedTakes = async (userId: string): Promise<Take[]> => 
   } catch (error) {
     console.error('Error fetching user takes:', error);
     throw new Error('Failed to load your takes');
+  }
+};
+
+// Delete a take (only by the original author)
+export const deleteTake = async (takeId: string, userId: string): Promise<void> => {
+  try {
+    // Delete the take document - Firebase security rules will ensure
+    // only the original author can delete their own takes
+    const takeRef = doc(db, TAKES_COLLECTION, takeId);
+    await deleteDoc(takeRef);
+    
+    // TODO: Consider cleaning up associated votes and skips
+    // For now we'll leave them for analytics purposes
+    
+  } catch (error) {
+    console.error('Error deleting take:', error);
+    if (error.code === 'permission-denied') {
+      throw new Error('You do not have permission to delete this take');
+    }
+    throw new Error('Failed to delete take');
   }
 };
 
