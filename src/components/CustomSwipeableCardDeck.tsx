@@ -450,7 +450,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           )}
           
           <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
-            Tap the clipboard icon (📋) to see all your takes
+            Tap the memo icon (📝) to see all your takes
           </Text>
         </View>
       </View>
@@ -594,7 +594,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           hapticIntensity={8}
         >
           <Text style={[styles.skipButtonText, styles.instructionsButtonText]}>
-            ❓ Instructions
+            ❔ Instructions
           </Text>
         </AnimatedPressable>
       )}
@@ -711,6 +711,14 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   skipButtonText: {
     color: 'white',
@@ -720,6 +728,14 @@ const styles = StyleSheet.create({
   instructionsButton: {
     bottom: 15, // Position below skip button
     backgroundColor: 'rgba(255, 107, 107, 0.95)', // More vibrant - less transparency
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   instructionsButtonText: {
     fontSize: 14,

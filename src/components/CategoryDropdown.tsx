@@ -54,7 +54,7 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
     <View style={styles.container}>
       <TouchableOpacity
         style={[styles.dropdown, { 
-          backgroundColor: theme.surface,
+          backgroundColor: isDarkMode ? theme.surface : '#F0F0F1',
           borderColor: theme.border,
         }]}
         onPress={() => setIsOpen(true)}
@@ -77,7 +77,7 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
           activeOpacity={1}
           onPress={() => setIsOpen(false)}
         >
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalContent, { backgroundColor: isDarkMode ? theme.surface : '#FFFFFF' }]}>
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>
                 Choose Category
@@ -163,6 +163,14 @@ const styles = StyleSheet.create({
     maxHeight: '70%',
     borderRadius: 12,
     overflow: 'hidden',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    shadowOpacity: 0.34,
+    shadowRadius: 6.27,
   },
   modalHeader: {
     flexDirection: 'row',

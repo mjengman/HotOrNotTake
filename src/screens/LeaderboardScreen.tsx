@@ -167,7 +167,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     };
 
     return (
-      <View key={take.id} style={[styles.takeItem, { backgroundColor: theme.surface }]}>
+      <View key={take.id} style={[styles.takeItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
         <View style={[
           styles.rankBadge, 
           rank <= 3 ? styles.medalBadge : styles.numberBadge
@@ -247,7 +247,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={[styles.closeButton, { backgroundColor: theme.surface }]}
+          style={[styles.closeButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
           onPress={onClose}
         >
           <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
@@ -268,7 +268,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             style={[
               styles.tab,
               {
-                backgroundColor: activeTab === tab.key ? theme.primary : theme.surface,
+                backgroundColor: activeTab === tab.key ? theme.primary : (isDarkMode ? theme.surface : '#F0F0F1'),
               },
             ]}
             onPress={
@@ -315,7 +315,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           <View style={styles.contentContainer}>
             {/* Database Stats - Hidden Dev Feature */}
             {showDbStats && dbStats && (
-              <View style={[styles.dbStatsContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={[styles.dbStatsContainer, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1', borderColor: theme.border }]}>
                 <Text style={[styles.dbStatsTitle, { color: theme.text }]}>🔍 Database Stats (Dev)</Text>
                 <Text style={[styles.dbStatsText, { color: theme.textSecondary }]}>
                   Approved Takes: {dbStats.total}
@@ -350,7 +350,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
             {/* AI Debug - Hidden Dev Feature */}
             {showAIDebug && aiStatus && (
-              <View style={[styles.dbStatsContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={[styles.dbStatsContainer, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1', borderColor: theme.border }]}>
                 <Text style={[styles.dbStatsTitle, { color: theme.text }]}>🤖 AI Debug Status (Dev)</Text>
                 <Text style={[styles.dbStatsText, { 
                   color: aiStatus.success ? '#4CAF50' : '#F44336' 

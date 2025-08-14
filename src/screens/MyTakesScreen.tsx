@@ -95,7 +95,7 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
   };
 
   const renderTakeCard = (take: Take) => (
-    <View key={take.id} style={[styles.takeCard, { backgroundColor: theme.surface }]}>
+    <View key={take.id} style={[styles.takeCard, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
       {/* Status Header */}
       <View style={styles.statusHeader}>
         <Text style={[styles.statusText, { color: getStatusColor(take.status) }]}>
@@ -183,7 +183,7 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={[styles.closeButton, { backgroundColor: theme.surface }]}
+          style={[styles.closeButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
           onPress={onClose}
         >
           <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
@@ -197,7 +197,7 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
       </View>
 
       {/* Stats Summary */}
-      <View style={[styles.summaryContainer, { backgroundColor: theme.surface }]}>
+      <View style={[styles.summaryContainer, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
         <View style={styles.summaryGrid}>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: theme.text }]}>

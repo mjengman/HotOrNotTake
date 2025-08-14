@@ -48,7 +48,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             </Text>
           </View>
 
-          <View style={[styles.exampleBox, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
+          <View style={[styles.exampleBox, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
             <Text style={[styles.exampleTitle, { color: theme.text }]}>Examples:</Text>
             <Text style={[styles.exampleText, { color: theme.textSecondary }]}>• "Pineapple belongs on pizza"</Text>
             <Text style={[styles.exampleText, { color: theme.textSecondary }]}>• "The book is always better than the movie"</Text>
@@ -61,7 +61,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
       title: "How to Vote 🗳️",
       content: (
         <>
-          <View style={[styles.voteSection, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
+          <View style={[styles.voteSection, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
             <View style={styles.voteOption}>
               <Text style={styles.voteEmoji}>🔥</Text>
               <Text style={[styles.voteLabel, { color: theme.text }]}>HOT</Text>
@@ -97,28 +97,28 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
       title: "How to Play 🎮",
       content: (
         <>
-          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
+          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
             <Text style={styles.instructionEmoji}>👆</Text>
             <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
               <Text style={[styles.bold, { color: theme.text }]}>TAP</Text> the vote buttons at the bottom of each card
             </Text>
           </View>
 
-          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
+          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
             <Text style={styles.instructionEmoji}>👉</Text>
             <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
               <Text style={[styles.bold, { color: theme.text }]}>SWIPE RIGHT</Text> to vote 🔥 HOT (agree)
             </Text>
           </View>
 
-          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
+          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
             <Text style={styles.instructionEmoji}>👈</Text>
             <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
               <Text style={[styles.bold, { color: theme.text }]}>SWIPE LEFT</Text> to vote ❄️ NOT (disagree)
             </Text>
           </View>
 
-          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#E8E8E8' }]}>
+          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
             <Text style={styles.instructionEmoji}>⬇️</Text>
             <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
               <Text style={[styles.bold, { color: theme.text }]}>SWIPE DOWN</Text> to skip if you're unsure

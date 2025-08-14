@@ -173,16 +173,16 @@ export const HomeScreen: React.FC = () => {
         <View style={styles.header}>
           <View style={styles.headerRow}>
           <AnimatedPressable 
-            style={[styles.headerButton, { backgroundColor: theme.surface }]}
+            style={[styles.headerButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
             onPress={() => setShowMyTakesModal(true)}
             scaleValue={0.9}
             hapticIntensity={8}
           >
-            <Text style={styles.headerButtonIcon}>📋</Text>
+            <Text style={styles.headerButtonIcon}>📝</Text>
           </AnimatedPressable>
           
           <AnimatedPressable 
-            style={[styles.headerButton, { backgroundColor: theme.surface }]}
+            style={[styles.headerButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
             onPress={() => setShowLeaderboardModal(true)}
             scaleValue={0.9}
             hapticIntensity={8}
@@ -191,7 +191,7 @@ export const HomeScreen: React.FC = () => {
           </AnimatedPressable>
           
           <AnimatedPressable 
-            style={[styles.headerButton, { backgroundColor: theme.surface }]}
+            style={[styles.headerButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
             onPress={toggleTheme}
             scaleValue={0.9}
             hapticIntensity={12}
@@ -405,6 +405,14 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 2.62,
   },
   headerButtonIcon: {
     fontSize: dimensions.fontSize.xlarge,
