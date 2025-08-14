@@ -183,15 +183,33 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }
   }, [safeTakes.length, hasMore, loading, loadMore]);
 
-  // Handle button press - now triggers flip animation
+  // Handle button press - now triggers pronounced swipe animation then flip
   const handleButtonVote = (vote: 'hot' | 'not') => {
     if (!currentTake || isAnimating.value || isCardFlipped) return;
     
     // Show vote indicator just like swipe gestures do
     setCurrentVote(vote);
     
-    Vibration.vibrate(25);
-    flipCard(vote);
+    // Simulate dramatic swipe animation - more pronounced than gesture
+    const direction = vote === 'hot' ? 1 : -1; // right for hot, left for not
+    const swipeDistance = SWIPE_THRESHOLD * 0.8; // Much bigger swipe for impact
+    
+    // Quick leap to edge with timing (no lingering)
+    translateX.value = withTiming(swipeDistance * direction, { 
+      duration: 150, // Quick leap
+      easing: Easing.out(Easing.quad)
+    }, () => {
+      'worklet';
+      // Immediate bouncy return
+      translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
+      translateY.value = withSpring(0);
+      scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+      runOnJS(Vibration.vibrate)(30);
+      runOnJS(flipCard)(vote);
+    });
+    
+    // Quick scale down
+    scale.value = withTiming(0.92, { duration: 150, easing: Easing.out(Easing.quad) });
   };
 
   // Handle skip with animation (for both button press and swipe down)
@@ -577,18 +595,27 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       
       {/* Skip Button */}
       <AnimatedPressable 
-        style={styles.skipButton} 
+        style={[
+          styles.skipButton,
+          isDarkMode 
+            ? { backgroundColor: theme.surface } // Match card color in dark mode
+            : { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
+        ]} 
         onPress={handleSkipWithAnimation}
         scaleValue={0.9}
         hapticIntensity={12}
       >
-        <Text style={styles.skipButtonText}>Skip</Text>
+        <Text style={[styles.skipButtonText, isDarkMode && { color: theme.text }]}>Skip ⏭️</Text>
       </AnimatedPressable>
 
       {/* Instructions Button */}
       {onShowInstructions && (
         <AnimatedPressable 
-          style={[styles.skipButton, styles.instructionsButton]} 
+          style={[
+            styles.skipButton, 
+            styles.instructionsButton,
+            !isDarkMode && { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
+          ]} 
           onPress={onShowInstructions}
           scaleValue={0.9}
           hapticIntensity={8}
@@ -705,12 +732,10 @@ const styles = StyleSheet.create({
   skipButton: {
     position: 'absolute',
     bottom: 65,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.7)', // Keep as default, will override inline for dark mode
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 25,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: {

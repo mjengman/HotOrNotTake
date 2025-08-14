@@ -54,6 +54,15 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             <Text style={[styles.exampleText, { color: theme.textSecondary }]}>• "The book is always better than the movie"</Text>
             <Text style={[styles.exampleText, { color: theme.textSecondary }]}>• "Coffee is just dirty water"</Text>
           </View>
+
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Your Hot Takes</Text>
+            <Text style={[styles.description, { color: theme.textSecondary }]}>
+              • <Text style={[styles.bold, { color: theme.text }]}>Completely anonymous</Text> - no usernames or profiles{'\n\n'}
+              • <Text style={[styles.bold, { color: theme.text }]}>Your candid opinion</Text> about any topic that matters to you{'\n\n'}
+              • <Text style={[styles.bold, { color: theme.text }]}>Only you can delete them</Text> - tap the 📝 icon to manage your takes
+            </Text>
+          </View>
         </>
       ),
     },
@@ -85,6 +94,20 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
                 This opinion is TRASH
               </Text>
             </View>
+
+            <View style={styles.orDivider}>
+              <Text style={[styles.orText, { color: theme.textSecondary }]}>- OR -</Text>
+            </View>
+
+            <View style={styles.voteOption}>
+              <Text style={styles.voteEmoji}>⏭️</Text>
+              <Text style={[styles.voteLabel, { color: theme.text }]}>PASS</Text>
+              <Text style={[styles.voteDescription, { color: theme.textSecondary }]}>
+                Not sure how to vote{'\n'}
+                Don't understand the topic{'\n'}
+                Need more context
+              </Text>
+            </View>
           </View>
 
           <Text style={[styles.footnote, { color: theme.textSecondary }]}>
@@ -97,32 +120,54 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
       title: "How to Play 🎮",
       content: (
         <>
-          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-            <Text style={styles.instructionEmoji}>👆</Text>
-            <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-              <Text style={[styles.bold, { color: theme.text }]}>TAP</Text> the vote buttons at the bottom of each card
-            </Text>
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Navigation</Text>
+            <View style={styles.buttonGrid}>
+              <View style={styles.buttonItem}>
+                <Text style={styles.buttonIcon}>📝</Text>
+                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>My Takes</Text>
+              </View>
+              <View style={styles.buttonItem}>
+                <Text style={styles.buttonIcon}>🏆</Text>
+                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>Leaderboards</Text>
+              </View>
+              <View style={styles.buttonItem}>
+                <Text style={styles.buttonIcon}>🌙/☀️</Text>
+                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>Dark/Light</Text>
+              </View>
+            </View>
           </View>
 
-          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-            <Text style={styles.instructionEmoji}>👉</Text>
-            <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-              <Text style={[styles.bold, { color: theme.text }]}>SWIPE RIGHT</Text> to vote 🔥 HOT (agree)
-            </Text>
-          </View>
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Actions</Text>
+            
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>👆</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>TAP</Text> the vote buttons at the bottom of each card
+              </Text>
+            </View>
 
-          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-            <Text style={styles.instructionEmoji}>👈</Text>
-            <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-              <Text style={[styles.bold, { color: theme.text }]}>SWIPE LEFT</Text> to vote ❄️ NOT (disagree)
-            </Text>
-          </View>
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>👉</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>SWIPE RIGHT</Text> to vote 🔥 HOT (agree)
+              </Text>
+            </View>
 
-          <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-            <Text style={styles.instructionEmoji}>⬇️</Text>
-            <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-              <Text style={[styles.bold, { color: theme.text }]}>SWIPE DOWN</Text> to skip if you're unsure
-            </Text>
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>👈</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>SWIPE LEFT</Text> to vote ❄️ NOT (disagree)
+              </Text>
+            </View>
+
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>⬇️</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>SWIPE DOWN</Text> to skip ⏭️ if you're unsure
+              </Text>
+            </View>
           </View>
 
           <View style={styles.tipBox}>
@@ -283,41 +328,41 @@ const styles = StyleSheet.create({
   voteSection: {
     flexDirection: 'column',
     borderRadius: 15,
-    padding: 20,
-    marginBottom: 20,
+    padding: 15,
+    marginBottom: 10,
   },
   voteOption: {
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   voteEmoji: {
-    fontSize: 50,
-    marginBottom: 10,
+    fontSize: 36,
+    marginBottom: 6,
   },
   voteLabel: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   voteDescription: {
-    fontSize: 13,
+    fontSize: 12,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 16,
   },
   orDivider: {
     alignItems: 'center',
-    paddingVertical: 15,
+    paddingVertical: 8,
   },
   orText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
   footnote: {
-    fontSize: 14,
+    fontSize: 13,
     fontStyle: 'italic',
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: 8,
   },
   instructionItem: {
     flexDirection: 'row',
@@ -337,6 +382,24 @@ const styles = StyleSheet.create({
   },
   bold: {
     fontWeight: 'bold',
+  },
+  buttonGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10,
+  },
+  buttonItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  buttonIcon: {
+    fontSize: 24,
+    marginBottom: 6,
+  },
+  buttonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   tipBox: {
     backgroundColor: '#FFF3CD',

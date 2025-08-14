@@ -140,7 +140,7 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
           </Text>
         </View>
         <TouchableOpacity
-          style={styles.deleteButton}
+          style={[styles.deleteButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
           onPress={() => handleDeleteTake(take)}
           activeOpacity={0.7}
         >
@@ -384,11 +384,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   deleteButton: {
-    padding: 8,
-    marginTop: -4, // Align with status text
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
   },
   deleteButtonText: {
-    fontSize: 18,
+    fontSize: 16,
   },
   takeText: {
     fontSize: dimensions.fontSize.medium,
