@@ -84,8 +84,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   
   // Reactive shared values for worklets (prevents stale boolean capture)
   const frozenSV = useSharedValue(0);
+  const flippedSV = useSharedValue(0);
+  const animatingSV = useSharedValue(0);
 
   useEffect(() => { frozenSV.value = useFrozen ? 1 : 0; }, [useFrozen]);
+  useEffect(() => { flippedSV.value = isCardFlipped ? 1 : 0; }, [isCardFlipped]);
 
   const theme = isDarkMode ? colors.dark : colors.light;
 
@@ -97,69 +100,65 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const flipCard = (vote: 'hot' | 'not') => {
     setLastVote(vote);
     
+    // 🧊 FREEZE: Capture current state immediately when vote is cast
+    if (renderCurrent) {
+      frozenCurrent.current = renderCurrent;
+      frozenNext.current = renderNext;
+      setUseFrozen(true);
+      
+      // Submit vote immediately to advance deck behind the stats card
+      onVote(renderCurrent.id, vote);
+    }
+    
     // Let VoteIndicator handle its own auto-hide timing
     
-    // Bounce micro-scale then flip
+    // Set animating flag and bounce micro-scale then flip
+    animatingSV.value = 1;
     scale.value = withSpring(0.96, {}, () => {
       'worklet';
       flipSV.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }, (finished) => {
-        if (finished) runOnJS(setIsCardFlipped)(true); // set after flip completes
+        if (finished) {
+          runOnJS(setIsCardFlipped)(true); // set after flip completes
+          // Start promoting next card behind the stats card
+          promoteSV.value = withTiming(1, { duration: 300 }, () => {
+            'worklet';
+            animatingSV.value = 0; // Clear animation flag
+          });
+        }
       });
       scale.value = withSpring(1);
     });
   };
   
-  // Continue to next card after reveal - now with freeze-and-promote
+  // Continue to next card after reveal - promotion already happened behind stats
   const continueToNext = () => {
-    if (!renderCurrent || isAnimating.value) return;
+    if (isAnimating.value) return;
     
     isAnimating.value = true;
-    const voteToSubmit = lastVote;
-    const takeId = renderCurrent.id;
     
-    // 🧊 FREEZE: Capture current state to prevent flicker
-    frozenCurrent.current = renderCurrent;
-    frozenNext.current = renderNext;
-    setUseFrozen(true);
-    
-    // Fly away animation (like old voting animation)  
-    const direction = voteToSubmit === 'hot' ? 1 : -1;
-    translateX.value = withSpring(
-      width * 1.5 * direction,
-      { damping: 15, stiffness: 120, mass: 0.8 },
-      () => {
-        'worklet';
-        // 🚀 PROMOTE: Animate next card into current position
-        promoteSV.value = withTiming(1, { duration: 200 }, (finished) => {
-          if (!finished) return;
-          
-          // Reset everything for next card
-          translateX.value = 0;
-          translateY.value = 0;
-          scale.value = 1;
-          flipSV.value = 0;
-          promoteSV.value = 0;
-          runOnJS(setIsCardFlipped)(false);
-          runOnJS(setLastVote)(null);
-          runOnJS(setCurrentVote)(null);
-          runOnJS(setUseFrozen)(false); // 🔓 UNFREEZE
-          isAnimating.value = false;
-        });
-        
-        // Submit vote to advance deck immediately (snappy UX)
-        if (voteToSubmit && takeId) {
-          runOnJS(onVote)(takeId, voteToSubmit);
-        }
-      }
-    );
+    // Simple clean transition - just reset everything since promotion already happened
+    translateX.value = withTiming(0, { duration: 200 }, () => {
+      'worklet';
+      // Reset everything for next card
+      translateY.value = 0;
+      scale.value = 1;
+      flipSV.value = 0;
+      promoteSV.value = 0;
+      runOnJS(setIsCardFlipped)(false);
+      runOnJS(setLastVote)(null);
+      runOnJS(setCurrentVote)(null);
+      runOnJS(setUseFrozen)(false); // 🔓 UNFREEZE - reveal new cards
+      isAnimating.value = false;
+    });
   };
 
   // Ensure takes is always an array
   const safeTakes = takes || [];
 
-  // Always use first two items for smooth transitions
+  // Always use first three items for smooth transitions
   const currentTake = safeTakes[0];
   const nextTake = safeTakes[1];
+  const thirdTake = safeTakes[2];
   
   // Derive what to render - frozen data during promotion or live props
   const renderCurrent = useFrozen && frozenCurrent.current ? frozenCurrent.current : currentTake;
@@ -215,19 +214,36 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Handle skip with animation (for both button press and swipe down)
   const handleSkipWithAnimation = () => {
     if (!currentTake || isAnimating.value) return;
+    
+    // 🧊 FREEZE: Capture current state immediately when skip is triggered
+    if (renderCurrent) {
+      frozenCurrent.current = renderCurrent;
+      frozenNext.current = renderNext;
+      setUseFrozen(true);
+      
+      // Submit skip immediately to advance deck behind the animation
+      onSkip(renderCurrent.id);
+    }
+    
     isAnimating.value = true;
-    const id = currentTake.id;
+    animatingSV.value = 1;
     Vibration.vibrate(15);
     translateY.value = withSpring(
       height * 0.8,
       { damping: 15, stiffness: 120, mass: 0.8 },
       () => {
         'worklet';
-        translateX.value = 0;
-        translateY.value = 0;
-        scale.value = withSpring(1);
-        runOnJS(jsOnSkip)(id);
-        isAnimating.value = false; // release
+        // Start promoting next card during return animation
+        promoteSV.value = withTiming(1, { duration: 200 }, () => {
+          'worklet';
+          // Reset everything for next card
+          translateX.value = 0;
+          translateY.value = 0;
+          scale.value = 1;
+          runOnJS(setUseFrozen)(false); // 🔓 UNFREEZE
+          animatingSV.value = 0;
+          isAnimating.value = false;
+        });
       }
     );
   };
@@ -290,13 +306,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       };
 
       if (shouldSwipeDown && id) {
-        isAnimating.value = true;
-        runOnJS(Vibration.vibrate)(25);
-        translateY.value = withSpring(
-          height * 0.8,
-          { damping: 15, stiffness: 120, mass: 0.8 },
-          () => { 'worklet'; reset(); runOnJS(jsOnSkip)(id); isAnimating.value = false; }
-        );
+        // Use the same skip logic as button press for consistency
+        runOnJS(handleSkipWithAnimation)();
         return;
       }
 
@@ -354,7 +365,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         { scale: scale.value },
       ],
       opacity,
-      zIndex: 2,
+      zIndex: flippedSV.value || animatingSV.value ? 5 : 2, // Highest z-index during animation and stats
     };
   });
 
@@ -370,7 +381,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         { translateY: nextTranslateY },
       ],
       opacity: 1,
-      zIndex: 1,
+      zIndex: frozenSV.value ? 3 : 1, // Higher during promotion, but lower than stats (5)
     };
   });
 
@@ -488,10 +499,42 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   }
 
 
+  // Third card style - sits behind next card
+  const thirdCardStyle = useAnimatedStyle(() => {
+    const thirdScale = 0.96;
+    const thirdTranslateY = 16;
+
+    return {
+      transform: [
+        { scale: thirdScale },
+        { translateY: thirdTranslateY },
+      ],
+      opacity: 1,
+      zIndex: 0,
+    };
+  });
+
   return (
     <View style={styles.container}>
       <VoteIndicator vote={currentVote} isDarkMode={isDarkMode} />
       
+      {/* Third card (furthest back - prevents flicker during promotion) */}
+      <Animated.View 
+        key="third-slot" 
+        style={[styles.cardContainer, styles.nextCard, thirdCardStyle]}
+        pointerEvents="none"
+        collapsable={false}
+      >
+        {thirdTake ? (
+          <TakeCard 
+            take={thirdTake} 
+            isDarkMode={isDarkMode} 
+            showStats={false}
+          />
+        ) : (
+          <View style={{ width: 1, height: 1 }} />
+        )}
+      </Animated.View>
       
       {/* Next card (background - always mounted) */}
       <Animated.View 
