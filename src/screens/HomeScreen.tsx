@@ -166,6 +166,7 @@ export const HomeScreen: React.FC = () => {
             onRefresh={handlePullToRefresh}
             colors={[theme.primary]}
             tintColor={theme.primary}
+            enabled={!showMyTakesModal && !showLeaderboardModal}
           />
         }
         showsVerticalScrollIndicator={false}
