@@ -43,8 +43,8 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>What's a "Hot Take"?</Text>
             <Text style={[styles.description, { color: theme.textSecondary }]}>
-              A hot take is a bold, controversial opinion that sparks debate.{'\n\n'}
-              These are opinions that make people say "Oh no they didn't!" 😱
+              A hot take is a bold, controversial opinion that gets people thinking and often sparks debate.{'\n\n'}
+              These are opinions that make people say "Oh no they didn't! 😱" or "Finally someone said it! 🤩"
             </Text>
           </View>
 

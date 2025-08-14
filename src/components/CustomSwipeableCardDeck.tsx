@@ -731,7 +731,7 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     position: 'absolute',
-    bottom: 65,
+    bottom: 70,
     backgroundColor: 'rgba(0,0,0,0.7)', // Keep as default, will override inline for dark mode
     paddingHorizontal: 20,
     paddingVertical: 10,

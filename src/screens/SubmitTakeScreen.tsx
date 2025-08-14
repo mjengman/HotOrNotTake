@@ -34,7 +34,7 @@ const CATEGORIES = [
 ] as const;
 
 const MIN_LENGTH = 10;
-const MAX_LENGTH = 500;
+const MAX_LENGTH = 150;
 
 interface SubmitTakeScreenProps {
   onClose: () => void;

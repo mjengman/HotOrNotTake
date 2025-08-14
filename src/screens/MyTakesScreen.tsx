@@ -132,9 +132,6 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
       {/* Status Header */}
       <View style={styles.statusHeader}>
         <View style={styles.statusLeft}>
-          <Text style={[styles.statusText, { color: getStatusColor(take.status) }]}>
-            {getStatusText(take.status)}
-          </Text>
           <Text style={[styles.dateText, { color: theme.textSecondary }]}>
             {take.submittedAt.toLocaleDateString()}
           </Text>
@@ -169,20 +166,20 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
           
           <View style={styles.voteStats}>
             <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: '#4A90E2' }]}>
+                {take.notVotes}
+              </Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                ❄️ Not ({formatPercentage(take.notVotes, take.totalVotes)})
+              </Text>
+            </View>
+            
+            <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: theme.primary }]}>
                 {take.hotVotes}
               </Text>
               <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
                 🔥 Hot ({formatPercentage(take.hotVotes, take.totalVotes)})
-              </Text>
-            </View>
-            
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.accent }]}>
-                {take.notVotes}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-                ❄️ Not ({formatPercentage(take.notVotes, take.totalVotes)})
               </Text>
             </View>
             
@@ -248,7 +245,7 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
           </View>
           
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: theme.primary }]}>
+            <Text style={[styles.summaryValue, { color: '#4CAF50' }]}>
               {stats.totalVotes}
             </Text>
             <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>

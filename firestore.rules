@@ -14,7 +14,7 @@ service cloud.firestore {
     function isValidTakeText(text) {
       return text is string && 
              text.size() >= 10 && 
-             text.size() <= 500; // Increased limit
+             text.size() <= 150; // Concise hot takes
     }
     
     function isValidCategory(category) {

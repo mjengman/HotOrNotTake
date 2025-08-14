@@ -178,7 +178,7 @@ export const HomeScreen: React.FC = () => {
             scaleValue={0.9}
             hapticIntensity={8}
           >
-            <Text style={styles.headerButtonIcon}>📝</Text>
+            <Text style={[styles.headerButtonIcon, { paddingLeft: 4 }]}>📝</Text>
           </AnimatedPressable>
           
           <AnimatedPressable 
