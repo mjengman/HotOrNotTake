@@ -397,8 +397,8 @@ const styles = StyleSheet.create({
   categoryContainer: {
     paddingHorizontal: dimensions.spacing.lg,
     paddingTop: dimensions.spacing.sm,
-    zIndex: 100, // Ensure dropdown stays above swipeable deck
-    elevation: 5, // For Android shadow
+    zIndex: 1, // Lower z-index so cards can animate above it
+    elevation: 1, // For Android shadow
   },
   headerButton: {
     width: 45,

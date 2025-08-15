@@ -118,7 +118,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               {totalVotes.toLocaleString()} total votes
             </Text>
             <Text style={[styles.continueHint, { color: theme.textSecondary }]}>
-              Tap or swipe to continue
+              Swipe to continue
             </Text>
           </View>
         )}

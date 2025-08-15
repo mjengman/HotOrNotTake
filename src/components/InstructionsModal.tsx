@@ -10,6 +10,18 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { 
+  PanGestureHandler, 
+  PanGestureHandlerGestureEvent,
+  GestureHandlerRootView 
+} from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedGestureHandler,
+  withSpring,
+  runOnJS,
+} from 'react-native-reanimated';
 import { colors } from '../constants';
 
 interface InstructionsModalProps {
@@ -19,6 +31,7 @@ interface InstructionsModalProps {
 }
 
 const { width: screenWidth } = Dimensions.get('window');
+const SWIPE_THRESHOLD = screenWidth * 0.25; // 25% of screen width to trigger navigation
 
 export const InstructionsModal: React.FC<InstructionsModalProps> = ({
   visible,
@@ -27,6 +40,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState(0);
   const theme = isDarkMode ? colors.dark : colors.light;
+  const translateX = useSharedValue(0);
 
   // Reset to first page when modal closes
   useEffect(() => {
@@ -101,7 +115,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
 
             <View style={styles.voteOption}>
               <Text style={styles.voteEmoji}>⏭️</Text>
-              <Text style={[styles.voteLabel, { color: theme.text }]}>PASS</Text>
+              <Text style={[styles.voteLabel, { color: theme.text }]}>SKIP</Text>
               <Text style={[styles.voteDescription, { color: theme.textSecondary }]}>
                 Not sure how to vote{'\n'}
                 Don't understand the topic{'\n'}
@@ -163,9 +177,9 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             </View>
 
             <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-              <Text style={styles.instructionEmoji}>⬇️</Text>
+              <Text style={styles.instructionEmoji}>↕️</Text>
               <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-                <Text style={[styles.bold, { color: theme.text }]}>SWIPE DOWN</Text> to skip ⏭️ if you're unsure
+                <Text style={[styles.bold, { color: theme.text }]}>SWIPE UP or DOWN</Text> to skip ⏭️ if you're unsure
               </Text>
             </View>
           </View>
@@ -194,6 +208,33 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
     }
   };
 
+  const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
+    onActive: (event) => {
+      translateX.value = event.translationX;
+    },
+    onEnd: (event) => {
+      const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
+      const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
+
+      if (shouldSwipeLeft) {
+        // Swipe left = go to next page
+        runOnJS(handleNext)();
+      } else if (shouldSwipeRight) {
+        // Swipe right = go to previous page
+        runOnJS(handlePrevious)();
+      }
+
+      // Bounce back to center
+      translateX.value = withSpring(0);
+    },
+  });
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateX: translateX.value }],
+    };
+  });
+
   return (
     <Modal
       visible={visible}
@@ -201,26 +242,32 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={styles.header} />
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+          <View style={styles.header} />
 
-        <ScrollView 
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-        >
-          <LinearGradient
-            colors={['#FF6B6B', '#FF8B8B']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.titleContainer}
-          >
-            <Text style={styles.pageTitle}>{pages[currentPage].title}</Text>
-          </LinearGradient>
+          <PanGestureHandler onGestureEvent={gestureHandler}>
+            <Animated.View style={[{ flex: 1 }, animatedStyle]}>
+              <ScrollView 
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+                scrollEnabled={true}
+              >
+                <LinearGradient
+                  colors={['#FF6B6B', '#FF8B8B']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.titleContainer}
+                >
+                  <Text style={styles.pageTitle}>{pages[currentPage].title}</Text>
+                </LinearGradient>
 
-          <View style={styles.pageContent}>
-            {pages[currentPage].content}
-          </View>
-        </ScrollView>
+                <View style={styles.pageContent}>
+                  {pages[currentPage].content}
+                </View>
+              </ScrollView>
+            </Animated.View>
+          </PanGestureHandler>
 
         <View style={styles.footer}>
           <View style={styles.pagination}>
@@ -262,7 +309,8 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             </TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </GestureHandlerRootView>
     </Modal>
   );
 };
