@@ -70,7 +70,7 @@ We may update this privacy policy from time to time. We will notify you of any c
 
 If you have questions about this privacy policy or our practices, please contact us at:
 
-[Your Email Address]
+engmanlabs@gmail.com
 
 ## Consent
 
@@ -78,4 +78,4 @@ By using Hot or Not Takes, you consent to our privacy policy and agree to its te
 
 ---
 
-*Last Updated: December 2024*
+*Last Updated: August 2025*

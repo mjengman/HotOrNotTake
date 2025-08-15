@@ -1,9 +1,9 @@
 # 🚀 Google Play Store Launch Checklist
 ## Hot or Not Takes - User-Generated MVP Launch
 
-**🎉 STATUS: PRODUCTION READY - ALL SYSTEMS GO! 🎉**
+**📅 STATUS: CLOSED TESTING PHASE - 12 TESTERS × 14 DAYS REQUIRED**
 
-**✅ ULTRA-POLISHED MVP COMPLETED WITH PREMIUM UX**
+**✅ APP READY - GOOGLE REQUIRES TESTING PERIOD FOR NEW DEVELOPERS**
 
 ## ✅ **STEP 1: Technical Prerequisites (COMPLETED)**
 
@@ -50,19 +50,80 @@
 - [x] User-generated takes flow working perfectly
 - [x] All categories properly balanced and filtered
 
-### Test Build Verification
-- [ ] **WAITING**: Current test build to complete
-- [ ] Install on physical Android device
-- [ ] **Critical Test Items**:
-  - [ ] AI moderation works on device (should reject inappropriate content)
-  - [ ] New user takes appear immediately in feed
-  - [ ] Skip button registers in leaderboards
-  - [ ] My Takes modal refreshes with new submissions
-  - [ ] Floating action button works for submissions
-  - [ ] AdMob ads display properly
-  - [ ] Performance is smooth and responsive
+### Test Build Verification ✅ COMPLETED
+- [x] **COMPLETED**: Thorough testing on Pixel device
+- [x] Install on physical Android device
+- [x] **Critical Test Items**:
+  - [x] AI moderation works on device (should reject inappropriate content)
+  - [x] New user takes appear immediately in feed
+  - [x] Skip button registers in leaderboards
+  - [x] My Takes modal refreshes with new submissions
+  - [x] Floating action button works for submissions
+  - [x] AdMob ads display properly with optimized timing
+  - [x] Performance is smooth and responsive
+  - [x] **NEW**: Swipe up/down to skip working perfectly
+  - [x] **NEW**: Stats card interactions fixed (no hidden card votes)
+  - [x] **NEW**: Instructions modal swipe navigation working
+  - [x] **NEW**: Ad frequency optimized (90s cooldown + policy compliance)
 
-## 📸 **STEP 3: App Store Assets Creation (45 minutes)**
+## 🎯 **NEW: MANDATORY TESTING REQUIREMENTS (Google Policy Nov 2023)**
+
+### For New Developer Accounts (Created After Nov 13, 2023)
+**You MUST complete Closed Testing before Production access:**
+- **12 testers minimum** (not 20!)
+- **14 consecutive days** of testing
+- **Testers must stay opted-in** entire time
+- **Then apply for production** (7 day review)
+
+### Testing Track Progression:
+1. ✅ **Internal Testing** (optional) - You've done this
+2. → **Closed Testing** (REQUIRED) - Start tonight
+3. ❌ **Open Testing** (locked until production)
+4. ❌ **Production** (locked until testing complete)
+
+## 📱 **STEP 3: Closed Testing Setup (REQUIRED - Do Tonight!)**
+
+### A. Recruit 12 Testers
+**Quick Recruiting Template:**
+```
+🔥 Be a founding tester for Hot or Not Takes!
+
+I need 12 beta testers for my community opinion app:
+- Submit controversial hot takes
+- Vote HOT or NOT on others
+- See what the community really thinks
+
+Just need your Gmail to add you. Takes 2 min!
+Reply with email or DM me 👇
+```
+
+**Where to Find Testers:**
+- [ ] Family WhatsApp/group chat (3-4 people)
+- [ ] Close friends on social (3-4 people)
+- [ ] r/alphaandbetausers subreddit (2-3 people)
+- [ ] Discord testing servers (2-3 people)
+- [ ] Facebook beta testing groups (backup)
+
+### B. Set Up Closed Testing Track
+- [ ] Go to Release → Testing → Closed testing
+- [ ] Create "Alpha" or "Beta" track
+- [ ] Name it (e.g., "Founding Testers")
+- [ ] Add all 12+ tester emails
+- [ ] Set countries (all available)
+
+### C. Upload Build
+- [ ] **VERSION CODE ISSUE**: Bump to version 13
+- [ ] Upload new AAB with updated version
+- [ ] Add release notes for testers
+
+### D. Track Testing Period
+- [ ] Day 1: All testers opted in
+- [ ] Day 7: Check all still opted in
+- [ ] Day 14: Apply for production
+- [ ] Day 21: Production approved
+- [ ] Day 22: LAUNCH! 🚀
+
+## 📸 **STEP 4: App Store Assets Creation (Do During Testing Period)**
 
 ### Screenshots (5 required - 1080x1920 resolution)
 **📋 Priority Order for Screenshots:**
