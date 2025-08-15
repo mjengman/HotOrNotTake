@@ -46,7 +46,7 @@ export const HomeScreen: React.FC = () => {
   // AI seeding is now manual-only via pull-to-refresh
   
   // Use the hook-based interstitial ads
-  const { onUserSwipe, onSessionEnd } = useInterstitialAds();
+  const { onCardComplete, onSessionEnd } = useInterstitialAds();
   
   const theme = isDarkMode ? colors.dark : colors.light;
 
@@ -85,8 +85,8 @@ export const HomeScreen: React.FC = () => {
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
       await submitVote(takeId, vote);
-      // Track swipe for ad service
-      onUserSwipe();
+      // Track completed card for ad service (called after vote is cast)
+      onCardComplete();
       // Update vote counter immediately
       await refreshStats();
     } catch (error) {
@@ -98,8 +98,8 @@ export const HomeScreen: React.FC = () => {
   const handleSkip = async (takeId: string) => {
     try {
       await skipTake(takeId);
-      // Track swipe for ad service
-      onUserSwipe();
+      // Track completed card for ad service (called after skip)
+      onCardComplete();
       // Refresh stats in case there are other metrics tracked
       await refreshStats();
     } catch (error) {

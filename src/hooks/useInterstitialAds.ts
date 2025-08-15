@@ -11,7 +11,8 @@ const getAdUnitId = () =>
     : Platform.select({ android: PROD_ANDROID, ios: PROD_IOS }) || TestIds.INTERSTITIAL;
 
 export const useInterstitialAds = () => {
-  const SWIPES_UNTIL_AD = 12;
+  const CARDS_UNTIL_AD = 12; // renamed: count completed cards, not raw swipes
+  const MIN_TIME_BETWEEN_ADS_MS = 90000; // 90 seconds = 1.5 minutes
 
   // initialize once (safe to call multiple times; lib ignores repeats)
   useEffect(() => {
@@ -23,9 +24,10 @@ export const useInterstitialAds = () => {
   const adUnitId = useMemo(getAdUnitId, []);
   const { isLoaded, isClosed, load, show, error } = useInterstitialAd(adUnitId);
 
-  const [swipeCount, setSwipeCount] = useState(0);
+  const [cardCount, setCardCount] = useState(0); // count completed cards
   const oweAdRef = useRef(false);      // we hit threshold before load finished
   const showingRef = useRef(false);    // prevent double show()
+  const lastAdTimeRef = useRef<number>(0); // track last ad show time
 
   // load one on mount
   useEffect(() => {
@@ -47,30 +49,59 @@ export const useInterstitialAds = () => {
     load();
   }, [isClosed, load]);
 
-  // if we owed an ad and it finally loaded, show now
-  useEffect(() => {
-    if (isLoaded && oweAdRef.current && !showingRef.current) {
-      showingRef.current = true;
-      show();
-      oweAdRef.current = false;
-      setSwipeCount(0);
-    }
-  }, [isLoaded, show]);
+  // Helper to check if enough time has passed since last ad
+  const canShowAd = () => {
+    const now = Date.now();
+    const timeSinceLastAd = now - lastAdTimeRef.current;
+    return timeSinceLastAd >= MIN_TIME_BETWEEN_ADS_MS;
+  };
 
-  const onUserSwipe = () => {
-    const next = swipeCount + 1;
-    setSwipeCount(next);
+  // Helper to show ad and update timestamp
+  const showAd = () => {
+    showingRef.current = true;
+    lastAdTimeRef.current = Date.now();
+    show();
+    setCardCount(0); // reset card counter after showing ad
+  };
 
-    if (next >= SWIPES_UNTIL_AD) {
+  // Note: Removed auto-show useEffect to prevent mid-animation interruptions
+  // Ads now only show at explicit "natural breaks" via onCardComplete()
+
+  // Call this AFTER a card is completely dismissed (natural break)
+  const onCardComplete = () => {
+    // Increment completed card count
+    const next = cardCount + 1;
+    setCardCount(next);
+
+    // First, check if we owe an ad and cooldown has passed
+    if (oweAdRef.current && canShowAd()) {
       if (isLoaded && !showingRef.current) {
-        showingRef.current = true;
-        show();
-        setSwipeCount(0);
+        showAd();
+        oweAdRef.current = false;
+        return; // Exit early after showing owed ad
+      }
+      // Still owe but ad not loaded, keep trying to load
+      if (!isLoaded) load();
+      return;
+    }
+
+    // Normal threshold checking
+    if (next >= CARDS_UNTIL_AD) {
+      // Check both card count AND time cooldown
+      if (canShowAd()) {
+        if (isLoaded && !showingRef.current) {
+          showAd();
+        } else {
+          // not loaded yet → remember to show when ready
+          oweAdRef.current = true;
+          // make sure a load is in flight
+          load();
+        }
       } else {
-        // not loaded yet → remember to show when ready
+        // Cooldown not met, mark that we owe an ad but don't reset counter
         oweAdRef.current = true;
-        // make sure a load is in flight
-        load();
+        console.log(`Ad cooldown active. Time remaining: ${Math.ceil((MIN_TIME_BETWEEN_ADS_MS - (Date.now() - lastAdTimeRef.current)) / 1000)}s`);
+        // Don't reset card count - we still owe this ad
       }
     } else {
       // keep pipeline warm
@@ -79,12 +110,10 @@ export const useInterstitialAds = () => {
   };
 
   const onSessionEnd = () => {
-    // optional: show at end if user was close to threshold
-    if (swipeCount >= Math.ceil(SWIPES_UNTIL_AD / 2)) {
+    // optional: show at end if user was close to threshold (and cooldown passed)
+    if (cardCount >= Math.ceil(CARDS_UNTIL_AD / 2) && canShowAd()) {
       if (isLoaded && !showingRef.current) {
-        showingRef.current = true;
-        show();
-        setSwipeCount(0);
+        showAd();
       } else {
         oweAdRef.current = true;
         load();
@@ -93,7 +122,7 @@ export const useInterstitialAds = () => {
   };
 
   return {
-    onUserSwipe,
+    onCardComplete, // renamed from onUserSwipe
     onSessionEnd,
     isAdLoaded: isLoaded,
   };
