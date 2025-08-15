@@ -1,6 +1,6 @@
 # Child Safety Standards - Hot or Not Takes
 
-**Effective Date: December 2024**
+**Effective Date: August 2025**
 
 ## Our Commitment to Child Safety
 
@@ -91,5 +91,5 @@ We regularly review our practices to ensure ongoing compliance and the highest s
 
 ---
 
-*Last Updated: December 2024*
+*Last Updated: August 2025*
 *Document Version: 1.0*
