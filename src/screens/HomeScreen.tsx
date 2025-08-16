@@ -20,6 +20,7 @@ import { InstructionsModal } from '../components/InstructionsModal';
 import { SubmitTakeScreen } from './SubmitTakeScreen';
 import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
+import { RecentVotesScreen } from './RecentVotesScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
 // AI seeding disabled for MVP launch
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
@@ -33,6 +34,8 @@ export const HomeScreen: React.FC = () => {
   const [showMyTakesModal, setShowMyTakesModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+  const [showRecentVotesModal, setShowRecentVotesModal] = useState(false);
+  const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: any, vote: 'hot' | 'not'} | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
@@ -166,7 +169,7 @@ export const HomeScreen: React.FC = () => {
             onRefresh={handlePullToRefresh}
             colors={[theme.primary]}
             tintColor={theme.primary}
-            enabled={!showMyTakesModal && !showLeaderboardModal}
+            enabled={!showMyTakesModal && !showLeaderboardModal && !showRecentVotesModal}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -255,6 +258,9 @@ export const HomeScreen: React.FC = () => {
             hasMore={hasMore}
             loadMore={loadMore}
             loading={takesLoading}
+            externalStatsCard={selectedTakeForStats}
+            onExternalStatsCardDismiss={() => setSelectedTakeForStats(null)}
+            onShowRecentVotes={() => setShowRecentVotesModal(true)}
           />
         )}
       </View>
@@ -335,6 +341,28 @@ export const HomeScreen: React.FC = () => {
         </View>
       )}
 
+      {/* Recent Votes Modal - Conditional Rendering */}
+      {showRecentVotesModal && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          zIndex: 1600, // Higher than other modals
+          paddingTop: StatusBar.currentHeight || 44, // Safe area for status bar
+        }}>
+          <RecentVotesScreen
+            onClose={() => setShowRecentVotesModal(false)}
+            onShowTakeStats={(take, vote) => {
+              setSelectedTakeForStats({ take, vote });
+            }}
+            isDarkMode={isDarkMode}
+          />
+        </View>
+      )}
+
       {/* Floating Action Button for Submit */}
       <TouchableOpacity
         style={[styles.fabButton, { backgroundColor: theme.primary }]}
@@ -354,6 +382,7 @@ export const HomeScreen: React.FC = () => {
 
       {/* Ad Consent Modal */}
       <AdConsentModal isDarkMode={isDarkMode} />
+
 
     </SafeAreaView>
   );

@@ -39,6 +39,9 @@ interface CustomSwipeableCardDeckProps {
   hasMore?: boolean;
   loadMore?: (count?: number) => Promise<void>;
   loading?: boolean;
+  externalStatsCard?: {take: Take, vote: 'hot' | 'not'} | null;
+  onExternalStatsCardDismiss?: () => void;
+  onShowRecentVotes?: () => void;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -62,10 +65,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   hasMore = true,
   loadMore,
   loading = false,
+  externalStatsCard = null,
+  onExternalStatsCardDismiss,
+  onShowRecentVotes,
 }) => {
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
   const [lastVote, setLastVote] = useState<'hot' | 'not' | null>(null);
+  const [autoDismissTimeout, setAutoDismissTimeout] = useState<NodeJS.Timeout | null>(null);
   
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -91,11 +98,47 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   useEffect(() => { frozenSV.value = useFrozen ? 1 : 0; }, [useFrozen]);
   useEffect(() => { flippedSV.value = isCardFlipped ? 1 : 0; }, [isCardFlipped]);
 
+  // Cleanup auto-dismiss timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autoDismissTimeout) {
+        clearTimeout(autoDismissTimeout);
+      }
+    };
+  }, [autoDismissTimeout]);
+
+  // Handle external stats card
+  useEffect(() => {
+    if (externalStatsCard) {
+      // Clear any existing timeout since this is manual
+      if (autoDismissTimeout) {
+        clearTimeout(autoDismissTimeout);
+        setAutoDismissTimeout(null);
+      }
+      
+      // Set the external stats card as the current flipped state
+      setIsCardFlipped(true);
+      setLastVote(externalStatsCard.vote);
+      setCurrentVote(null); // No current vote since this is historical
+      
+      // Set the flip animation to show the stats
+      flipSV.value = 1;
+      promoteSV.value = 1;
+      animatingSV.value = 0;
+    }
+  }, [externalStatsCard]);
+
   const theme = isDarkMode ? colors.dark : colors.light;
 
   // JS-thread helpers for runOnJS
   const jsSetVote = (val: 'hot' | 'not' | null) => setCurrentVote(val);
   const jsOnSkip = (id: string) => onSkip(id);
+  const jsSetAutoDismiss = () => {
+    const timeout = setTimeout(() => {
+      continueToNext();
+    }, 1200);
+    setAutoDismissTimeout(timeout);
+  };
   
   // Flip the card to reveal stats
   const flipCard = (vote: 'hot' | 'not') => {
@@ -120,6 +163,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       flipSV.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }, (finished) => {
         if (finished) {
           runOnJS(setIsCardFlipped)(true); // set after flip completes
+          // Auto-dismiss stats card after 2.5 seconds
+          runOnJS(jsSetAutoDismiss)();
           // Start promoting next card behind the stats card
           promoteSV.value = withTiming(1, { duration: 300 }, () => {
             'worklet';
@@ -134,6 +179,37 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Continue to next card after reveal - promotion already happened behind stats
   const continueToNext = (skipAnimation = false) => {
     if (isAnimating.value) return;
+    
+    // Clear auto-dismiss timeout if it exists
+    if (autoDismissTimeout) {
+      clearTimeout(autoDismissTimeout);
+      setAutoDismissTimeout(null);
+    }
+    
+    // If this is an external stats card, dismiss it properly
+    if (externalStatsCard && onExternalStatsCardDismiss) {
+      // Reset all animation values immediately
+      translateX.value = 0;
+      translateY.value = 0;
+      scale.value = 1;
+      flipSV.value = 0;
+      promoteSV.value = 0;
+      animatingSV.value = 0;
+      
+      // Reset state
+      setIsCardFlipped(false);
+      setLastVote(null);
+      setCurrentVote(null);
+      
+      // Clear timeout
+      if (autoDismissTimeout) {
+        clearTimeout(autoDismissTimeout);
+        setAutoDismissTimeout(null);
+      }
+      
+      onExternalStatsCardDismiss();
+      return;
+    }
     
     isAnimating.value = true;
     
@@ -175,8 +251,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const nextTake = safeTakes[1];
   const thirdTake = safeTakes[2];
   
-  // Derive what to render - frozen data during promotion or live props
-  const renderCurrent = useFrozen && frozenCurrent.current ? frozenCurrent.current : currentTake;
+  // Derive what to render - external stats card takes priority, then frozen data during promotion, then live props
+  const renderCurrent = externalStatsCard ? externalStatsCard.take : 
+    (useFrozen && frozenCurrent.current ? frozenCurrent.current : currentTake);
   const renderNext = useFrozen && frozenNext.current ? frozenNext.current : nextTake;
 
   // If we run out of takes, clean up frozen state to prevent crashes
@@ -199,7 +276,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // Handle button press - now triggers pronounced swipe animation then flip
   const handleButtonVote = (vote: 'hot' | 'not') => {
-    if (!currentTake || isAnimating.value || isCardFlipped) return;
+    if (!currentTake || isAnimating.value || isCardFlipped || externalStatsCard) return;
     
     // Show vote indicator just like swipe gestures do
     setCurrentVote(vote);
@@ -228,7 +305,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // Handle skip with animation (for both button press and swipe up/down)
   const handleSkipWithAnimation = (direction: 'up' | 'down' = 'down') => {
-    if (!currentTake || isAnimating.value) return;
+    if (!currentTake || isAnimating.value || externalStatsCard) return;
     
     // 🧊 FREEZE: Capture current state immediately when skip is triggered
     if (renderCurrent) {
@@ -280,8 +357,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       translateX.value = event.translationX;
       translateY.value = event.translationY;
       
-      // Only show vote indicators when NOT flipped (front card only)
-      if (!flippedSV.value) {
+      // Only show vote indicators when NOT flipped (front card only) and not showing external stats
+      if (!flippedSV.value && !externalStatsCard) {
         // Vote indicator based on swipe direction
         const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
         const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
@@ -324,6 +401,15 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         const didSwipe = Math.abs(event.translationX) > 20 || Math.abs(event.translationY) > 20;
         // Continue immediately with no animation if they swiped
         runOnJS(continueToNext)(didSwipe);
+        return;
+      }
+      
+      // Don't allow voting on external stats cards - they're just for viewing
+      if (externalStatsCard) {
+        // Spring back to original position
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        scale.value = withSpring(1);
         return;
       }
       
@@ -642,10 +728,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
               <TakeCard
                 take={{
                   ...renderCurrent,
-                  // optional: optimistic single-vote bump so stats include user's vote
-                  hotVotes: renderCurrent.hotVotes + (lastVote === 'hot' ? 1 : 0),
-                  notVotes: renderCurrent.notVotes + (lastVote === 'not' ? 1 : 0),
-                  totalVotes: renderCurrent.totalVotes + (lastVote ? 1 : 0),
+                  // For external stats cards, don't add optimistic votes since they're historical
+                  // For regular votes, add optimistic single-vote bump so stats include user's vote
+                  hotVotes: renderCurrent.hotVotes + (!externalStatsCard && lastVote === 'hot' ? 1 : 0),
+                  notVotes: renderCurrent.notVotes + (!externalStatsCard && lastVote === 'not' ? 1 : 0),
+                  totalVotes: renderCurrent.totalVotes + (!externalStatsCard && lastVote ? 1 : 0),
                 }}
                 isDarkMode={isDarkMode}
                 showStats={true}
@@ -674,6 +761,24 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         </Animated.View>
       </PanGestureHandler>
       
+      {/* Recent Votes Button */}
+      {onShowRecentVotes && (
+        <AnimatedPressable 
+          style={[
+            styles.skipButton,
+            styles.recentVotesButton,
+            isDarkMode 
+              ? { backgroundColor: theme.surface } 
+              : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
+          ]} 
+          onPress={onShowRecentVotes}
+          scaleValue={0.9}
+          hapticIntensity={8}
+        >
+          <Text style={[styles.recentVotesButtonIcon, isDarkMode && { color: theme.text }]}>📊</Text>
+        </AnimatedPressable>
+      )}
+
       {/* Skip Button */}
       <AnimatedPressable 
         style={[
@@ -831,6 +936,27 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  recentVotesButton: {
+    left: 30, // Position to the left of the skip button
+    width: 45,
+    height: 45,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 0, // Override the skip button padding
+    paddingVertical: 0, // Override the skip button padding
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 2.62,
+  },
+  recentVotesButtonIcon: {
+    fontSize: dimensions.fontSize.xlarge,
   },
   instructionsButton: {
     bottom: 15, // Position below skip button

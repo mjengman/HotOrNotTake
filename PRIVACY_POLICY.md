@@ -11,6 +11,7 @@ Welcome to Hot or Not Takes ("we," "our," or "us"). We respect your privacy and 
 ### Information You Provide
 - **User-Generated Content**: Hot takes you submit, votes you cast, and takes you skip
 - **Account Information**: Anonymous user ID (no email or personal information required)
+- **Recent Votes History**: Your last 10 voted takes for easy access to stats
 
 ### Information Automatically Collected
 - **Usage Data**: How you interact with the app (votes, skips, categories viewed)
@@ -24,6 +25,7 @@ We use the collected information to:
 - Display your hot takes to other users for voting
 - Show you community-submitted content
 - Track voting results and leaderboards
+- Provide access to your recent voting history and stats
 - Improve app performance and user experience
 - Display relevant advertisements
 - Moderate content for inappropriate material (via AI)
