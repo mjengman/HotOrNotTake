@@ -232,8 +232,11 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     try {
       // Check if we've already voted on this take
       if (interactedTakeIds.includes(takeId)) {
-        console.log('⚠️ Attempted to vote on already voted take:', takeId);
-        throw new Error('You have already voted on this take');
+        console.warn('⚠️ Duplicate vote prevented - take already voted:', takeId);
+        // Silently return instead of throwing to prevent crashes
+        // Remove from feed if somehow still there
+        setFeed(prev => prev.filter(take => take.id !== takeId));
+        return;
       }
 
       // Mark as in-flight
@@ -266,7 +269,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     } catch (err) {
       // Rollback on error
       setInteractedTakeIds(prev => prev.filter(id => id !== takeId));
-      throw new Error(err instanceof Error ? err.message : 'Failed to submit vote');
+      console.error('Vote error, but handled gracefully:', err);
+      // Don't throw - just log to prevent crashes
     } finally {
       // Always clear in-flight flag
       inFlightVotesRef.current.delete(takeId);

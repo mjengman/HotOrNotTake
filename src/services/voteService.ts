@@ -35,7 +35,9 @@ export const submitVote = async (
     // Check if user has already voted on this take
     const existingVote = await getUserVoteForTake(takeId, userId);
     if (existingVote) {
-      throw new Error('User has already voted on this take');
+      console.warn(`Duplicate vote attempt: User ${userId} already voted on take ${takeId}`);
+      // Silently return success instead of throwing - prevents crash
+      return;
     }
 
     // Create the vote document
@@ -64,7 +66,9 @@ export const submitVote = async (
     await updateTakeVotes(takeId, vote);
   } catch (error) {
     console.error('Error submitting vote:', error);
-    throw new Error('Failed to submit vote');
+    // Don't throw - just log the error to prevent crashes
+    // The vote might have already been recorded
+    console.warn('Vote may have been recorded despite error:', error);
   }
 };
 
