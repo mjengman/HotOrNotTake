@@ -251,6 +251,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const nextTake = safeTakes[1];
   const thirdTake = safeTakes[2];
   
+  // Safety check: if current take is somehow undefined but we have takes, log error
+  if (!currentTake && safeTakes.length > 0) {
+    console.error('⚠️ No current take but safeTakes has items! This should not happen.');
+  }
+  
   // Derive what to render - external stats card takes priority, then frozen data during promotion, then live props
   const renderCurrent = externalStatsCard ? externalStatsCard.take : 
     (useFrozen && frozenCurrent.current ? frozenCurrent.current : currentTake);
@@ -258,14 +263,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // If we run out of takes, clean up frozen state to prevent crashes
   useEffect(() => {
-    if (!currentTake && !nextTake && useFrozen) {
+    if (!currentTake && !nextTake && useFrozen && !isCardFlipped) {
       console.log('🚨 No more takes - cleaning up frozen state');
-      setUseFrozen(false);
-      frozenCurrent.current = null;
-      frozenNext.current = null;
-      promoteSV.value = 0;
+      // Use setTimeout to defer state cleanup to next tick, avoiding hooks mismatch
+      setTimeout(() => {
+        setUseFrozen(false);
+        frozenCurrent.current = null;
+        frozenNext.current = null;
+        promoteSV.value = 0;
+      }, 0);
     }
-  }, [currentTake, nextTake, useFrozen]);
+  }, [currentTake, nextTake, useFrozen, isCardFlipped]);
 
   // Auto-load more when getting low on cards
   useEffect(() => {
@@ -576,11 +584,31 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     return { opacity: Math.max(downOpacity, upOpacity) };
   });
 
+  // Third card style - sits behind next card (MUST be before any returns!)
+  const thirdCardStyle = useAnimatedStyle(() => {
+    const thirdScale = 0.96;
+    const thirdTranslateY = 16;
+
+    return {
+      transform: [
+        { scale: thirdScale },
+        { translateY: thirdTranslateY },
+      ],
+      opacity: 1,
+      zIndex: 0,
+    };
+  });
+
   // Show end screen only when truly no more content and not in frozen state
   const noCards = safeTakes.length === 0;
   const atEnd = !currentTake && !renderCurrent; // No current card means we're at the end
   
-  const shouldShowEnd = !useFrozen && (noCards || (atEnd && !hasMore && !loading));
+  // Special case: if frozen but we have no actual cards left, show end screen
+  const frozenButEmpty = useFrozen && !frozenCurrent.current && !frozenNext.current && noCards;
+  
+  // Don't show end screen if we're mid-animation or flipped (unless frozen but empty)
+  // Note: removed isAnimating.value check to avoid Reanimated warning
+  const shouldShowEnd = (!useFrozen && !isCardFlipped && (noCards || (atEnd && !hasMore && !loading))) || frozenButEmpty;
   if (shouldShowEnd) {
     return (
       <View style={styles.container}>
@@ -616,32 +644,47 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   }
 
   // If at end but still has more or loading, show empty container (loading happens in background)
-  if (atEnd && (loading || hasMore) && !useFrozen) {
+  if (atEnd && (loading || hasMore) && !useFrozen && !isCardFlipped) {
     if (loadMore && !loading) loadMore(20).catch(console.error);
     return <View style={styles.container} />;
   }
   
-  // Safety fallback: if we have no current card to render but are frozen, show empty container
+  // Safety fallback: if we have no current card to render but are frozen, show end screen
   if (!renderCurrent && useFrozen) {
-    console.log('⚠️ No renderCurrent but frozen - showing empty container');
-    return <View style={styles.container} />;
+    console.log('⚠️ No renderCurrent but frozen - transitioning to end screen');
+    // Defer cleanup to avoid hooks issues
+    setTimeout(() => {
+      setUseFrozen(false);
+      frozenCurrent.current = null;
+      frozenNext.current = null;
+    }, 0);
+    return (
+      <View style={styles.container}>
+        <View style={styles.endContainer}>
+          <Text style={styles.endEmoji}>🎉</Text>
+          <Text style={[styles.endTitle, { color: theme.text }]}>
+            You've reached the end!
+          </Text>
+          <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
+            Submit more takes to keep the conversation going!
+          </Text>
+          {onSubmitTake && (
+            <AnimatedPressable
+              style={[styles.submitButton, { backgroundColor: theme.primary }]}
+              onPress={onSubmitTake}
+              scaleValue={0.95}
+              hapticIntensity={15}
+            >
+              <Text style={styles.submitButtonText}>✏️ Submit Take</Text>
+            </AnimatedPressable>
+          )}
+          <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
+            Tap the memo icon (📝) to see all your takes
+          </Text>
+        </View>
+      </View>
+    );
   }
-
-
-  // Third card style - sits behind next card
-  const thirdCardStyle = useAnimatedStyle(() => {
-    const thirdScale = 0.96;
-    const thirdTranslateY = 16;
-
-    return {
-      transform: [
-        { scale: thirdScale },
-        { translateY: thirdTranslateY },
-      ],
-      opacity: 1,
-      zIndex: 0,
-    };
-  });
 
   return (
     <View style={styles.container}>

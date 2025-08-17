@@ -156,11 +156,20 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           interactedIds: freshInteractedIds,
         });
         
+        // Double-check filtering: ensure no voted takes made it through
+        const doubleFiltered = items.filter(take => {
+          const isVoted = freshInteractedIds.has(take.id);
+          if (isVoted) {
+            console.warn(`⚠️ Filtering out already-voted take that slipped through: ${take.id}`);
+          }
+          return !isVoted;
+        });
+        
         // Apply variety once on initial load
-        const ordered = category === 'all' ? ensureCategoryVariety(items, 0) : items;
+        const ordered = category === 'all' ? ensureCategoryVariety(doubleFiltered, 0) : doubleFiltered;
         setFeed(ordered);
         setHasMore(gotAny && ordered.length > 0);
-        console.log(`✅ Initial feed loaded: ${items.length} takes, hasMore: ${gotAny}`);
+        console.log(`✅ Initial feed loaded: ${doubleFiltered.length} takes (filtered from ${items.length}), hasMore: ${gotAny}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load takes');
         console.error('Error initializing feed:', err);
@@ -195,14 +204,23 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         interactedIds: interacted,
       });
 
+      // Double-check filtering: ensure no interacted takes made it through
+      const doubleFiltered = items.filter(take => {
+        const isInteracted = interacted.has(take.id);
+        if (isInteracted) {
+          console.warn(`⚠️ LoadMore: Filtering out already-interacted take that slipped through: ${take.id}`);
+        }
+        return !isInteracted;
+      });
+
       setFeed(prev => {
-        const combined = [...prev, ...items];
+        const combined = [...prev, ...doubleFiltered];
         if (category !== 'all') return combined;
         // Freeze the existing length so we only variety-shuffle the newly appended tail
         return ensureCategoryVariety(combined, prev.length);
       });
-      setHasMore(gotAny && items.length > 0);
-      console.log(`📝 Loaded ${items.length} more takes, hasMore: ${gotAny}, total feed: ${feed.length + items.length}`);
+      setHasMore(gotAny && doubleFiltered.length > 0);
+      console.log(`📝 Loaded ${doubleFiltered.length} more takes (filtered from ${items.length}), hasMore: ${gotAny}, total feed: ${feed.length + doubleFiltered.length}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load more takes');
       console.error('Error in loadMore:', err);
