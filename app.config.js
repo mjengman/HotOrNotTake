@@ -1,7 +1,7 @@
 // ChatGPT's suggested fix: Use app.config.js to embed API key in manifest
 export default () => ({
   expo: {
-    name: "HotOrNotTakes",
+    name: "Hot or Not Takes",
     slug: "HotOrNotTakes",
     version: "1.0.0",
     orientation: "portrait",
