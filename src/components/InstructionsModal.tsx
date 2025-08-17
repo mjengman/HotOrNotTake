@@ -184,9 +184,15 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             </View>
           </View>
 
-          <View style={styles.tipBox}>
+          {/* <View style={styles.tipBox}>
             <Text style={styles.tipText}>
               💡 Tip: You can change categories using the dropdown at the top!
+            </Text>
+          </View> */}
+
+          <View style={[styles.tipBox, { backgroundColor: '#E8F5E8', marginTop: 10 }]}>
+            <Text style={[styles.tipText, { color: '#2E7D32' }]}>
+              🚀 Pro Tip: The more you swipe in a session, the fewer ads you'll see! Keep swiping for longer uninterrupted streaks.
             </Text>
           </View>
         </>
