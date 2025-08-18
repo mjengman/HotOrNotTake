@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
@@ -231,9 +232,14 @@ export const HomeScreen: React.FC = () => {
           </View>
         
         <View style={styles.titleContainer}>
-          <Text style={[styles.title, { color: theme.text }]}>
-            🔥 Hot or Not Takes
-          </Text>
+          <Image 
+            source={isDarkMode 
+              ? require('../assets/images/title-banner-dark-mode.png')
+              : require('../assets/images/title-banner-light-mode.png')
+            }
+            style={styles.titleBanner}
+            resizeMode="contain"
+          />
         </View>
         
         <View style={styles.statsContainer}>
@@ -429,16 +435,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-start',
     marginBottom: dimensions.spacing.xs,
+    zIndex: 10,
+    elevation: 10,
   },
   titleContainer: {
     alignItems: 'center',
-    marginBottom: dimensions.spacing.xs,
+    marginBottom: dimensions.spacing.sm,
+    marginTop: -60,
   },
   title: {
     fontSize: dimensions.fontSize.xxlarge,
     fontWeight: 'bold',
     textAlign: 'center',
     width: '100%',
+  },
+  titleBanner: {
+    width: '95%',
+    height: 110,
+    alignSelf: 'center',
   },
   statsContainer: {
     alignItems: 'center',
@@ -457,7 +471,7 @@ const styles = StyleSheet.create({
   deckContainer: {
     flex: 1,
     justifyContent: 'center',
-    marginTop: -65, // Pull the deck up to reduce dead space
+    marginTop: -40, // Pull the deck up but leave space for category dropdown
   },
   loadingContainer: {
     flex: 1,

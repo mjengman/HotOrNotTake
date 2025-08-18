@@ -73,7 +73,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               </Text>
             </TouchableOpacity>
             
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
             
             <TouchableOpacity 
               style={styles.statItem}
@@ -209,8 +209,7 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 40,
-    backgroundColor: '#E1E8ED',
-    opacity: 0.5,
+    // backgroundColor and opacity now set via theme.border
   },
   // Reveal styles
   revealContainer: {

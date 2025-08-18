@@ -856,7 +856,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         <AnimatedPressable 
           style={[
             styles.instructionsButton,
-            !isDarkMode && { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
+            { backgroundColor: theme.primary }
           ]} 
           onPress={onShowInstructions}
           scaleValue={0.9}
@@ -1025,7 +1025,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 15, // Position below skip button
     alignSelf: 'center',
-    backgroundColor: 'rgba(255, 107, 107, 0.95)', // More vibrant - less transparency
+    // backgroundColor removed - set dynamically to theme.primary
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 25,
