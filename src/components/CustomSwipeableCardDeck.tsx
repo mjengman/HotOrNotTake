@@ -1029,6 +1029,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 25,
+    borderWidth: 0, // Remove any default border
+    overflow: 'hidden', // Ensures border radius clips properly
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: {
