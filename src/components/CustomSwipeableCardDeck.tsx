@@ -42,6 +42,7 @@ interface CustomSwipeableCardDeckProps {
   externalStatsCard?: {take: Take, vote: 'hot' | 'not'} | null;
   onExternalStatsCardDismiss?: () => void;
   onShowRecentVotes?: () => void;
+  onChangeVote?: (take: Take) => void;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -68,6 +69,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   externalStatsCard = null,
   onExternalStatsCardDismiss,
   onShowRecentVotes,
+  onChangeVote,
 }) => {
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
@@ -176,6 +178,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     });
   };
   
+  // Handle change vote - dismiss stats card and trigger the change vote callback
+  const handleChangeVote = (take: Take) => {
+    if (onChangeVote) {
+      // Call the change vote function first
+      onChangeVote(take);
+      
+      // Then dismiss the stats card properly
+      continueToNext(true);
+    }
+  };
+
   // Continue to next card after reveal - promotion already happened behind stats
   const continueToNext = (skipAnimation = false) => {
     if (isAnimating.value) return;
@@ -781,6 +794,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
                 showStats={true}
                 userVote={lastVote}
                 isFlipped={true}
+                onChangeVote={handleChangeVote}
               />
             </Animated.View>
           )}

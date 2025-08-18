@@ -22,6 +22,7 @@ import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecentVotesScreen } from './RecentVotesScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
+import { deleteVote } from '../services/voteService';
 // AI seeding disabled for MVP launch
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 // Removed class-based ad service (API issue)
@@ -41,7 +42,7 @@ export const HomeScreen: React.FC = () => {
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const { user, loading: authLoading, signIn } = useAuth();
-  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore } = useFirebaseTakes({
+  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
     category: selectedCategory
   });
   const { stats, refreshStats } = useUserStats();
@@ -154,6 +155,27 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  const handleChangeVote = async (take: any) => {
+    if (!user) return;
+    
+    try {
+      // Delete the existing vote
+      await deleteVote(take.id, user.uid);
+      
+      // Refresh stats to reflect the deleted vote
+      await refreshStats();
+      
+      // Add the take to the front of the deck for re-voting
+      prependTake(take);
+      
+      // Note: The stats card dismissal is handled by CustomSwipeableCardDeck
+      
+    } catch (error) {
+      console.error('Error changing vote:', error);
+      // Could show a toast notification here
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar 
@@ -261,6 +283,7 @@ export const HomeScreen: React.FC = () => {
             externalStatsCard={selectedTakeForStats}
             onExternalStatsCardDismiss={() => setSelectedTakeForStats(null)}
             onShowRecentVotes={() => setShowRecentVotesModal(true)}
+            onChangeVote={handleChangeVote}
           />
         )}
       </View>

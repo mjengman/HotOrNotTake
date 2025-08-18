@@ -17,6 +17,7 @@ interface TakeStatsModalProps {
   take: Take;
   userVote: 'hot' | 'not';
   onClose: () => void;
+  onChangeVote?: (take: Take) => void;
   isDarkMode?: boolean;
 }
 
@@ -27,6 +28,7 @@ export const TakeStatsModal: React.FC<TakeStatsModalProps> = ({
   take,
   userVote,
   onClose,
+  onChangeVote,
   isDarkMode = false,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
@@ -92,6 +94,18 @@ export const TakeStatsModal: React.FC<TakeStatsModalProps> = ({
                   {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
                 </Text>
               </View>
+              
+              {onChangeVote && (
+                <TouchableOpacity
+                  style={styles.changeVoteButton}
+                  onPress={() => onChangeVote(take)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.changeVoteText, { color: theme.textSecondary }]}>
+                    Change your vote
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Stats */}
@@ -216,6 +230,15 @@ const styles = StyleSheet.create({
   userVoteText: {
     fontSize: dimensions.fontSize.medium,
     fontWeight: 'bold',
+  },
+  changeVoteButton: {
+    marginTop: dimensions.spacing.sm,
+    alignSelf: 'flex-start',
+  },
+  changeVoteText: {
+    fontSize: dimensions.fontSize.small,
+    textDecorationLine: 'underline',
+    fontWeight: '500',
   },
   statsSection: {
     marginBottom: dimensions.spacing.lg,

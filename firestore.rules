@@ -66,8 +66,11 @@ service cloud.firestore {
                    request.resource.data.takeId is string &&
                    request.resource.data.votedAt is timestamp;
       
-      // No updates or deletes allowed for votes
-      allow update, delete: if false;
+      // Users can delete their own votes (for vote changes)
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+      
+      // No updates allowed for votes (votes are immutable except for deletion)
+      allow update: if false;
     }
     
     // Skips collection

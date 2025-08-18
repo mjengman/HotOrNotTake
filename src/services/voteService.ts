@@ -7,6 +7,8 @@ import {
   getDocs,
   Timestamp,
   writeBatch,
+  updateDoc,
+  increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { TakeVote, TakeVoteFirestore } from '../types/Take';
@@ -111,6 +113,56 @@ export const getUserVotes = async (userId: string): Promise<TakeVote[]> => {
   } catch (error) {
     console.error('Error getting user votes:', error);
     return [];
+  }
+};
+
+// Delete a user's vote for a specific take
+export const deleteVote = async (
+  takeId: string,
+  userId: string
+): Promise<void> => {
+  try {
+    // Find the user's vote for this take
+    const voteQuery = query(
+      collection(db, VOTES_COLLECTION),
+      where('takeId', '==', takeId),
+      where('userId', '==', userId)
+    );
+
+    const snapshot = await getDocs(voteQuery);
+    
+    if (snapshot.empty) {
+      console.warn(`No vote found to delete for user ${userId} on take ${takeId}`);
+      return;
+    }
+
+    const voteDoc = snapshot.docs[0];
+    const voteData = voteDoc.data();
+    const vote = voteData.vote as 'hot' | 'not';
+
+    // Use batch write to ensure consistency
+    const batch = writeBatch(db);
+
+    // Delete the vote document
+    batch.delete(voteDoc.ref);
+
+    // Commit the batch
+    await batch.commit();
+
+    // Update the take vote counts (decrement the vote count)
+    const takeRef = doc(db, 'takes', takeId);
+    const updateData = {
+      totalVotes: increment(-1),
+      ...(vote === 'hot' 
+        ? { hotVotes: increment(-1) } 
+        : { notVotes: increment(-1) }
+      ),
+    };
+
+    await updateDoc(takeRef, updateData);
+  } catch (error) {
+    console.error('Error deleting vote:', error);
+    throw new Error('Failed to delete vote');
   }
 };
 

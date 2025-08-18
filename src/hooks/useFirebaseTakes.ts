@@ -28,6 +28,7 @@ interface UseFirebaseTakesResult {
   refreshTakes: () => Promise<void>;
   loadMore: (count?: number) => Promise<void>;
   hasMore: boolean;
+  prependTake: (take: Take) => void;
 }
 
 interface UseFirebaseTakesOptions {
@@ -402,6 +403,22 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
   }, [category, interactedTakeIds]);
 
+  // Prepend a take to the front of the deck (used for vote changes)
+  const prependTake = useCallback((take: Take) => {
+    // Remove the take from interacted IDs so it can be voted on again
+    setInteractedTakeIds(prev => prev.filter(id => id !== take.id));
+    
+    // Add the take to the front of the feed
+    setFeed(prev => {
+      // Remove the take if it already exists in the feed
+      const filtered = prev.filter(existingTake => existingTake.id !== take.id);
+      // Add it to the front
+      return [take, ...filtered];
+    });
+    
+    console.log(`🔄 Prepended take ${take.id} to front of deck for re-voting`);
+  }, []);
+
   return {
     takes,
     loading,
@@ -413,5 +430,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     refreshTakes,
     loadMore,
     hasMore,
+    prependTake,
   };
 };

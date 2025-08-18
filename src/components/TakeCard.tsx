@@ -17,6 +17,7 @@ interface TakeCardProps {
   showStats?: boolean;
   userVote?: 'hot' | 'not' | null;
   isFlipped?: boolean;
+  onChangeVote?: (take: Take) => void;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -29,6 +30,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   showStats = true,
   userVote = null,
   isFlipped = false,
+  onChangeVote,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
   
@@ -91,9 +93,22 @@ export const TakeCard: React.FC<TakeCardProps> = ({
           // Back of card - stats reveal
           <View style={styles.revealContainer}>
             {userVote && (
-              <Text style={[styles.yourVote, { color: theme.text }]}>
-                You voted {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
-              </Text>
+              <View style={styles.voteSection}>
+                <Text style={[styles.yourVote, { color: theme.text }]}>
+                  You voted {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
+                </Text>
+                {onChangeVote && (
+                  <TouchableOpacity
+                    style={styles.changeVoteButton}
+                    onPress={() => onChangeVote(take)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.changeVoteText, { color: theme.textSecondary }]}>
+                      Change your vote
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
             <View style={styles.percentageContainer}>
               <View style={styles.percentageItem}>
@@ -202,10 +217,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: dimensions.spacing.md,
   },
+  voteSection: {
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.md,
+  },
   yourVote: {
     fontSize: dimensions.fontSize.medium,
     fontWeight: '600',
-    marginBottom: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.xs,
+  },
+  changeVoteButton: {
+    marginTop: dimensions.spacing.xs,
+  },
+  changeVoteText: {
+    fontSize: dimensions.fontSize.small,
+    textDecorationLine: 'underline',
+    fontWeight: '500',
   },
   percentageContainer: {
     flexDirection: 'row',
