@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
   },
   fabButton: {
     position: 'absolute',
-    bottom: 110,
+    bottom: 130,
     right: dimensions.spacing.lg,
     width: 56,
     height: 56,
