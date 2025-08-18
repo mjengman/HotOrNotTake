@@ -17,12 +17,13 @@ import { AdConsentModal } from '../components/AdConsentModal';
 import { LoadingSkeleton } from '../components/loading/LoadingSkeleton';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { InstructionsModal } from '../components/InstructionsModal';
+import { BurgerMenu } from '../components/BurgerMenu';
 import { SubmitTakeScreen } from './SubmitTakeScreen';
 import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecentVotesScreen } from './RecentVotesScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
-import { deleteVote } from '../services/voteService';
+import { deleteVote, getUserVoteForTake } from '../services/voteService';
 // AI seeding disabled for MVP launch
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 // Removed class-based ad service (API issue)
@@ -37,6 +38,7 @@ export const HomeScreen: React.FC = () => {
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
   const [showRecentVotesModal, setShowRecentVotesModal] = useState(false);
   const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: any, vote: 'hot' | 'not'} | null>(null);
+  const [lastVotedTake, setLastVotedTake] = useState<any | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
@@ -88,6 +90,12 @@ export const HomeScreen: React.FC = () => {
 
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
+      // Find the take that was voted on to track it
+      const votedTake = takes.find(take => take.id === takeId);
+      if (votedTake) {
+        setLastVotedTake(votedTake);
+      }
+      
       await submitVote(takeId, vote);
       // Track completed card for ad service (called after vote is cast)
       onCardComplete();
@@ -176,6 +184,21 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  const handleShowLastVote = async () => {
+    if (!lastVotedTake || !user) return;
+    
+    try {
+      // Get the user's vote for this take
+      const userVoteRecord = await getUserVoteForTake(lastVotedTake.id, user.uid);
+      if (userVoteRecord && userVoteRecord.vote) {
+        // Show the stats card for the last voted take
+        setSelectedTakeForStats({ take: lastVotedTake, vote: userVoteRecord.vote });
+      }
+    } catch (error) {
+      console.error('Error showing last vote:', error);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar 
@@ -198,35 +221,14 @@ export const HomeScreen: React.FC = () => {
       >
         <View style={styles.header}>
           <View style={styles.headerRow}>
-          <AnimatedPressable 
-            style={[styles.headerButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
-            onPress={() => setShowMyTakesModal(true)}
-            scaleValue={0.9}
-            hapticIntensity={8}
-          >
-            <Text style={[styles.headerButtonIcon, { paddingLeft: 4 }]}>📝</Text>
-          </AnimatedPressable>
-          
-          <AnimatedPressable 
-            style={[styles.headerButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
-            onPress={() => setShowLeaderboardModal(true)}
-            scaleValue={0.9}
-            hapticIntensity={8}
-          >
-            <Text style={styles.headerButtonIcon}>🏆</Text>
-          </AnimatedPressable>
-          
-          <AnimatedPressable 
-            style={[styles.headerButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
-            onPress={toggleTheme}
-            scaleValue={0.9}
-            hapticIntensity={12}
-          >
-            <Text style={styles.headerButtonIcon}>
-              {isDarkMode ? '☀️' : '🌙'}
-            </Text>
-          </AnimatedPressable>
-        </View>
+            <BurgerMenu
+              isDarkMode={isDarkMode}
+              onMyTakes={() => setShowMyTakesModal(true)}
+              onLeaderboard={() => setShowLeaderboardModal(true)}
+              onRecentVotes={() => setShowRecentVotesModal(true)}
+              onToggleTheme={toggleTheme}
+            />
+          </View>
         
         <View style={styles.titleContainer}>
           <Text style={[styles.title, { color: theme.text }]}>
@@ -282,7 +284,7 @@ export const HomeScreen: React.FC = () => {
             loading={takesLoading}
             externalStatsCard={selectedTakeForStats}
             onExternalStatsCardDismiss={() => setSelectedTakeForStats(null)}
-            onShowRecentVotes={() => setShowRecentVotesModal(true)}
+            onShowRecentVotes={handleShowLastVote}
             onChangeVote={handleChangeVote}
           />
         )}
@@ -425,7 +427,7 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: dimensions.spacing.xs,
   },
   titleContainer: {
@@ -451,24 +453,6 @@ const styles = StyleSheet.create({
     paddingTop: dimensions.spacing.sm,
     zIndex: 1, // Lower z-index so cards can animate above it
     elevation: 1, // For Android shadow
-  },
-  headerButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 2.62,
-  },
-  headerButtonIcon: {
-    fontSize: dimensions.fontSize.xlarge,
   },
   deckContainer: {
     flex: 1,
