@@ -828,20 +828,19 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           styles.skipButton,
           isDarkMode 
             ? { backgroundColor: theme.surface } // Match card color in dark mode
-            : { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
+            : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }
         ]} 
-        onPress={() => handleSkipWithAnimation('down')}
+        onPress={() => handleSkipWithAnimation('up')}
         scaleValue={0.9}
         hapticIntensity={12}
       >
-        <Text style={[styles.skipButtonText, isDarkMode && { color: theme.text }]}>Skip ⏭️</Text>
+        <Text style={[styles.skipButtonText, isDarkMode ? { color: theme.text } : { color: '#333' }]}>⏭️</Text>
       </AnimatedPressable>
 
       {/* Instructions Button */}
       {onShowInstructions && (
         <AnimatedPressable 
           style={[
-            styles.skipButton, 
             styles.instructionsButton,
             !isDarkMode && { borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
           ]} 
@@ -849,7 +848,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           scaleValue={0.9}
           hapticIntensity={8}
         >
-          <Text style={[styles.skipButtonText, styles.instructionsButtonText]}>
+          <Text style={styles.instructionsButtonText}>
             ❔ Instructions
           </Text>
         </AnimatedPressable>
@@ -962,10 +961,14 @@ const styles = StyleSheet.create({
   skipButton: {
     position: 'absolute',
     bottom: 70,
+    left: '50%',
+    marginLeft: 5, // Small gap from center - skip on right
     backgroundColor: 'rgba(0,0,0,0.7)', // Keep as default, will override inline for dark mode
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
+    width: 45,
+    height: 45,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: {
@@ -977,11 +980,14 @@ const styles = StyleSheet.create({
   },
   skipButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
   },
   recentVotesButton: {
-    left: 30, // Position to the left of the skip button
+    position: 'absolute',
+    bottom: 70,
+    left: '50%',
+    marginLeft: -55, // Position to left of center (45 width + 10 gap)
     width: 45,
     height: 45,
     borderRadius: 40,
@@ -1002,8 +1008,13 @@ const styles = StyleSheet.create({
     fontSize: dimensions.fontSize.xlarge,
   },
   instructionsButton: {
+    position: 'absolute',
     bottom: 15, // Position below skip button
+    alignSelf: 'center',
     backgroundColor: 'rgba(255, 107, 107, 0.95)', // More vibrant - less transparency
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: {
@@ -1014,6 +1025,8 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
   instructionsButtonText: {
+    color: 'white',
     fontSize: 14,
+    fontWeight: '600',
   },
 });
