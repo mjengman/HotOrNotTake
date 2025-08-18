@@ -832,7 +832,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           scaleValue={0.9}
           hapticIntensity={8}
         >
-          <Text style={[styles.recentVotesButtonIcon, isDarkMode && { color: theme.text }]}>📊</Text>
+          <Text style={[styles.recentVotesButtonIcon, isDarkMode && { color: theme.text }]}>↩️</Text>
         </AnimatedPressable>
       )}
 
