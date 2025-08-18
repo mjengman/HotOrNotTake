@@ -165,7 +165,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
-    borderBottomWidth: 1,
   },
   menuIcon: {
     fontSize: dimensions.fontSize.xlarge,
