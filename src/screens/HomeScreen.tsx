@@ -91,17 +91,27 @@ export const HomeScreen: React.FC = () => {
 
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
-      // Find the take that was voted on to track it
+      // Find the take that was voted on
       const votedTake = takes.find(take => take.id === takeId);
-      if (votedTake) {
-        setLastVotedTake(votedTake);
-      }
       
       await submitVote(takeId, vote);
       // Track completed card for ad service (called after vote is cast)
       onCardComplete();
       // Update vote counter immediately
       await refreshStats();
+      
+      // Set lastVotedTake with updated vote counts after vote submission
+      if (votedTake) {
+        const updatedHotVotes = vote === 'hot' ? votedTake.hotVotes + 1 : votedTake.hotVotes;
+        const updatedNotVotes = vote === 'not' ? votedTake.notVotes + 1 : votedTake.notVotes;
+        const updatedTake = {
+          ...votedTake,
+          hotVotes: updatedHotVotes,
+          notVotes: updatedNotVotes,
+          totalVotes: updatedHotVotes + updatedNotVotes,
+        };
+        setLastVotedTake(updatedTake);
+      }
     } catch (error) {
       console.error('Error submitting vote:', error);
       // Could show a toast notification here
@@ -168,14 +178,26 @@ export const HomeScreen: React.FC = () => {
     if (!user) return;
     
     try {
+      // Get the user's current vote first to know what to decrement
+      const userVote = await getUserVoteForTake(take.id, user.uid);
+      if (!userVote) return;
+      
       // Delete the existing vote
       await deleteVote(take.id, user.uid);
       
       // Refresh stats to reflect the deleted vote
       await refreshStats();
       
-      // Add the take to the front of the deck for re-voting
-      prependTake(take);
+      // Update the take's vote counts to reflect the deletion
+      const updatedTake = {
+        ...take,
+        hotVotes: userVote.vote === 'hot' ? take.hotVotes - 1 : take.hotVotes,
+        notVotes: userVote.vote === 'not' ? take.notVotes - 1 : take.notVotes,
+        totalVotes: take.totalVotes - 1,
+      };
+      
+      // Add the updated take to the front of the deck for re-voting
+      prependTake(updatedTake);
       
       // Note: The stats card dismissal is handled by CustomSwipeableCardDeck
       

@@ -19,7 +19,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   useAnimatedGestureHandler,
-  withSpring,
   runOnJS,
 } from 'react-native-reanimated';
 import { colors } from '../constants';
@@ -190,7 +189,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             </Text>
           </View> */}
 
-          <View style={[styles.tipBox, { backgroundColor: '#E8F5E8', marginTop: 10 }]}>
+          <View style={[styles.tipBox, { backgroundColor: '#E8F5E8', marginTop: -10 }]}>
             <Text style={[styles.tipText, { color: '#2E7D32' }]}>
               🚀 Pro Tip: The more you swipe in a session, the fewer ads you'll see! Keep swiping for longer uninterrupted streaks.
             </Text>
@@ -216,7 +215,9 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
 
   const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
     onActive: (event) => {
-      translateX.value = event.translationX;
+      // Limit the translation to prevent over-stretching
+      const maxTranslation = screenWidth * 0.3;
+      translateX.value = Math.max(-maxTranslation, Math.min(maxTranslation, event.translationX));
     },
     onEnd: (event) => {
       const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
@@ -230,8 +231,8 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
         runOnJS(handlePrevious)();
       }
 
-      // Bounce back to center
-      translateX.value = withSpring(0);
+      // Instant return to center (no animation)
+      translateX.value = 0;
     },
   });
 
