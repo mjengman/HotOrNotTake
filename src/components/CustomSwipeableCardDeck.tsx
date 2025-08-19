@@ -43,6 +43,7 @@ interface CustomSwipeableCardDeckProps {
   onExternalStatsCardDismiss?: () => void;
   onShowRecentVotes?: () => void;
   onChangeVote?: (take: Take) => void;
+  totalVotes?: number;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -70,6 +71,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   onExternalStatsCardDismiss,
   onShowRecentVotes,
   onChangeVote,
+  totalVotes = 0,
 }) => {
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
@@ -851,6 +853,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         <Text style={[styles.skipButtonText, isDarkMode ? { color: theme.text } : { color: '#333' }]}>⏭️</Text>
       </AnimatedPressable>
 
+      {/* Vote Counter - Bottom Left */}
+      <View style={[styles.voteCounter, { backgroundColor: theme.surface }]}>
+        <Text style={[styles.voteCounterText, { color: '#4CAF50' }]}>
+          Votes: {totalVotes}
+        </Text>
+      </View>
+
       {/* Instructions Button */}
       {onShowInstructions && (
         <AnimatedPressable 
@@ -1020,6 +1029,26 @@ const styles = StyleSheet.create({
   },
   recentVotesButtonIcon: {
     fontSize: dimensions.fontSize.xlarge,
+  },
+  voteCounter: {
+    position: 'absolute',
+    bottom: 15,
+    left: dimensions.spacing.lg,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+  },
+  voteCounterText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   instructionsButton: {
     position: 'absolute',

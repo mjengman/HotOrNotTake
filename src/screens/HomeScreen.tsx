@@ -241,12 +241,6 @@ export const HomeScreen: React.FC = () => {
             resizeMode="contain"
           />
         </View>
-        
-        <View style={styles.statsContainer}>
-          <Text style={[styles.statsText, { color: theme.textSecondary }]}>
-            Votes: {stats.totalVotes}
-          </Text>
-        </View>
       </View>
 
       {/* Category Dropdown */}
@@ -292,6 +286,7 @@ export const HomeScreen: React.FC = () => {
             onExternalStatsCardDismiss={() => setSelectedTakeForStats(null)}
             onShowRecentVotes={handleShowLastVote}
             onChangeVote={handleChangeVote}
+            totalVotes={stats.totalVotes}
           />
         )}
       </View>
