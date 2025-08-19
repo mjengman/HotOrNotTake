@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
   titleContainer: {
     alignItems: 'center',
     marginBottom: dimensions.spacing.sm,
-    marginTop: -60,
+    marginTop: -55,
   },
   title: {
     fontSize: dimensions.fontSize.xxlarge,
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
   },
   titleBanner: {
     width: '95%',
-    height: 110,
+    height: 130,
     alignSelf: 'center',
   },
   statsContainer: {
@@ -459,7 +459,8 @@ const styles = StyleSheet.create({
   },
   categoryContainer: {
     paddingHorizontal: dimensions.spacing.lg,
-    paddingTop: dimensions.spacing.sm,
+    paddingTop: 0,
+    marginTop: -3,
     zIndex: 1, // Lower z-index so cards can animate above it
     elevation: 1, // For Android shadow
   },
