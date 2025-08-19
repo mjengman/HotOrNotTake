@@ -8,6 +8,7 @@ import {
   ScrollView,
   Dimensions,
   SafeAreaView,
+  BackHandler,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
@@ -47,6 +48,26 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
       setCurrentPage(0);
     }
   }, [visible]);
+
+  // Handle back button when instructions modal is open
+  useEffect(() => {
+    if (!visible) return;
+
+    const backAction = () => {
+      if (currentPage > 0) {
+        // Go back to previous page
+        setCurrentPage(currentPage - 1);
+        return true; // Prevent default back behavior
+      } else {
+        // On first page, close the modal
+        onClose();
+        return true; // Prevent default back behavior
+      }
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [visible, currentPage, onClose]);
 
   const pages = [
     {

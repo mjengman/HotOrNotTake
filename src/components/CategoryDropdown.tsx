@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Modal,
   ScrollView,
   Dimensions,
+  BackHandler,
 } from 'react-native';
 import { colors, dimensions } from '../constants';
 
@@ -49,6 +50,22 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
     onCategoryChange(categoryValue);
     setIsOpen(false);
   };
+
+  // Handle back button when category dropdown is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const backAction = () => {
+      if (isOpen) {
+        setIsOpen(false);
+        return true; // Prevent default back behavior
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [isOpen]);
 
   return (
     <View style={styles.container}>

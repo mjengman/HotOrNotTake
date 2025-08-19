@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,6 +9,8 @@ import {
   ScrollView,
   RefreshControl,
   Image,
+  BackHandler,
+  Animated,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
@@ -44,6 +46,8 @@ export const HomeScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
     category: selectedCategory
@@ -56,6 +60,14 @@ export const HomeScreen: React.FC = () => {
   const { onCardComplete, onSessionEnd } = useInterstitialAds();
   
   const theme = isDarkMode ? colors.dark : colors.light;
+
+  // Rotating instruction messages
+  const instructionTexts = [
+    "Swipe right for 🔥 HOT • Swipe left for ❄️ NOT",
+    "Swipe up ⬆️ or down ⬇️ to SKIP",
+    "🚀 More swipes = fewer ads!",
+    "☰ Tap the menu button for more options",
+  ];
 
   // Check if this is the first launch
   useEffect(() => {
@@ -87,7 +99,65 @@ export const HomeScreen: React.FC = () => {
     }
   }, [user, authLoading, signIn]);
 
+  // Handle back button/gesture to close modals in proper order
+  useEffect(() => {
+    const backAction = () => {
+      // Check modals in order of priority (highest z-index first)
+      if (showSubmitModal) {
+        setShowSubmitModal(false);
+        return true; // Prevent default back behavior
+      }
+      if (showRecentVotesModal) {
+        setShowRecentVotesModal(false);
+        return true;
+      }
+      if (showLeaderboardModal) {
+        setShowLeaderboardModal(false);
+        return true;
+      }
+      if (showMyTakesModal) {
+        setShowMyTakesModal(false);
+        return true;
+      }
+      if (showInstructionsModal) {
+        setShowInstructionsModal(false);
+        return true;
+      }
+      if (selectedTakeForStats) {
+        setSelectedTakeForStats(null);
+        return true;
+      }
+      // If no modals are open, allow default behavior (exit app)
+      return false;
+    };
 
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [showSubmitModal, showRecentVotesModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, selectedTakeForStats]);
+
+  // Rotate instruction text every 4 seconds with fade animation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Fade out
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        // Change text while faded out
+        setCurrentInstructionIndex((prev) => (prev + 1) % instructionTexts.length);
+        
+        // Fade back in
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }).start();
+      });
+    }, 10000); // Change every 4 seconds
+
+    return () => clearInterval(interval);
+  }, [instructionTexts.length, fadeAnim]);
 
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
@@ -315,9 +385,17 @@ export const HomeScreen: React.FC = () => {
 
       <View style={styles.footer}>
         <View style={styles.instructions}>
-          <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-            Swipe right for 🔥 HOT • Swipe left for ❄️ NOT
-          </Text>
+          <Animated.Text 
+            style={[
+              styles.instructionText, 
+              { 
+                color: theme.textSecondary,
+                opacity: fadeAnim 
+              }
+            ]}
+          >
+            {instructionTexts[currentInstructionIndex]}
+          </Animated.Text>
         </View>
         
         <View style={styles.adSpace}>

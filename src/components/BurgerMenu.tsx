@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Modal,
   TouchableOpacity,
   SafeAreaView,
+  BackHandler,
 } from 'react-native';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
 import { colors, dimensions } from '../constants';
@@ -33,6 +34,22 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
     // Small delay to let the modal close before triggering action
     setTimeout(action, 100);
   };
+
+  // Handle back button when burger menu is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const backAction = () => {
+      if (isOpen) {
+        setIsOpen(false);
+        return true; // Prevent default back behavior
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [isOpen]);
 
   return (
     <>
