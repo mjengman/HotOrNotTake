@@ -56,16 +56,19 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
       {/* Burger Menu Modal */}
       <Modal
         visible={isOpen}
-        transparent
+        transparent={true}
         animationType="fade"
+        statusBarTranslucent={true}
+        presentationStyle="overFullScreen"
         onRequestClose={() => setIsOpen(false)}
       >
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={() => setIsOpen(false)}
-        >
-          <SafeAreaView style={styles.menuContainer}>
+        <View style={StyleSheet.absoluteFillObject}>
+          <TouchableOpacity
+            style={styles.overlay}
+            activeOpacity={1}
+            onPress={() => setIsOpen(false)}
+          >
+            <SafeAreaView style={styles.menuContainer}>
             <View style={[styles.menu, { backgroundColor: theme.background }]}>
               <TouchableOpacity
                 style={[styles.menuItem, { borderBottomColor: theme.border }]}
@@ -107,6 +110,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
             </View>
           </SafeAreaView>
         </TouchableOpacity>
+        </View>
       </Modal>
     </>
   );
