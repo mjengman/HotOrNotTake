@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Text } from 'react-native';
 import mobileAds from 'react-native-google-mobile-ads';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -33,8 +34,10 @@ export default function App() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <HomeScreen />
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <HomeScreen />
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }

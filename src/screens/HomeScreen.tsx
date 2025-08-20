@@ -6,13 +6,12 @@ import {
   StatusBar,
   Text,
   TouchableOpacity,
-  ScrollView,
-  RefreshControl,
   Image,
   BackHandler,
   Animated,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
 import { CategoryDropdown } from '../components/CategoryDropdown';
 import { AdBanner } from '../components/AdBanner';
@@ -26,12 +25,13 @@ import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecentVotesScreen } from './RecentVotesScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
+import { useResponsive } from '../hooks/useResponsive';
 import { deleteVote, getUserVoteForTake } from '../services/voteService';
 // AI seeding disabled for MVP launch
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 // Removed class-based ad service (API issue)
 // import adService from '../services/adService';
-import { colors, dimensions } from '../constants';
+import { colors } from '../constants';
 
 export const HomeScreen: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -45,7 +45,6 @@ export const HomeScreen: React.FC = () => {
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
-  const [refreshing, setRefreshing] = useState(false);
   const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const { user, loading: authLoading, signIn } = useAuth();
@@ -60,6 +59,13 @@ export const HomeScreen: React.FC = () => {
   const { onCardComplete, onSessionEnd } = useInterstitialAds();
   
   const theme = isDarkMode ? colors.dark : colors.light;
+  
+  // Get responsive dimensions for this device profile
+  const responsive = useResponsive();
+  const insets = useSafeAreaInsets();
+  
+  // Create responsive styles
+  const styles = useMemo(() => createStyles(responsive, insets), [responsive, insets]);
 
   // Rotating instruction messages
   const instructionTexts = [
@@ -225,24 +231,11 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  const handleLoadMore = async () => {
-    console.log('🚫 AI generation disabled for MVP launch');
-    // AI generation removed - pure user-content MVP
-    // Users must submit their own takes
-    return;
-  };
+  // AI generation removed - pure user-content MVP
+  // Users must submit their own takes
 
-  const handlePullToRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await refreshTakes();
-      await refreshStats();
-    } catch (error) {
-      console.error('Pull to refresh failed:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
+  // Removed pull-to-refresh due to fixed layout structure
+  // Can be re-implemented with a different trigger if needed
 
   const handleChangeVote = async (take: any) => {
     if (!user) return;
@@ -299,29 +292,17 @@ export const HomeScreen: React.FC = () => {
         backgroundColor={theme.background}
       />
       
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handlePullToRefresh}
-            colors={[theme.primary]}
-            tintColor={theme.primary}
-            enabled={!showMyTakesModal && !showLeaderboardModal && !showRecentVotesModal}
+      {/* Fixed Header Section */}
+      <View style={styles.fixedHeader}>
+        <View style={styles.headerRow}>
+          <BurgerMenu
+            isDarkMode={isDarkMode}
+            onMyTakes={() => setShowMyTakesModal(true)}
+            onLeaderboard={() => setShowLeaderboardModal(true)}
+            onRecentVotes={() => setShowRecentVotesModal(true)}
+            onToggleTheme={toggleTheme}
           />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <BurgerMenu
-              isDarkMode={isDarkMode}
-              onMyTakes={() => setShowMyTakesModal(true)}
-              onLeaderboard={() => setShowLeaderboardModal(true)}
-              onRecentVotes={() => setShowRecentVotesModal(true)}
-              onToggleTheme={toggleTheme}
-            />
-          </View>
+        </View>
         
         <View style={styles.titleContainer}>
           <Image 
@@ -333,18 +314,19 @@ export const HomeScreen: React.FC = () => {
             resizeMode="contain"
           />
         </View>
+        
+        {/* Category Dropdown - part of fixed header */}
+        <View style={styles.categoryContainer}>
+          <CategoryDropdown
+            selectedCategory={selectedCategory}
+            onCategoryChange={handleCategoryChange}
+            isDarkMode={isDarkMode}
+          />
+        </View>
       </View>
 
-      {/* Category Dropdown */}
-      <View style={styles.categoryContainer}>
-        <CategoryDropdown
-          selectedCategory={selectedCategory}
-          onCategoryChange={handleCategoryChange}
-          isDarkMode={isDarkMode}
-        />
-      </View>
-
-      <View style={styles.deckContainer}>
+      {/* Flexible Middle Section - Card fills available space */}
+      <View style={styles.flexibleMiddle}>
         {takesLoading || authLoading ? (
           <LoadingSkeleton isDarkMode={isDarkMode} />
         ) : takesError ? (
@@ -383,7 +365,67 @@ export const HomeScreen: React.FC = () => {
         )}
       </View>
 
-      <View style={styles.footer}>
+      {/* Fixed Bottom Section */}
+      <View style={styles.fixedFooter}>
+        {/* Bottom Buttons Row - moved closer to instructions */}
+        <View style={styles.bottomButtonsRow}>
+          {/* Recent Votes Button */}
+          <AnimatedPressable 
+            style={[
+              styles.bottomButton,
+              styles.recentVotesButton,
+              isDarkMode 
+                ? { backgroundColor: theme.surface } 
+                : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
+            ]} 
+            onPress={handleShowLastVote}
+            scaleValue={0.9}
+            hapticIntensity={8}
+          >
+            <Text style={[styles.buttonIcon, isDarkMode && { color: theme.text }]}>↩️</Text>
+          </AnimatedPressable>
+
+          {/* Skip Button */}
+          <AnimatedPressable 
+            style={[
+              styles.bottomButton,
+              isDarkMode 
+                ? { backgroundColor: theme.surface } 
+                : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }
+            ]} 
+            onPress={() => skipTake(takes[0]?.id)}
+            scaleValue={0.9}
+            hapticIntensity={12}
+          >
+            <Text style={[styles.buttonIcon, isDarkMode ? { color: theme.text } : { color: '#333' }]}>⏭️</Text>
+          </AnimatedPressable>
+        </View>
+
+        {/* Instructions Row - Vote counter + Instructions button */}
+        <View style={styles.instructionsRow}>
+          {/* Vote Counter - left side */}
+          <View style={[styles.voteCounter, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.voteCounterText, { color: '#4CAF50' }]}>
+              Votes: {stats.totalVotes}
+            </Text>
+          </View>
+
+          {/* Instructions Button - right side */}
+          <AnimatedPressable 
+            style={[
+              styles.instructionsButton,
+              { backgroundColor: theme.primary }
+            ]} 
+            onPress={() => setShowInstructionsModal(true)}
+            scaleValue={0.9}
+            hapticIntensity={8}
+          >
+            <Text style={styles.instructionsButtonText}>
+              ❔ Instructions
+            </Text>
+          </AnimatedPressable>
+        </View>
+
         <View style={styles.instructions}>
           <Animated.Text 
             style={[
@@ -497,7 +539,6 @@ export const HomeScreen: React.FC = () => {
       >
         <Text style={styles.fabText}>✏️</Text>
       </TouchableOpacity>
-      </ScrollView>
 
       {/* Instructions Modal */}
       <InstructionsModal
@@ -514,95 +555,121 @@ export const HomeScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+// Create responsive styles function
+const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   container: {
     flex: 1,
+  },
+  fixedHeader: {
+    // backgroundColor: 'yellow',
+    paddingHorizontal: responsive.spacing.md,
+    paddingTop: insets.top + responsive.spacing.xs,
+    paddingBottom: responsive.spacing.xs,
+  },
+  flexibleMiddle: {
+    // backgroundColor: 'green',
+    flex: 1,
+    position: 'relative', // Ensure absolute children position correctly
+  },
+  fixedFooter: {
+    // backgroundColor: 'blue',
+    paddingHorizontal: responsive.spacing.lg,
+    paddingTop: responsive.spacing.md, // Reduce top padding
+    paddingBottom: insets.bottom + responsive.spacing.xs, // Reduce bottom padding
   },
   scrollContent: {
     flexGrow: 1,
   },
   header: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingTop: dimensions.spacing.lg + 10,
-    paddingBottom: dimensions.spacing.xs,
+    paddingHorizontal: responsive.spacing.lg,
+    paddingTop: insets.top + responsive.spacing.lg,
+    paddingBottom: responsive.spacing.xs,
   },
   headerRow: {
+    // backgroundColor: 'purple',
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    marginBottom: dimensions.spacing.xs,
     zIndex: 10,
-    elevation: 10,
+    // elevation: 10, // Remove unwanted shadow/border
   },
   titleContainer: {
     alignItems: 'center',
-    marginBottom: dimensions.spacing.sm,
-    marginTop: -55,
+    justifyContent: 'center',
+    marginBottom: responsive.spacing.sm,
+    marginTop: -responsive.spacing.xxl - responsive.spacing.xs, // Replace -55 with scaled spacing
+    width: '100%',
+    overflow: 'hidden', // Prevent any overflow
   },
   title: {
-    fontSize: dimensions.fontSize.xxlarge,
+    fontSize: responsive.fontSize.xxlarge,
     fontWeight: 'bold',
     textAlign: 'center',
     width: '100%',
   },
   titleBanner: {
-    width: '95%',
-    height: 130,
+    // backgroundColor: 'aqua',
+    // For L profile (baseline/Pixel 8), use original exact dimensions
+    // For other profiles, scale appropriately
+    width: responsive.profile === 'L' ? '95%' : Math.min(responsive.screen.availableWidth * 0.95, 548),
+    height: responsive.profile === 'L' ? 110 : undefined,
+    // Only use aspectRatio for non-L profiles
+    ...(responsive.profile !== 'L' && { aspectRatio: 548 / 130 }),
     alignSelf: 'center',
   },
   statsContainer: {
     alignItems: 'center',
-    marginBottom: dimensions.spacing.xs,
+    marginBottom: responsive.spacing.xs,
   },
   statsText: {
-    fontSize: dimensions.fontSize.medium,
+    fontSize: responsive.fontSize.medium,
     fontWeight: '600',
   },
   categoryContainer: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingTop: 0,
-    marginTop: -3,
-    zIndex: 1, // Lower z-index so cards can animate above it
-    elevation: 1, // For Android shadow
+    // backgroundColor: 'red',
+    paddingHorizontal: responsive.spacing.lg,
+    paddingTop: responsive.spacing.xs,
+    paddingBottom: responsive.spacing.sm,
+    zIndex: 1,
+    // elevation: 1, // Remove unwanted shadow/border
   },
   deckContainer: {
+    // backgroundColor: 'green',
     flex: 1,
     justifyContent: 'center',
-    marginTop: -40, // Pull the deck up but leave space for category dropdown
+    alignItems: 'center',
   },
   loadingContainer: {
+    // backgroundColor: 'green',
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: dimensions.fontSize.large,
+    fontSize: responsive.fontSize.large,
     fontWeight: '500',
   },
   errorText: {
-    fontSize: dimensions.fontSize.medium,
+    fontSize: responsive.fontSize.medium,
     fontWeight: '500',
     textAlign: 'center',
-    marginBottom: dimensions.spacing.md,
+    marginBottom: responsive.spacing.md,
   },
   retryButton: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: responsive.spacing.lg,
+    paddingVertical: responsive.spacing.md,
     borderRadius: 8,
   },
   retryButtonText: {
-    fontSize: dimensions.fontSize.medium,
+    fontSize: responsive.fontSize.medium,
     fontWeight: '600',
-  },
-  footer: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingBottom: dimensions.spacing.md,
   },
   instructions: {
     alignItems: 'center',
-    marginBottom: dimensions.spacing.sm,
+    // paddingTop: responsive.spacing.sm,
+    marginBottom: responsive.spacing.sm,
   },
   instructionText: {
-    fontSize: dimensions.fontSize.small,
+    fontSize: responsive.fontSize.small,
     textAlign: 'center',
     fontWeight: '500',
   },
@@ -610,40 +677,117 @@ const styles = StyleSheet.create({
     minHeight: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: dimensions.spacing.sm,
+    // marginTop: responsive.spacing.sm,
     backgroundColor: 'transparent',
   },
+  bottomButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: responsive.spacing.xs, // Reduce spacing to move closer to instructions
+    gap: 20,
+  },
+  instructionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center', // Center the instructions button
+    alignItems: 'center',
+    marginTop: responsive.spacing.sm,
+    marginBottom: responsive.spacing.sm,
+    position: 'relative', // Allow absolute positioning of vote counter
+  },
+  bottomButton: {
+    width: 45,
+    height: 45,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // Add shadow/elevation
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 3.84,
+  },
+  recentVotesButton: {
+    marginRight: 10,
+  },
+  buttonIcon: {
+    fontSize: responsive.fontSize.large,
+    fontWeight: 'bold',
+  },
+  voteCounter: {
+    position: 'absolute',
+    left: 0, // Position on far left
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    // Add shadow/elevation
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 2.22,
+  },
+  voteCounterText: {
+    fontSize: responsive.fontSize.small,
+    fontWeight: 'bold',
+  },
+  instructionsButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    // Add shadow/elevation
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 3.84,
+  },
+  instructionsButtonText: {
+    color: '#FFFFFF',
+    fontSize: responsive.fontSize.small,
+    fontWeight: 'bold',
+  },
   emptySubtext: {
-    fontSize: dimensions.fontSize.medium,
+    fontSize: responsive.fontSize.medium,
     textAlign: 'center',
-    marginTop: dimensions.spacing.sm,
-    marginBottom: dimensions.spacing.lg,
+    marginTop: responsive.spacing.sm,
+    marginBottom: responsive.spacing.lg,
   },
   emptySubmitButton: {
-    paddingHorizontal: dimensions.spacing.xl,
-    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: responsive.spacing.xl,
+    paddingVertical: responsive.spacing.md,
     borderRadius: 25,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptySubmitButtonText: {
-    fontSize: dimensions.fontSize.large,
+    fontSize: responsive.fontSize.large,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
   adPlaceholder: {
-    fontSize: dimensions.fontSize.small,
+    fontSize: responsive.fontSize.small,
     textAlign: 'center',
     fontStyle: 'italic',
   },
   fabButton: {
     position: 'absolute',
-    bottom: 130,
-    right: dimensions.spacing.lg,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    bottom: 130, // Match MyTakesScreen positioning
+    right: responsive.spacing.lg,
+    width: responsive.iconSize.xlarge + 8, // Scale from 56 to responsive
+    height: responsive.iconSize.xlarge + 8,
+    borderRadius: (responsive.iconSize.xlarge + 8) / 2,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 8,
@@ -656,6 +800,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4.65,
   },
   fabText: {
-    fontSize: 24,
+    fontSize: responsive.fontSize.xlarge,
   },
 });

@@ -209,6 +209,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   cardContainer: {
+    backgroundColor: 'green',
     marginBottom: dimensions.spacing.lg,
     alignItems: 'center',
   },

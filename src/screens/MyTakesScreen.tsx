@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../hooks';
+import { useResponsive } from '../hooks/useResponsive';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, dimensions } from '../constants';
 import { Take } from '../types';
 import { getUserSubmittedTakes, deleteTake } from '../services/takeService';
@@ -28,11 +30,16 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
   refreshTrigger,
 }) => {
   const { user } = useAuth();
+  const responsive = useResponsive();
+  const insets = useSafeAreaInsets();
   const [takes, setTakes] = useState<Take[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
   const theme = isDarkMode ? colors.dark : colors.light;
+  
+  // Create responsive styles
+  const styles = useMemo(() => createStyles(responsive, insets), [responsive, insets]);
 
   const loadUserTakes = async () => {
     if (!user) return;
@@ -298,7 +305,8 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+// Create responsive styles function
+const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -404,7 +412,7 @@ const styles = StyleSheet.create({
     marginBottom: dimensions.spacing.sm,
   },
   categoryContainer: {
-    marginBottom: dimensions.spacing.md,
+    // marginBottom: dimensions.spacing.md,
   },
   categoryText: {
     fontSize: dimensions.fontSize.small,
@@ -483,11 +491,11 @@ const styles = StyleSheet.create({
   },
   fabButton: {
     position: 'absolute',
-    bottom: 130,
-    right: dimensions.spacing.lg,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    bottom: 130, // Keep original correct position
+    right: responsive.spacing.lg,
+    width: responsive.iconSize.xlarge + 8, // Use responsive sizing
+    height: responsive.iconSize.xlarge + 8,
+    borderRadius: (responsive.iconSize.xlarge + 8) / 2,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 8,
@@ -500,6 +508,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4.65,
   },
   fabText: {
-    fontSize: 24,
+    fontSize: responsive.fontSize.xlarge,
   },
 });

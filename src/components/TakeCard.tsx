@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Take } from '../types';
 import { colors, dimensions } from '../constants';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface TakeCardProps {
   take: Take;
@@ -33,6 +34,9 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   onChangeVote,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
+  const responsive = useResponsive();
+  
+  // Create dynamic styles with responsive dimensions
   
   // Calculate percentages for the reveal
   const totalVotes = take.totalVotes || 0;
@@ -40,7 +44,17 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.card }]}>
+    <View style={[
+      styles.card, 
+      { 
+        backgroundColor: theme.card,
+        width: responsive.card.width,
+        // Remove fixed height - let card fill available container space
+        borderRadius: responsive.card.borderRadius,
+        padding: responsive.spacing.lg,
+        flex: 1, // Fill available height in cardContainer
+      }
+    ]}>
       <View style={styles.header}>
         <View style={[styles.categoryBadge, { backgroundColor: theme.accent + '20' }]}>
           <Text style={[styles.category, { color: theme.accent }]}>
@@ -112,16 +126,31 @@ export const TakeCard: React.FC<TakeCardProps> = ({
             )}
             <View style={styles.percentageContainer}>
               <View style={styles.percentageItem}>
-                <Text style={[styles.bigPercentage, { color: theme.not }]}>
+                <Text style={[
+                  styles.bigPercentage, 
+                  { 
+                    color: theme.not,
+                    fontSize: responsive.fontSize.xxlarge + 4 // Responsive scaling from 36
+                  }
+                ]}>
                   {notPercentage}%
                 </Text>
                 <Text style={[styles.percentageLabel, { color: theme.textSecondary }]}>
                   NOT
                 </Text>
               </View>
-              <View style={styles.percentageDivider} />
+              <View style={[
+                styles.percentageDivider,
+                { height: responsive.spacing.xxl + responsive.spacing.sm } // Responsive scaling from 50
+              ]} />
               <View style={styles.percentageItem}>
-                <Text style={[styles.bigPercentage, { color: theme.hot }]}>
+                <Text style={[
+                  styles.bigPercentage, 
+                  { 
+                    color: theme.hot,
+                    fontSize: responsive.fontSize.xxlarge + 4 // Responsive scaling from 36
+                  }
+                ]}>
                   {hotPercentage}%
                 </Text>
                 <Text style={[styles.percentageLabel, { color: theme.textSecondary }]}>
@@ -141,11 +170,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    width: dimensions.card.width,
-    height: dimensions.card.height,
-    borderRadius: dimensions.card.borderRadius,
-    padding: dimensions.spacing.lg,
-    margin: dimensions.spacing.md,
+    // Dimensions are set dynamically in component
+    alignSelf: 'center', // Ensure card centers itself
     elevation: 12,
     shadowColor: '#000',
     shadowOffset: {
@@ -155,6 +181,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     justifyContent: 'space-between',
+    minHeight: '100%', // Ensure card fills full container height
+    height: '100%', // Ensure card fills full container height
   },
   header: {
     alignItems: 'center',
@@ -215,6 +243,8 @@ const styles = StyleSheet.create({
   revealContainer: {
     alignItems: 'center',
     paddingVertical: dimensions.spacing.md,
+    flex: 1, // Fill available space to match front card layout
+    justifyContent: 'center', // Center content vertically
   },
   voteSection: {
     alignItems: 'center',
@@ -245,7 +275,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bigPercentage: {
-    fontSize: 36,
+    fontSize: 36, // Will be overridden by responsive calculation
     fontWeight: 'bold',
     marginBottom: 4,
   },

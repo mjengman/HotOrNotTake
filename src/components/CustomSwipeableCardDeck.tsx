@@ -28,6 +28,7 @@ import { TakeCard } from './TakeCard';
 import { VoteIndicator } from './VoteIndicator';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
 import { dimensions, colors } from '../constants';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface CustomSwipeableCardDeckProps {
   takes: Take[];
@@ -73,6 +74,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   onChangeVote,
   totalVotes = 0,
 }) => {
+  const responsive = useResponsive();
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
   const [lastVote, setLastVote] = useState<'hot' | 'not' | null>(null);
@@ -528,13 +530,25 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       ],
       opacity: 1,
       zIndex: frozenSV.value ? 3 : 1, // Higher during promotion, but lower than stats (5)
+      position: 'absolute' as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0, // Fill full container height
     };
   });
 
   // 3D flip animations
   const frontFaceStyle = useAnimatedStyle(() => {
     if (ANDROID_SAFE_FLIP) {
-      return { opacity: 1 - flipSV.value };
+      return { 
+        opacity: 1 - flipSV.value,
+        position: 'absolute' as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0, // Fill full container height
+      };
     }
     const deg = interpolate(flipSV.value, [0, 1], [0, 180]);
     const opacity = interpolate(flipSV.value, [0, 0.45, 0.5], [1, 1, 0], Extrapolate.CLAMP);
@@ -542,6 +556,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       transform: [{ perspective: 1000 }, { rotateY: `${deg}deg` }],
       opacity,
       backfaceVisibility: 'hidden' as const,
+      position: 'absolute' as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0, // Fill full container height
     };
   });
   
@@ -549,7 +568,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     if (ANDROID_SAFE_FLIP) {
       return { 
         opacity: flipSV.value,
-        ...absoluteFill,
+        position: 'absolute' as const,
+        top: 0,
+        left: 0,
+        right: 0,
       };
     }
     const deg = interpolate(flipSV.value, [0, 1], [180, 360]);
@@ -558,7 +580,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       transform: [{ perspective: 1000 }, { rotateY: `${deg}deg` }],
       opacity,
       backfaceVisibility: 'hidden' as const,
-      ...absoluteFill,
+      position: 'absolute' as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0, // Fill full container height
     };
   });
 
@@ -611,6 +637,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       ],
       opacity: 1,
       zIndex: 0,
+      position: 'absolute' as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0, // Fill full container height
     };
   });
 
@@ -701,6 +732,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     );
   }
 
+  // Create dynamic styles with responsive card height
+  const dynamicStyles = React.useMemo(() => ({
+    cardContainer: {
+      // backgroundColor: 'orange',
+      position: 'relative' as const, // Use relative positioning to respect flexibleMiddle
+      alignItems: 'center' as const,
+      justifyContent: 'flex-start' as const,
+      flex: 1, // Fill available flexibleMiddle space - let flexibleMiddle constrain the height
+    }
+  }), []);
+
   return (
     <View style={styles.container}>
       <VoteIndicator vote={currentVote} isDarkMode={isDarkMode} />
@@ -708,7 +750,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       {/* Third card (furthest back - prevents flicker during promotion) */}
       <Animated.View 
         key="third-slot" 
-        style={[styles.cardContainer, styles.nextCard, thirdCardStyle]}
+        style={[dynamicStyles.cardContainer, styles.nextCard, thirdCardStyle]}
         pointerEvents="none"
         collapsable={false}
       >
@@ -726,7 +768,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       {/* Next card (background - always mounted) */}
       <Animated.View 
         key="next-slot" 
-        style={[styles.cardContainer, styles.nextCard, nextCardStyle]}
+        style={[dynamicStyles.cardContainer, styles.nextCard, nextCardStyle]}
         pointerEvents="none"
         collapsable={false}
       >
@@ -745,7 +787,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       <PanGestureHandler onGestureEvent={gestureHandler}>
         <Animated.View 
           key="current-slot" 
-          style={[styles.cardContainer, card3DStyle]}
+          style={[dynamicStyles.cardContainer, card3DStyle]}
           collapsable={false}
         >
           {/* 👻 Invisible sizer only when we actually have a card */}
@@ -762,7 +804,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           {/* FRONT */}
           {!!renderCurrent && (
             <Animated.View
-              style={[absoluteFill, frontFaceStyle]}
+              style={[frontFaceStyle]}
               pointerEvents={isCardFlipped ? 'none' : 'auto'}
             >
               <TakeCard
@@ -780,7 +822,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           {/* BACK (stats) */}
           {!!renderCurrent && (
             <Animated.View
-              style={[absoluteFill, backFaceStyle]}
+              style={[backFaceStyle]}
               pointerEvents={isCardFlipped ? 'auto' : 'none'}
             >
               <TakeCard
@@ -820,62 +862,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         </Animated.View>
       </PanGestureHandler>
       
-      {/* Recent Votes Button */}
-      {onShowRecentVotes && (
-        <AnimatedPressable 
-          style={[
-            styles.skipButton,
-            styles.recentVotesButton,
-            isDarkMode 
-              ? { backgroundColor: theme.surface } 
-              : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
-          ]} 
-          onPress={onShowRecentVotes}
-          scaleValue={0.9}
-          hapticIntensity={8}
-        >
-          <Text style={[styles.recentVotesButtonIcon, isDarkMode && { color: theme.text }]}>↩️</Text>
-        </AnimatedPressable>
-      )}
-
-      {/* Skip Button */}
-      <AnimatedPressable 
-        style={[
-          styles.skipButton,
-          isDarkMode 
-            ? { backgroundColor: theme.surface } // Match card color in dark mode
-            : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }
-        ]} 
-        onPress={() => handleSkipWithAnimation('up')}
-        scaleValue={0.9}
-        hapticIntensity={12}
-      >
-        <Text style={[styles.skipButtonText, isDarkMode ? { color: theme.text } : { color: '#333' }]}>⏭️</Text>
-      </AnimatedPressable>
-
-      {/* Vote Counter - Bottom Left */}
-      <View style={[styles.voteCounter, { backgroundColor: theme.surface }]}>
-        <Text style={[styles.voteCounterText, { color: '#4CAF50' }]}>
-          Votes: {totalVotes}
-        </Text>
-      </View>
-
-      {/* Instructions Button */}
-      {onShowInstructions && (
-        <AnimatedPressable 
-          style={[
-            styles.instructionsButton,
-            { backgroundColor: theme.primary }
-          ]} 
-          onPress={onShowInstructions}
-          scaleValue={0.9}
-          hapticIntensity={8}
-        >
-          <Text style={styles.instructionsButtonText}>
-            ❔ Instructions
-          </Text>
-        </AnimatedPressable>
-      )}
       
       {/* One-frame blocker to avoid any compositor seam */}
       {useFrozen && <View pointerEvents="none" style={StyleSheet.absoluteFill} />}
@@ -887,13 +873,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start', // Position at top of available space
   },
   cardContainer: {
-    position: 'absolute',
+    // backgroundColor: 'orange',
+    position: 'absolute', // Position absolutely within flexibleMiddle
+    top: 10, // Small margin from top of flexibleMiddle
+    left: 0,
+    right: 0,
+    // height: 400, // Fixed height to prevent covering buttons - will make dynamic
     alignItems: 'center',
-    justifyContent: 'center',
-    bottom: 110
+    justifyContent: 'flex-start',
+    width: '100%',
   },
   nextCard: {
     // Static styles moved to nextCardStyle for animation
@@ -903,6 +894,7 @@ const styles = StyleSheet.create({
   },
   ghostSizer: {
     opacity: 0, // invisible, but participates in layout
+    position: 'absolute', // Don't affect layout
   },
   endContainer: {
     alignItems: 'center',
@@ -968,7 +960,7 @@ const styles = StyleSheet.create({
   },
   overlayBottom: {
     position: 'absolute',
-    bottom: 120,
+    bottom: dimensions.spacing.xxl * 2.5,
     left: 20,
     right: 20,
     alignItems: 'center',
@@ -980,98 +972,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  skipButton: {
-    position: 'absolute',
-    bottom: 70,
-    left: '50%',
-    marginLeft: 5, // Small gap from center - skip on right
-    backgroundColor: 'rgba(0,0,0,0.7)', // Keep as default, will override inline for dark mode
-    width: 45,
-    height: 45,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  skipButtonText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  recentVotesButton: {
-    position: 'absolute',
-    bottom: 70,
-    left: '50%',
-    marginLeft: -55, // Position to left of center (45 width + 10 gap)
-    width: 45,
-    height: 45,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 0, // Override the skip button padding
-    paddingVertical: 0, // Override the skip button padding
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 2.62,
-  },
-  recentVotesButtonIcon: {
-    fontSize: dimensions.fontSize.xlarge,
-  },
-  voteCounter: {
-    position: 'absolute',
-    bottom: 15,
-    left: dimensions.spacing.lg,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-  },
-  voteCounterText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  instructionsButton: {
-    position: 'absolute',
-    bottom: 15, // Position below skip button
-    alignSelf: 'center',
-    // backgroundColor removed - set dynamically to theme.primary
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
-    borderWidth: 0, // Remove any default border
-    overflow: 'hidden', // Ensures border radius clips properly
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  instructionsButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

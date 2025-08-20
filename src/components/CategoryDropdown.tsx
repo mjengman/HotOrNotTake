@@ -144,7 +144,7 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: dimensions.spacing.md,
+    // marginBottom: dimensions.spacing.md, // Remove bottom margin
     zIndex: 1000, // Ensure it's above other elements
     elevation: 10, // For Android
   },

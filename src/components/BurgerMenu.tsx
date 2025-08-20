@@ -9,7 +9,8 @@ import {
   BackHandler,
 } from 'react-native';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
-import { colors, dimensions } from '../constants';
+import { colors } from '../constants';
+import { useResponsive } from '../hooks/useResponsive';
 
 interface BurgerMenuProps {
   isDarkMode: boolean;
@@ -28,6 +29,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const theme = isDarkMode ? colors.dark : colors.light;
+  const responsive = useResponsive();
 
   const handleMenuItemPress = (action: () => void) => {
     setIsOpen(false);
@@ -57,7 +59,13 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
       <AnimatedPressable
         style={[
           styles.burgerButton,
-          { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }
+          { 
+            backgroundColor: isDarkMode ? theme.surface : '#F0F0F1',
+            width: responsive.iconSize.xlarge + 2, // Scale from 45 to responsive
+            height: responsive.iconSize.xlarge + 2,
+            borderRadius: (responsive.iconSize.xlarge + 2) / 2,
+            marginTop: responsive.spacing.sm + 2, // Scale from 10 to responsive
+          }
         ]}
         onPress={() => setIsOpen(true)}
         scaleValue={0.9}
@@ -85,7 +93,13 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
             activeOpacity={1}
             onPress={() => setIsOpen(false)}
           >
-            <SafeAreaView style={styles.menuContainer}>
+            <SafeAreaView style={[
+              styles.menuContainer,
+              {
+                marginTop: responsive.spacing.xxl * 2, // Scale from 100 to responsive  
+                marginLeft: responsive.spacing.lg,
+              }
+            ]}>
             <View style={[styles.menu, { backgroundColor: theme.background }]}>
               <TouchableOpacity
                 style={[styles.menuItem, { borderBottomColor: theme.border }]}
@@ -135,12 +149,12 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
 
 const styles = StyleSheet.create({
   burgerButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 40,
+    width: 45, // Will be overridden inline
+    height: 45, // Will be overridden inline  
+    borderRadius: 40, // Will be overridden inline
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 10, // Will be overridden inline
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: {
@@ -167,8 +181,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   menuContainer: {
-    marginTop: 100, // Position below header
-    marginLeft: dimensions.spacing.lg,
+    marginTop: 100, // Will be overridden inline
+    marginLeft: 24, // Placeholder, will use responsive
   },
   menu: {
     borderRadius: 12,
@@ -185,15 +199,15 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: 24, // Placeholder, will use responsive
+    paddingVertical: 16, // Placeholder, will use responsive
   },
   menuIcon: {
-    fontSize: dimensions.fontSize.xlarge,
-    marginRight: dimensions.spacing.md,
+    fontSize: 24, // Placeholder, will use responsive
+    marginRight: 16, // Placeholder, will use responsive
   },
   menuText: {
-    fontSize: dimensions.fontSize.medium,
+    fontSize: 16, // Placeholder, will use responsive
     fontWeight: '500',
     flex: 1,
   },
