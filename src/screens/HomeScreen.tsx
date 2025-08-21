@@ -9,6 +9,7 @@ import {
   Image,
   BackHandler,
   Animated,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +28,7 @@ import { RecentVotesScreen } from './RecentVotesScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
 import { useResponsive } from '../hooks/useResponsive';
 import { deleteVote, getUserVoteForTake } from '../services/voteService';
+import { getCommunityStats } from '../services/userService';
 // AI seeding disabled for MVP launch
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 // Removed class-based ad service (API issue)
@@ -46,6 +48,7 @@ export const HomeScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
   const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
+  const [communityTotalVotes, setCommunityTotalVotes] = useState<number>(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
@@ -104,6 +107,27 @@ export const HomeScreen: React.FC = () => {
       signIn().catch(console.error);
     }
   }, [user, authLoading, signIn]);
+
+  // Fetch community stats on mount and key actions
+  const refreshCommunityStats = async () => {
+    const stats = await getCommunityStats();
+    setCommunityTotalVotes(stats.totalVotes);
+  };
+
+  // Initial load and periodic refresh
+  React.useEffect(() => {
+    refreshCommunityStats();
+    
+    // Refresh every 60 seconds if the app is active
+    const interval = setInterval(refreshCommunityStats, 60000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Refresh on category change
+  React.useEffect(() => {
+    refreshCommunityStats();
+  }, [selectedCategory]);
 
   // Handle back button/gesture to close modals in proper order
   useEffect(() => {
@@ -175,6 +199,8 @@ export const HomeScreen: React.FC = () => {
       onCardComplete();
       // Update vote counter immediately
       await refreshStats();
+      // Also refresh community stats
+      await refreshCommunityStats();
       
       // Set lastVotedTake with updated vote counts after vote submission
       if (votedTake) {
@@ -300,6 +326,7 @@ export const HomeScreen: React.FC = () => {
             onMyTakes={() => setShowMyTakesModal(true)}
             onLeaderboard={() => setShowLeaderboardModal(true)}
             onRecentVotes={() => setShowRecentVotesModal(true)}
+            onInstructions={() => setShowInstructionsModal(true)}
             onToggleTheme={toggleTheme}
           />
         </View>
@@ -401,29 +428,15 @@ export const HomeScreen: React.FC = () => {
           </AnimatedPressable>
         </View>
 
-        {/* Instructions Row - Vote counter + Instructions button */}
-        <View style={styles.instructionsRow}>
-          {/* Vote Counter - left side */}
+        {/* Vote Counter Row - showing personal and community totals */}
+        <View style={styles.voteCounterRow}>
           <View style={[styles.voteCounter, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.voteCounterText, { color: '#4CAF50' }]}>
-              Votes: {stats.totalVotes}
+            <Text style={[styles.voteCounterText, { color: theme.text }]}>
+              <Text style={{ color: '#4CAF50', fontWeight: 'bold' }}>Your votes: {stats.totalVotes}</Text>
+              <Text style={{ color: theme.textSecondary }}> | </Text>
+              <Text style={{ color: '#6B7280' }}>Community: {communityTotalVotes.toLocaleString()}</Text>
             </Text>
           </View>
-
-          {/* Instructions Button - right side */}
-          <AnimatedPressable 
-            style={[
-              styles.instructionsButton,
-              { backgroundColor: theme.primary }
-            ]} 
-            onPress={() => setShowInstructionsModal(true)}
-            scaleValue={0.9}
-            hapticIntensity={8}
-          >
-            <Text style={styles.instructionsButtonText}>
-              ❔ Instructions
-            </Text>
-          </AnimatedPressable>
         </View>
 
         <View style={styles.instructions}>
@@ -563,7 +576,7 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   fixedHeader: {
     // backgroundColor: 'yellow',
     paddingHorizontal: responsive.spacing.md,
-    paddingTop: insets.top + responsive.spacing.xs,
+    paddingTop: Platform.OS === 'ios' ? 0 : insets.top + responsive.spacing.xs,
     paddingBottom: responsive.spacing.xs,
   },
   flexibleMiddle: {
@@ -575,7 +588,7 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     // backgroundColor: 'blue',
     paddingHorizontal: responsive.spacing.lg,
     paddingTop: responsive.spacing.md, // Reduce top padding
-    paddingBottom: insets.bottom + responsive.spacing.xs, // Reduce bottom padding
+    paddingBottom: Platform.OS === 'ios' ? 0 : insets.bottom + responsive.spacing.xs, // Reduce bottom padding
   },
   scrollContent: {
     flexGrow: 1,
@@ -687,13 +700,12 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     marginBottom: responsive.spacing.xs, // Reduce spacing to move closer to instructions
     gap: 20,
   },
-  instructionsRow: {
+  voteCounterRow: {
     flexDirection: 'row',
-    justifyContent: 'center', // Center the instructions button
+    justifyContent: 'center', // Center the vote counter
     alignItems: 'center',
     marginTop: responsive.spacing.sm,
     marginBottom: responsive.spacing.sm,
-    position: 'relative', // Allow absolute positioning of vote counter
   },
   bottomButton: {
     width: 45,
@@ -719,29 +731,10 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     fontWeight: 'bold',
   },
   voteCounter: {
-    position: 'absolute',
-    left: 0, // Position on far left
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    // Add shadow/elevation
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.12,
-    shadowRadius: 2.22,
-  },
-  voteCounterText: {
-    fontSize: responsive.fontSize.small,
-    fontWeight: 'bold',
-  },
-  instructionsButton: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 25,
+    minWidth: 200, // Ensure enough space for the expanded content
     // Add shadow/elevation
     elevation: 4,
     shadowColor: '#000',
@@ -752,9 +745,8 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 3.84,
   },
-  instructionsButtonText: {
-    color: '#FFFFFF',
-    fontSize: responsive.fontSize.small,
+  voteCounterText: {
+    fontSize: responsive.fontSize.medium,
     fontWeight: 'bold',
   },
   emptySubtext: {
@@ -783,7 +775,7 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   },
   fabButton: {
     position: 'absolute',
-    bottom: 130, // Match MyTakesScreen positioning
+    bottom: 160, // Moved up by 10px from 130
     right: responsive.spacing.lg,
     width: responsive.iconSize.xlarge + 8, // Scale from 56 to responsive
     height: responsive.iconSize.xlarge + 8,

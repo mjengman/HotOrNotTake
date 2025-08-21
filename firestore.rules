@@ -57,7 +57,8 @@ service cloud.firestore {
     // Votes collection
     match /votes/{voteId} {
       // Users can read their own votes
-      allow read: if isOwner(resource.data.userId);
+      // Also allow any authenticated user to read for aggregate queries
+      allow read: if isAuthenticated();
       
       // Users can create votes
       allow create: if isAuthenticated() &&

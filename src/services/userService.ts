@@ -6,6 +6,8 @@ import {
   increment,
   arrayUnion,
   Timestamp,
+  collection,
+  getCountFromServer,
 } from 'firebase/firestore';
 import { 
   signInAnonymously,
@@ -194,5 +196,39 @@ export const signOut = async (): Promise<void> => {
   } catch (error) {
     console.error('Error signing out:', error);
     throw new Error('Failed to sign out');
+  }
+};
+
+// Get global community stats (total votes from all users)
+export const getCommunityStats = async (): Promise<{ totalVotes: number }> => {
+  try {
+    // Alternative approach: sum up totalVotes from all approved takes
+    // This matches what users can actually see and vote on
+    const { getDocs, collection: firestoreCollection, query, where } = await import('firebase/firestore');
+    
+    // Only query approved takes (which all users can read)
+    const takesQuery = query(
+      firestoreCollection(db, 'takes'),
+      where('isApproved', '==', true)
+    );
+    
+    const takesSnapshot = await getDocs(takesQuery);
+    let totalVotes = 0;
+    
+    takesSnapshot.forEach((doc) => {
+      const take = doc.data();
+      // Each take has totalVotes which is the sum of hotVotes + notVotes
+      totalVotes += (take.totalVotes || 0);
+    });
+    
+    return {
+      totalVotes,
+    };
+  } catch (error) {
+    console.error('Error fetching community stats:', error);
+    // Return a fallback value rather than throwing
+    return {
+      totalVotes: 0,
+    };
   }
 };

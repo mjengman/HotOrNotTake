@@ -572,6 +572,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         top: 0,
         left: 0,
         right: 0,
+        bottom: 0, // ADD MISSING BOTTOM
       };
     }
     const deg = interpolate(flipSV.value, [0, 1], [180, 360]);

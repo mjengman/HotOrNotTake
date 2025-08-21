@@ -36,12 +36,55 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const theme = isDarkMode ? colors.dark : colors.light;
   const responsive = useResponsive();
   
-  // Create dynamic styles with responsive dimensions
+  // Dynamic text sizing based on card height
+  // For smaller cards (< 400px), reduce text size for better readability
+  const getAdaptiveTextSize = () => {
+    const cardHeight = responsive.card.height;
+    if (cardHeight < 400) {
+      // Small cards: use responsive medium instead of large
+      return responsive.fontSize.medium;
+    } else if (cardHeight < 500) {
+      // Medium cards: scale down responsive large slightly
+      return responsive.fontSize.large * 0.9;
+    } else {
+      // Large cards: use full responsive large
+      return responsive.fontSize.large;
+    }
+  };
+  
+  // Adaptive spacing for small cards to give text more room
+  const getAdaptiveSpacing = () => {
+    const cardHeight = responsive.card.height;
+    if (cardHeight < 400) {
+      return {
+        cardPadding: responsive.spacing.md, // Reduce from lg (24px) to md (16px)
+        headerMargin: responsive.spacing.sm, // Reduce from md (16px) to sm (8px)
+        footerMargin: responsive.spacing.md, // Reduce from lg (24px) to md (16px)
+        contentPadding: responsive.spacing.sm, // Reduce content horizontal padding
+      };
+    } else {
+      return {
+        cardPadding: responsive.spacing.lg,
+        headerMargin: responsive.spacing.md,
+        footerMargin: responsive.spacing.lg,
+        contentPadding: responsive.spacing.md,
+      };
+    }
+  };
+  
+  const adaptiveTextSize = getAdaptiveTextSize();
+  const adaptiveSpacing = getAdaptiveSpacing();
   
   // Calculate percentages for the reveal
-  const totalVotes = take.totalVotes || 0;
+  // Some takes may not have totalVotes, so calculate from individual votes
+  const totalVotes = take.totalVotes || (take.hotVotes + take.notVotes) || 0;
+  
+  
+  // Calculate percentages for the reveal (already calculated totalVotes above for debug)
   const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
   const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
+  
+  
 
   return (
     <View style={[
@@ -51,25 +94,48 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         width: responsive.card.width,
         // Remove fixed height - let card fill available container space
         borderRadius: responsive.card.borderRadius,
-        padding: responsive.spacing.lg,
+        padding: adaptiveSpacing.cardPadding,
         flex: 1, // Fill available height in cardContainer
       }
     ]}>
-      <View style={styles.header}>
+      <View style={[
+        styles.header,
+        { marginBottom: adaptiveSpacing.headerMargin }
+      ]}>
         <View style={[styles.categoryBadge, { backgroundColor: theme.accent + '20' }]}>
-          <Text style={[styles.category, { color: theme.accent }]}>
+          <Text style={[
+            styles.category, 
+            { 
+              color: theme.accent,
+              fontSize: responsive.fontSize.small
+            }
+          ]}>
             {take.category?.toUpperCase() || 'GENERAL'}
           </Text>
         </View>
       </View>
       
-      <View style={styles.content}>
-        <Text style={[styles.takeText, { color: theme.text }]}>
+      <View style={[
+        styles.content,
+        { paddingHorizontal: adaptiveSpacing.contentPadding }
+      ]}>
+        <Text style={[
+          styles.takeText, 
+          { 
+            color: theme.text,
+            fontSize: adaptiveTextSize,
+            // Adjust line height proportionally to font size
+            lineHeight: adaptiveTextSize * 1.4,
+          }
+        ]}>
           {take.text}
         </Text>
       </View>
       
-      <View style={styles.footer}>
+      <View style={[
+        styles.footer,
+        { marginTop: adaptiveSpacing.footerMargin }
+      ]}>
         {!isFlipped ? (
           // Front of card - voting buttons
           <View style={styles.voteStats}>
@@ -79,10 +145,22 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               disabled={!onNotPress}
               activeOpacity={0.7}
             >
-              <Text style={[styles.statNumber, { color: theme.not }]}>
+              <Text style={[
+                styles.statNumber, 
+                { 
+                  color: theme.not,
+                  fontSize: responsive.fontSize.large
+                }
+              ]}>
                 {showStats ? take.notVotes.toLocaleString() : '?'}
               </Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+              <Text style={[
+                styles.statLabel, 
+                { 
+                  color: theme.textSecondary,
+                  fontSize: responsive.fontSize.small
+                }
+              ]}>
                 ❄️ NOT
               </Text>
             </TouchableOpacity>
@@ -95,20 +173,44 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               disabled={!onHotPress}
               activeOpacity={0.7}
             >
-              <Text style={[styles.statNumber, { color: theme.hot }]}>
+              <Text style={[
+                styles.statNumber, 
+                { 
+                  color: theme.hot,
+                  fontSize: responsive.fontSize.large
+                }
+              ]}>
                 {showStats ? take.hotVotes.toLocaleString() : '?'}
               </Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+              <Text style={[
+                styles.statLabel, 
+                { 
+                  color: theme.textSecondary,
+                  fontSize: responsive.fontSize.small
+                }
+              ]}>
                 🔥 HOT
               </Text>
             </TouchableOpacity>
           </View>
         ) : (
           // Back of card - stats reveal
-          <View style={styles.revealContainer}>
+          <View style={[
+            styles.revealContainer, 
+            {
+              backgroundColor: theme.card,
+            }
+          ]}>
             {userVote && (
-              <View style={styles.voteSection}>
-                <Text style={[styles.yourVote, { color: theme.text }]}>
+              <View style={[styles.voteSection, { minHeight: 40, justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={[
+                  styles.yourVote, 
+                  { 
+                    color: theme.text,
+                    fontSize: responsive.fontSize.medium,
+                    textAlign: 'center'
+                  }
+                ]}>
                   You voted {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
                 </Text>
                 {onChangeVote && (
@@ -117,50 +219,93 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                     onPress={() => onChangeVote(take)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.changeVoteText, { color: theme.textSecondary }]}>
+                    <Text style={[
+                      styles.changeVoteText, 
+                      { 
+                        color: theme.primary,
+                        fontSize: responsive.fontSize.small,
+                        textAlign: 'center'
+                      }
+                    ]}>
                       Change your vote
                     </Text>
                   </TouchableOpacity>
                 )}
               </View>
             )}
-            <View style={styles.percentageContainer}>
-              <View style={styles.percentageItem}>
-                <Text style={[
-                  styles.bigPercentage, 
-                  { 
-                    color: theme.not,
-                    fontSize: responsive.fontSize.xxlarge + 4 // Responsive scaling from 36
-                  }
-                ]}>
-                  {notPercentage}%
-                </Text>
-                <Text style={[styles.percentageLabel, { color: theme.textSecondary }]}>
-                  NOT
-                </Text>
+            <View style={[styles.percentageContainer, { minHeight: 80, justifyContent: 'center', alignItems: 'center' }]}>
+              <View style={[styles.percentageItem, { minHeight: 60, justifyContent: 'center', alignItems: 'center' }]}>
+                <View style={{ minHeight: 40, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={[
+                    styles.bigPercentage, 
+                    { 
+                      color: theme.not,
+                      fontSize: responsive.fontSize.xxlarge + 4,
+                      textAlign: 'center'
+                    }
+                  ]}>
+                    {notPercentage}%
+                  </Text>
+                </View>
+                <View style={{ minHeight: 25, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={[
+                    styles.percentageLabel, 
+                    { 
+                      color: theme.textSecondary,
+                      fontSize: responsive.fontSize.medium,
+                      textAlign: 'center'
+                    }
+                  ]}>
+                    NOT
+                  </Text>
+                </View>
               </View>
               <View style={[
                 styles.percentageDivider,
-                { height: responsive.spacing.xxl + responsive.spacing.sm } // Responsive scaling from 50
+                { 
+                  backgroundColor: theme.border,
+                  height: responsive.spacing.xxl + responsive.spacing.sm
+                }
               ]} />
-              <View style={styles.percentageItem}>
-                <Text style={[
-                  styles.bigPercentage, 
-                  { 
-                    color: theme.hot,
-                    fontSize: responsive.fontSize.xxlarge + 4 // Responsive scaling from 36
-                  }
-                ]}>
-                  {hotPercentage}%
-                </Text>
-                <Text style={[styles.percentageLabel, { color: theme.textSecondary }]}>
-                  HOT
-                </Text>
+              <View style={[styles.percentageItem, { minHeight: 60, justifyContent: 'center', alignItems: 'center' }]}>
+                <View style={{ minHeight: 40, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={[
+                    styles.bigPercentage, 
+                    { 
+                      color: theme.hot,
+                      fontSize: responsive.fontSize.xxlarge + 4,
+                      textAlign: 'center'
+                    }
+                  ]}>
+                    {hotPercentage}%
+                  </Text>
+                </View>
+                <View style={{ minHeight: 25, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={[
+                    styles.percentageLabel, 
+                    { 
+                      color: theme.textSecondary,
+                      fontSize: responsive.fontSize.medium,
+                      textAlign: 'center'
+                    }
+                  ]}>
+                    HOT
+                  </Text>
+                </View>
               </View>
             </View>
-            <Text style={[styles.totalVotes, { color: theme.textSecondary }]}>
-              {totalVotes.toLocaleString()} total votes
-            </Text>
+            <View style={{ minHeight: 25, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={[
+                styles.totalVotes, 
+                { 
+                  color: theme.textSecondary,
+                  fontSize: responsive.fontSize.small,
+                  textAlign: 'center'
+                }
+              ]}>
+                {totalVotes.toLocaleString()} total votes
+              </Text>
+            </View>
           </View>
         )}
       </View>
@@ -186,7 +331,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
+    // marginBottom now set dynamically with adaptive spacing
   },
   categoryBadge: {
     paddingHorizontal: dimensions.spacing.md,
@@ -196,18 +341,18 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 167, 2, 0.3)',
   },
   category: {
-    fontSize: dimensions.fontSize.small,
+    // fontSize now set dynamically with responsive sizing
     fontWeight: '700',
     letterSpacing: 1.2,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: dimensions.spacing.md,
+    // backgroundColor: 'blue'
+    // paddingHorizontal now set dynamically with adaptive spacing
   },
   takeText: {
-    fontSize: dimensions.fontSize.large,
-    lineHeight: 28,
+    // fontSize and lineHeight now set dynamically based on card height
     textAlign: 'center',
     fontWeight: '500',
   },
@@ -226,12 +371,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   statNumber: {
-    fontSize: dimensions.fontSize.large,
+    // fontSize now set dynamically with responsive sizing
     fontWeight: 'bold',
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: dimensions.fontSize.small,
+    // fontSize now set dynamically with responsive sizing
     fontWeight: '600',
   },
   statDivider: {
@@ -243,15 +388,15 @@ const styles = StyleSheet.create({
   revealContainer: {
     alignItems: 'center',
     paddingVertical: dimensions.spacing.md,
-    flex: 1, // Fill available space to match front card layout
-    justifyContent: 'center', // Center content vertically
+    // flex: 1, // Fill available space to match front card layout
+    justifyContent: 'flex-start', // Align content to top instead of center
   },
   voteSection: {
     alignItems: 'center',
     marginBottom: dimensions.spacing.md,
   },
   yourVote: {
-    fontSize: dimensions.fontSize.medium,
+    // fontSize now set dynamically with responsive sizing
     fontWeight: '600',
     marginBottom: dimensions.spacing.xs,
   },
@@ -259,7 +404,7 @@ const styles = StyleSheet.create({
     marginTop: dimensions.spacing.xs,
   },
   changeVoteText: {
-    fontSize: dimensions.fontSize.small,
+    // fontSize now set dynamically with responsive sizing
     textDecorationLine: 'underline',
     fontWeight: '500',
   },
@@ -280,7 +425,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   percentageLabel: {
-    fontSize: dimensions.fontSize.medium,
+    // fontSize now set dynamically with responsive sizing
     fontWeight: '600',
   },
   percentageDivider: {
@@ -290,12 +435,12 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   totalVotes: {
-    fontSize: dimensions.fontSize.small,
+    // fontSize now set dynamically with responsive sizing
     fontStyle: 'italic',
     marginTop: dimensions.spacing.xs,
   },
   continueHint: {
-    fontSize: dimensions.fontSize.small,
+    // fontSize now set dynamically with responsive sizing
     marginTop: dimensions.spacing.md,
     fontStyle: 'italic',
   },

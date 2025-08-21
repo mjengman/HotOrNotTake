@@ -491,7 +491,7 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   },
   fabButton: {
     position: 'absolute',
-    bottom: 130, // Keep original correct position
+    bottom: 160, // Keep original correct position
     right: responsive.spacing.lg,
     width: responsive.iconSize.xlarge + 8, // Use responsive sizing
     height: responsive.iconSize.xlarge + 8,

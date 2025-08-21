@@ -7,8 +7,10 @@ interface AdBannerProps {
 }
 
 // Ad unit IDs
-// For testing, let's be more explicit about when to use production ads
-const USE_PRODUCTION_ADS = true; // Set to true for production builds
+// NOTE: "no-fill" errors are NORMAL for new apps and emulators
+// The implementation is working correctly when you see these errors
+// Real devices with real users will have better fill rates
+const USE_PRODUCTION_ADS = true; // Use production ads for release
 
 const adUnitId = Platform.select({
   ios: TestIds.BANNER, // Keep test ID for iOS for now
