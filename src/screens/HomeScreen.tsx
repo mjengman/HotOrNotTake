@@ -430,11 +430,11 @@ export const HomeScreen: React.FC = () => {
 
         {/* Vote Counter Row - showing personal and community totals */}
         <View style={styles.voteCounterRow}>
-          <View style={[styles.voteCounter, { backgroundColor: theme.surface }]}>
+          <View style={[styles.voteCounter, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
             <Text style={[styles.voteCounterText, { color: theme.text }]}>
               <Text style={{ color: '#4CAF50', fontWeight: 'bold' }}>Your votes: {stats.totalVotes}</Text>
               <Text style={{ color: theme.textSecondary }}> | </Text>
-              <Text style={{ color: '#6B7280' }}>Community: {communityTotalVotes.toLocaleString()}</Text>
+              <Text style={{ color: theme.textSecondary }}>Community: {communityTotalVotes.toLocaleString()}</Text>
             </Text>
           </View>
         </View>
@@ -747,7 +747,7 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   },
   voteCounterText: {
     fontSize: responsive.fontSize.medium,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   emptySubtext: {
     fontSize: responsive.fontSize.medium,
