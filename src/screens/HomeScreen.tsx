@@ -402,7 +402,7 @@ export const HomeScreen: React.FC = () => {
               styles.bottomButton,
               styles.recentVotesButton,
               isDarkMode 
-                ? { backgroundColor: theme.surface } 
+                ? { backgroundColor: theme.surface, borderWidth: 0 } 
                 : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
             ]} 
             onPress={handleShowLastVote}
@@ -417,7 +417,7 @@ export const HomeScreen: React.FC = () => {
             style={[
               styles.bottomButton,
               isDarkMode 
-                ? { backgroundColor: theme.surface } 
+                ? { backgroundColor: theme.surface, borderWidth: 0 } 
                 : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }
             ]} 
             onPress={() => skipTake(takes[0]?.id)}

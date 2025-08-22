@@ -847,12 +847,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           {/* Overlay indicators - hidden when flipped */}
           {!isCardFlipped && (
             <>
-              <Animated.View style={[styles.overlayLeft, { backgroundColor: theme.not }, notOverlayStyle]}>
-                <Text style={styles.overlayText}>NOT</Text>
+              <Animated.View style={[styles.overlayLeft, { backgroundColor: theme.hot }, hotOverlayStyle]}>
+                <Text style={styles.overlayText}>HOT</Text>
               </Animated.View>
               
-              <Animated.View style={[styles.overlayRight, { backgroundColor: theme.hot }, hotOverlayStyle]}>
-                <Text style={styles.overlayText}>HOT</Text>
+              <Animated.View style={[styles.overlayRight, { backgroundColor: theme.not }, notOverlayStyle]}>
+                <Text style={styles.overlayText}>NOT</Text>
               </Animated.View>
 
               <Animated.View style={[styles.overlayBottom, { backgroundColor: 'rgba(0,0,0,0.8)' }, skipOverlayStyle]}>
@@ -944,7 +944,7 @@ const styles = StyleSheet.create({
   overlayLeft: {
     position: 'absolute',
     top: 50,
-    right: 20,
+    right: 5,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -953,7 +953,7 @@ const styles = StyleSheet.create({
   overlayRight: {
     position: 'absolute',
     top: 50,
-    left: 20,
+    left: 5,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,

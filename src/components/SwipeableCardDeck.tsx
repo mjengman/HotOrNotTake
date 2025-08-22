@@ -125,26 +125,6 @@ export const SwipeableCardDeck: React.FC<SwipeableCardDeckProps> = ({
         animateOverlayLabelsOpacity={true}
         overlayLabels={{
           left: {
-            title: 'NOT',
-            style: {
-              label: {
-                backgroundColor: '#FF3838',
-                color: 'white',
-                fontSize: dimensions.fontSize.xlarge,
-                fontWeight: 'bold',
-                padding: dimensions.spacing.md,
-                borderRadius: 8,
-              },
-              wrapper: {
-                flexDirection: 'column',
-                alignItems: 'flex-end',
-                justifyContent: 'flex-start',
-                marginTop: 30,
-                marginLeft: -30,
-              },
-            },
-          },
-          right: {
             title: 'HOT',
             style: {
               label: {
@@ -157,10 +137,30 @@ export const SwipeableCardDeck: React.FC<SwipeableCardDeckProps> = ({
               },
               wrapper: {
                 flexDirection: 'column',
+                alignItems: 'flex-end',
+                justifyContent: 'flex-start',
+                marginTop: 30,
+                marginLeft: -50,
+              },
+            },
+          },
+          right: {
+            title: 'NOT',
+            style: {
+              label: {
+                backgroundColor: '#FF3838',
+                color: 'white',
+                fontSize: dimensions.fontSize.xlarge,
+                fontWeight: 'bold',
+                padding: dimensions.spacing.md,
+                borderRadius: 8,
+              },
+              wrapper: {
+                flexDirection: 'column',
                 alignItems: 'flex-start',
                 justifyContent: 'flex-start',
                 marginTop: 30,
-                marginLeft: 30,
+                marginLeft: 50,
               },
             },
           },
