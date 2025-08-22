@@ -880,12 +880,12 @@ const styles = StyleSheet.create({
     // backgroundColor: 'orange',
     position: 'absolute', // Position absolutely within flexibleMiddle
     top: 10, // Small margin from top of flexibleMiddle
-    left: 0,
-    right: 0,
+    left: dimensions.spacing.lg, // Add left margin
+    right: dimensions.spacing.lg, // Add right margin
     // height: 400, // Fixed height to prevent covering buttons - will make dynamic
     alignItems: 'center',
     justifyContent: 'flex-start',
-    width: '100%',
+    width: undefined, // Remove width constraint since we're using left/right
   },
   nextCard: {
     // Static styles moved to nextCardStyle for animation

@@ -91,7 +91,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       styles.card, 
       { 
         backgroundColor: theme.card,
-        width: responsive.card.width,
+        width: responsive.card.width, // Container already provides margins
         // Remove fixed height - let card fill available container space
         borderRadius: responsive.card.borderRadius,
         padding: adaptiveSpacing.cardPadding,

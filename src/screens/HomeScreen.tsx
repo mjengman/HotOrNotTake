@@ -589,6 +589,7 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     paddingHorizontal: responsive.spacing.lg,
     paddingTop: responsive.spacing.md, // Reduce top padding
     paddingBottom: Platform.OS === 'ios' ? 0 : insets.bottom + responsive.spacing.xs, // Reduce bottom padding
+    zIndex: 200, // Ensure footer is above other elements
   },
   scrollContent: {
     flexGrow: 1,
@@ -790,6 +791,7 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     },
     shadowOpacity: 0.3,
     shadowRadius: 4.65,
+    zIndex: 300, // Higher than footer (200)
   },
   fabText: {
     fontSize: responsive.fontSize.xlarge,

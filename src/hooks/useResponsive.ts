@@ -111,7 +111,9 @@ export const useResponsive = (): ResponsiveDimensions => {
   
   // Memoize scaled dimensions to avoid recalculation on every render
   const scaledDimensions = useMemo((): ResponsiveDimensions => {
-    const availableWidth = dimensions.width - (insets.left + insets.right);
+    // Account for safe area insets AND container margins
+    const lgSpacing = Math.round(scaleSpacing(BASE_DIMENSIONS.spacing.lg, profile));
+    const availableWidth = dimensions.width - (insets.left + insets.right + lgSpacing * 2);
     
     // Apply height-based spacing adjustment
     const spacingAdjustment = heightAdjustments.spacingMultiplier;

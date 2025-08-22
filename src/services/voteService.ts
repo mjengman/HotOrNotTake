@@ -160,6 +160,10 @@ export const deleteVote = async (
     };
 
     await updateDoc(takeRef, updateData);
+
+    // Also decrement the user's vote count
+    const { decrementUserVoteCount } = await import('./userService');
+    await decrementUserVoteCount(userId);
   } catch (error) {
     console.error('Error deleting vote:', error);
     throw new Error('Failed to delete vote');

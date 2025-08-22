@@ -119,6 +119,19 @@ export const incrementUserVoteCount = async (userId: string): Promise<void> => {
   }
 };
 
+// Decrement user's vote count (for vote changes/deletions)
+export const decrementUserVoteCount = async (userId: string): Promise<void> => {
+  try {
+    const userRef = doc(db, USERS_COLLECTION, userId);
+    await updateDoc(userRef, {
+      totalVotes: increment(-1),
+      lastActiveAt: Timestamp.fromDate(new Date()),
+    });
+  } catch (error) {
+    console.error('Error decrementing vote count:', error);
+  }
+};
+
 // Increment user's submission count and add take ID
 export const incrementUserSubmissionCount = async (
   userId: string,
