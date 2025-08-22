@@ -134,6 +134,40 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }
   }, [externalStatsCard]);
 
+  // Ensure takes is always an array
+  const safeTakes = takes || [];
+
+  // Always use first three items for smooth transitions
+  const currentTake = safeTakes[0];
+  const nextTake = safeTakes[1];
+  const thirdTake = safeTakes[2];
+  
+  // Derive what to render - external stats card takes priority, then frozen data during promotion, then live props
+  const renderCurrent = externalStatsCard ? externalStatsCard.take : 
+    (useFrozen && frozenCurrent.current ? frozenCurrent.current : currentTake);
+  const renderNext = useFrozen && frozenNext.current ? frozenNext.current : nextTake;
+
+  // If we run out of takes, clean up frozen state to prevent crashes
+  useEffect(() => {
+    if (!currentTake && !nextTake && useFrozen && !isCardFlipped) {
+      console.log('🚨 No more takes - cleaning up frozen state');
+      // Use setTimeout to defer state cleanup to next tick, avoiding hooks mismatch
+      setTimeout(() => {
+        setUseFrozen(false);
+        frozenCurrent.current = null;
+        frozenNext.current = null;
+        promoteSV.value = 0;
+      }, 0);
+    }
+  }, [currentTake, nextTake, useFrozen, isCardFlipped]);
+
+  // Auto-load more when getting low on cards
+  useEffect(() => {
+    if (loadMore && safeTakes.length <= 5 && hasMore && !loading) {
+      loadMore(20).catch(console.error);
+    }
+  }, [safeTakes.length, hasMore, loading, loadMore]);
+
   const theme = isDarkMode ? colors.dark : colors.light;
 
   // JS-thread helpers for runOnJS
@@ -260,44 +294,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }
   };
 
-  // Ensure takes is always an array
-  const safeTakes = takes || [];
-
-  // Always use first three items for smooth transitions
-  const currentTake = safeTakes[0];
-  const nextTake = safeTakes[1];
-  const thirdTake = safeTakes[2];
-  
   // Safety check: if current take is somehow undefined but we have takes, log error
   if (!currentTake && safeTakes.length > 0) {
     console.error('⚠️ No current take but safeTakes has items! This should not happen.');
   }
-  
-  // Derive what to render - external stats card takes priority, then frozen data during promotion, then live props
-  const renderCurrent = externalStatsCard ? externalStatsCard.take : 
-    (useFrozen && frozenCurrent.current ? frozenCurrent.current : currentTake);
-  const renderNext = useFrozen && frozenNext.current ? frozenNext.current : nextTake;
-
-  // If we run out of takes, clean up frozen state to prevent crashes
-  useEffect(() => {
-    if (!currentTake && !nextTake && useFrozen && !isCardFlipped) {
-      console.log('🚨 No more takes - cleaning up frozen state');
-      // Use setTimeout to defer state cleanup to next tick, avoiding hooks mismatch
-      setTimeout(() => {
-        setUseFrozen(false);
-        frozenCurrent.current = null;
-        frozenNext.current = null;
-        promoteSV.value = 0;
-      }, 0);
-    }
-  }, [currentTake, nextTake, useFrozen, isCardFlipped]);
-
-  // Auto-load more when getting low on cards
-  useEffect(() => {
-    if (loadMore && safeTakes.length <= 5 && hasMore && !loading) {
-      loadMore(20).catch(console.error);
-    }
-  }, [safeTakes.length, hasMore, loading, loadMore]);
 
   // Handle button press - now triggers pronounced swipe animation then flip
   const handleButtonVote = (vote: 'hot' | 'not') => {
