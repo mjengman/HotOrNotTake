@@ -513,7 +513,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         { scale: scale.value },
       ],
       opacity,
-      zIndex: flippedSV.value || animatingSV.value ? 5 : 2, // Highest z-index during animation and stats
+      zIndex: flippedSV.value || animatingSV.value ? 150 : 100, // Higher during animation but below UI elements (footer: 200)
     };
   });
 
@@ -529,7 +529,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         { translateY: nextTranslateY },
       ],
       opacity: 1,
-      zIndex: frozenSV.value ? 3 : 1, // Higher during promotion, but lower than stats (5)
+      zIndex: frozenSV.value ? 80 : 50, // Higher during promotion, but lower than current card
       position: 'absolute' as const,
       top: 0,
       left: 0,
@@ -637,7 +637,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         { translateY: thirdTranslateY },
       ],
       opacity: 1,
-      zIndex: 0,
+      zIndex: 25,
       position: 'absolute' as const,
       top: 0,
       left: 0,
