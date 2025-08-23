@@ -7,6 +7,8 @@ import {
   Text,
   Vibration,
   Platform,
+  RefreshControl,
+  ScrollView,
 } from 'react-native';
 import {
   PanGestureHandler,
@@ -78,7 +80,15 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
   const [lastVote, setLastVote] = useState<'hot' | 'not' | null>(null);
-  const [autoDismissTimeout, setAutoDismissTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [autoDismissTimeout, setAutoDismissTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Track if we should end after dismissing stats (when there's no next card)
+  const endAfterDismissRef = React.useRef(false);
+  
+  // Debounce loadMore to prevent hammering
+  const lastLoadTsRef = React.useRef(0);
+  const DEBOUNCE_MS = 900;
   
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -100,6 +110,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const frozenSV = useSharedValue(0);
   const flippedSV = useSharedValue(0);
   const animatingSV = useSharedValue(0);
+  
+  // Safety gate for gestures - prevent interaction when no current card
+  const hasCurrentSV = useSharedValue(0);
 
   useEffect(() => { frozenSV.value = useFrozen ? 1 : 0; }, [useFrozen]);
   useEffect(() => { flippedSV.value = isCardFlipped ? 1 : 0; }, [isCardFlipped]);
@@ -146,29 +159,60 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const renderCurrent = externalStatsCard ? externalStatsCard.take : 
     (useFrozen && frozenCurrent.current ? frozenCurrent.current : currentTake);
   const renderNext = useFrozen && frozenNext.current ? frozenNext.current : nextTake;
+  
+  // Update safety gate for gestures based on current card availability
+  useEffect(() => { hasCurrentSV.value = !!renderCurrent ? 1 : 0; }, [renderCurrent]);
 
   // If we run out of takes, clean up frozen state to prevent crashes
   useEffect(() => {
     if (!currentTake && !nextTake && useFrozen && !isCardFlipped) {
       console.log('🚨 No more takes - cleaning up frozen state');
-      // Use setTimeout to defer state cleanup to next tick, avoiding hooks mismatch
-      setTimeout(() => {
-        setUseFrozen(false);
-        frozenCurrent.current = null;
-        frozenNext.current = null;
-        promoteSV.value = 0;
-      }, 0);
+      // Direct state update - safe in effects
+      setUseFrozen(false);
+      frozenCurrent.current = null;
+      frozenNext.current = null;
+      promoteSV.value = 0;
     }
   }, [currentTake, nextTake, useFrozen, isCardFlipped]);
 
-  // Auto-load more when getting low on cards
+  // Auto-load more when getting low on cards (with debounce)
   useEffect(() => {
-    if (loadMore && safeTakes.length <= 5 && hasMore && !loading) {
-      loadMore(20).catch(console.error);
-    }
+    if (!loadMore || loading || !hasMore) return;
+    if (safeTakes.length > 5) return;
+    
+    const now = Date.now();
+    if (now - lastLoadTsRef.current < DEBOUNCE_MS) return;
+    
+    lastLoadTsRef.current = now;
+    loadMore(20).catch(console.error);
   }, [safeTakes.length, hasMore, loading, loadMore]);
+  
+  // Safe cleanup effect - if frozen but nothing to render, unfreeze
+  useEffect(() => {
+    if (!renderCurrent && useFrozen) {
+      setUseFrozen(false);
+      frozenCurrent.current = null;
+      frozenNext.current = null;
+      promoteSV.value = 0;
+    }
+  }, [renderCurrent, useFrozen, promoteSV]);
 
   const theme = isDarkMode ? colors.dark : colors.light;
+
+  // Handle pull-to-refresh on end screen
+  const handleRefresh = async () => {
+    if (!loadMore) return;
+    
+    setRefreshing(true);
+    try {
+      // Force a fresh load attempt
+      await loadMore(20);
+    } catch (error) {
+      console.error('Error refreshing takes:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // JS-thread helpers for runOnJS
   const jsSetVote = (val: 'hot' | 'not' | null) => setCurrentVote(val);
@@ -187,7 +231,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     // 🧊 FREEZE: Capture current state immediately when vote is cast
     if (renderCurrent) {
       frozenCurrent.current = renderCurrent;
-      frozenNext.current = renderNext;
+      // Only capture next if it exists
+      if (renderNext) {
+        frozenNext.current = renderNext;
+        endAfterDismissRef.current = false;
+      } else {
+        frozenNext.current = null;
+        endAfterDismissRef.current = true; // no next; after stats we should end
+      }
       setUseFrozen(true);
       
       // Submit vote immediately to advance deck behind the stats card
@@ -264,33 +315,30 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     
     isAnimating.value = true;
     
-    if (skipAnimation) {
-      // Skip animation - just reset everything immediately
+    const resetAll = () => {
+      'worklet';
       translateX.value = 0;
       translateY.value = 0;
       scale.value = 1;
       flipSV.value = 0;
       promoteSV.value = 0;
-      setIsCardFlipped(false);
-      setLastVote(null);
-      setCurrentVote(null);
-      setUseFrozen(false); // 🔓 UNFREEZE - reveal new cards
+      runOnJS(setIsCardFlipped)(false);
+      runOnJS(setLastVote)(null);
+      runOnJS(setCurrentVote)(null);
+      runOnJS(setUseFrozen)(false);
       isAnimating.value = false;
+    };
+    
+    if (skipAnimation) {
+      resetAll();
     } else {
-      // Simple clean transition - just reset everything since promotion already happened
-      translateX.value = withTiming(0, { duration: 200 }, () => {
-        'worklet';
-        // Reset everything for next card
-        translateY.value = 0;
-        scale.value = 1;
-        flipSV.value = 0;
-        promoteSV.value = 0;
-        runOnJS(setIsCardFlipped)(false);
-        runOnJS(setLastVote)(null);
-        runOnJS(setCurrentVote)(null);
-        runOnJS(setUseFrozen)(false); // 🔓 UNFREEZE - reveal new cards
-        isAnimating.value = false;
-      });
+      translateX.value = withTiming(0, { duration: 200 }, resetAll);
+    }
+    
+    // If we knew there was no next at the time we froze, we're done.
+    if (endAfterDismissRef.current) {
+      endAfterDismissRef.current = false; // consume the flag
+      // Nothing else to do; the normal render pass will show the end screen
     }
   };
 
@@ -335,7 +383,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     // 🧊 FREEZE: Capture current state immediately when skip is triggered
     if (renderCurrent) {
       frozenCurrent.current = renderCurrent;
-      frozenNext.current = renderNext;
+      // Only capture next if it exists
+      if (renderNext) {
+        frozenNext.current = renderNext;
+        endAfterDismissRef.current = false;
+      } else {
+        frozenNext.current = null;
+        endAfterDismissRef.current = true;
+      }
       setUseFrozen(true);
       
       // Submit skip immediately to advance deck behind the animation
@@ -371,12 +426,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
     onStart: () => {
-      if (isAnimating.value) return; // ignore new gestures mid-flight
+      if (isAnimating.value || !hasCurrentSV.value) return; // ignore new gestures mid-flight or no card
       scale.value = withSpring(0.95);
       runOnJS(Vibration.vibrate)(10);
     },
     onActive: (event) => {
-      if (isAnimating.value) return;
+      if (isAnimating.value || !hasCurrentSV.value) return;
       
       // Allow dragging the stats card too
       translateX.value = event.translationX;
@@ -418,7 +473,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       }
     },
     onEnd: (event) => {
-      if (isAnimating.value) return;
+      if (isAnimating.value || !hasCurrentSV.value) return;
       
       // If card is flipped (showing stats), any swipe continues to next
       if (flippedSV.value) {
@@ -514,6 +569,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       ],
       opacity,
       zIndex: flippedSV.value || animatingSV.value ? 150 : 100, // Higher during animation but below UI elements (footer: 200)
+      elevation: flippedSV.value || animatingSV.value ? 6 : 4, // Android layering fix
     };
   });
 
@@ -530,6 +586,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       ],
       opacity: 1,
       zIndex: frozenSV.value ? 80 : 50, // Higher during promotion, but lower than current card
+      elevation: frozenSV.value ? 3 : 2, // Android layering fix
       position: 'absolute' as const,
       top: 0,
       left: 0,
@@ -646,19 +703,36 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     };
   });
 
-  // Show end screen only when truly no more content and not in frozen state
+  // Create dynamic styles with responsive card height - MUST be before any returns
+  const dynamicStyles = React.useMemo(() => ({
+    cardContainer: {
+      // backgroundColor: 'orange',
+      position: 'relative' as const, // Use relative positioning to respect flexibleMiddle
+      alignItems: 'center' as const,
+      justifyContent: 'flex-start' as const,
+      flex: 1, // Fill available flexibleMiddle space - let flexibleMiddle constrain the height
+    }
+  }), []);
+
+  // Simplified end screen detection that can't get stuck
   const noCards = safeTakes.length === 0;
-  const atEnd = !currentTake && !renderCurrent; // No current card means we're at the end
-  
-  // Special case: if frozen but we have no actual cards left, show end screen
-  const frozenButEmpty = useFrozen && !frozenCurrent.current && !frozenNext.current && noCards;
-  
-  // Don't show end screen if we're mid-animation or flipped (unless frozen but empty)
-  // Note: removed isAnimating.value check to avoid Reanimated warning
-  const shouldShowEnd = (!useFrozen && !isCardFlipped && (noCards || (atEnd && !hasMore && !loading))) || frozenButEmpty;
+  const nothingToRender = !renderCurrent; // already accounts for external/frozen priority
+  const shouldShowEnd = !isCardFlipped && nothingToRender && !loading && (!hasMore || noCards);
   if (shouldShowEnd) {
     return (
-      <View style={styles.container}>
+      <ScrollView 
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.primary}
+            title="Pull to check for new takes"
+            titleColor={theme.textSecondary}
+          />
+        }
+      >
         <View style={styles.endContainer}>
           <Text style={styles.endEmoji}>🎉</Text>
           <Text style={[styles.endTitle, { color: theme.text }]}>
@@ -685,64 +759,28 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
             Tap the memo icon (📝) to see all your takes
           </Text>
+          
+          <Text style={[styles.pullHint, { color: theme.textSecondary, opacity: 0.5, marginTop: 20 }]}>
+            Pull down to check for new takes
+          </Text>
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
   // If at end but still has more or loading, show empty container (loading happens in background)
-  if (atEnd && (loading || hasMore) && !useFrozen && !isCardFlipped) {
-    if (loadMore && !loading) loadMore(20).catch(console.error);
+  if (nothingToRender && (loading || hasMore) && !useFrozen && !isCardFlipped) {
+    if (loadMore && !loading) {
+      const now = Date.now();
+      if (now - lastLoadTsRef.current >= DEBOUNCE_MS) {
+        lastLoadTsRef.current = now;
+        loadMore(20).catch(console.error);
+      }
+    }
     return <View style={styles.container} />;
   }
   
-  // Safety fallback: if we have no current card to render but are frozen, show end screen
-  if (!renderCurrent && useFrozen) {
-    console.log('⚠️ No renderCurrent but frozen - transitioning to end screen');
-    // Defer cleanup to avoid hooks issues
-    setTimeout(() => {
-      setUseFrozen(false);
-      frozenCurrent.current = null;
-      frozenNext.current = null;
-    }, 0);
-    return (
-      <View style={styles.container}>
-        <View style={styles.endContainer}>
-          <Text style={styles.endEmoji}>🎉</Text>
-          <Text style={[styles.endTitle, { color: theme.text }]}>
-            You've reached the end!
-          </Text>
-          <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
-            Submit more takes to keep the conversation going!
-          </Text>
-          {onSubmitTake && (
-            <AnimatedPressable
-              style={[styles.submitButton, { backgroundColor: theme.primary }]}
-              onPress={onSubmitTake}
-              scaleValue={0.95}
-              hapticIntensity={15}
-            >
-              <Text style={styles.submitButtonText}>✏️ Submit Take</Text>
-            </AnimatedPressable>
-          )}
-          <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
-            Tap the memo icon (📝) to see all your takes
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  // Create dynamic styles with responsive card height
-  const dynamicStyles = React.useMemo(() => ({
-    cardContainer: {
-      // backgroundColor: 'orange',
-      position: 'relative' as const, // Use relative positioning to respect flexibleMiddle
-      alignItems: 'center' as const,
-      justifyContent: 'flex-start' as const,
-      flex: 1, // Fill available flexibleMiddle space - let flexibleMiddle constrain the height
-    }
-  }), []);
+  // The cleanup effect handles the frozen state - no need for fallback here
 
   return (
     <View style={styles.container}>
@@ -926,7 +964,19 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontStyle: 'italic',
   },
-  // Removed pullHint - no longer needed
+  pullHint: {
+    fontSize: dimensions.fontSize.small,
+    textAlign: 'center',
+    marginTop: dimensions.spacing.md,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   submitButton: {
     paddingHorizontal: dimensions.spacing.xl,
     paddingVertical: dimensions.spacing.md,
