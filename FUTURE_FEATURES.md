@@ -1,6 +1,6 @@
 # 🚀 Future Features Roadmap - Hot or Not Takes
 
-**Created**: December 2024  
+**Created**: August 2025  
 **Status**: Ideas & Planning Phase
 
 ---

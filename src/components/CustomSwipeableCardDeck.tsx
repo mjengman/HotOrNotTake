@@ -41,6 +41,7 @@ interface CustomSwipeableCardDeckProps {
   isDarkMode?: boolean;
   hasMore?: boolean;
   loadMore?: (count?: number) => Promise<void>;
+  refreshTakes?: () => Promise<void>;
   loading?: boolean;
   externalStatsCard?: {take: Take, vote: 'hot' | 'not'} | null;
   onExternalStatsCardDismiss?: () => void;
@@ -69,6 +70,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   isDarkMode = false,
   hasMore = true,
   loadMore,
+  refreshTakes,
   loading = false,
   externalStatsCard = null,
   onExternalStatsCardDismiss,
@@ -201,12 +203,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // Handle pull-to-refresh on end screen
   const handleRefresh = async () => {
-    if (!loadMore) return;
+    // Prefer refreshTakes for a full refresh, fallback to loadMore
+    const refreshFunction = refreshTakes || loadMore;
+    if (!refreshFunction) return;
     
     setRefreshing(true);
     try {
-      // Force a fresh load attempt
-      await loadMore(20);
+      // Force a fresh load attempt - refreshTakes will reset and reload
+      await refreshFunction();
     } catch (error) {
       console.error('Error refreshing takes:', error);
     } finally {
@@ -226,26 +230,26 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   
   // Flip the card to reveal stats
   const flipCard = (vote: 'hot' | 'not') => {
+    if (!renderCurrent) return; // Safety check
+    
     setLastVote(vote);
     
     // 🧊 FREEZE: Capture current state immediately when vote is cast
-    if (renderCurrent) {
-      frozenCurrent.current = renderCurrent;
-      // Only capture next if it exists
-      if (renderNext) {
-        frozenNext.current = renderNext;
-        endAfterDismissRef.current = false;
-      } else {
-        frozenNext.current = null;
-        endAfterDismissRef.current = true; // no next; after stats we should end
-      }
-      setUseFrozen(true);
-      
-      // Submit vote immediately to advance deck behind the stats card
-      onVote(renderCurrent.id, vote);
+    // Capture the current card BEFORE it gets removed
+    frozenCurrent.current = renderCurrent;
+    // Only capture next if it exists
+    if (renderNext) {
+      frozenNext.current = renderNext;
+      endAfterDismissRef.current = false;
+    } else {
+      frozenNext.current = null;
+      endAfterDismissRef.current = true; // no next; after stats we should end
     }
+    // MUST set frozen BEFORE the animation to lock in the card
+    setUseFrozen(true);
     
-    // Let VoteIndicator handle its own auto-hide timing
+    // Store the vote details but DON'T submit yet
+    const voteToSubmit = { id: renderCurrent.id, vote };
     
     // Set animating flag and bounce micro-scale then flip
     animatingSV.value = 1;
@@ -254,6 +258,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       flipSV.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }, (finished) => {
         if (finished) {
           runOnJS(setIsCardFlipped)(true); // set after flip completes
+          // NOW submit the vote after the flip is complete and stats are showing
+          runOnJS(onVote)(voteToSubmit.id, voteToSubmit.vote);
           // Auto-dismiss stats card after 2.5 seconds
           runOnJS(jsSetAutoDismiss)();
           // Start promoting next card behind the stats card
@@ -391,10 +397,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         frozenNext.current = null;
         endAfterDismissRef.current = true;
       }
+      // MUST set frozen BEFORE calling onSkip to prevent end screen flash
       setUseFrozen(true);
       
-      // Submit skip immediately to advance deck behind the animation
-      onSkip(renderCurrent.id);
+      // Use requestAnimationFrame to ensure state updates are flushed
+      requestAnimationFrame(() => {
+        // Submit skip after freeze state is committed
+        onSkip(renderCurrent.id);
+      });
     }
     
     isAnimating.value = true;
@@ -717,7 +727,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Simplified end screen detection that can't get stuck
   const noCards = safeTakes.length === 0;
   const nothingToRender = !renderCurrent; // already accounts for external/frozen priority
-  const shouldShowEnd = !isCardFlipped && nothingToRender && !loading && (!hasMore || noCards);
+  // Don't show end screen if we're frozen (showing stats) or flipped
+  const shouldShowEnd = !useFrozen && !isCardFlipped && nothingToRender && !loading && (!hasMore || noCards);
   if (shouldShowEnd) {
     return (
       <ScrollView 

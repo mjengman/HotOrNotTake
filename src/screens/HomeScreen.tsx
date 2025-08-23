@@ -382,6 +382,7 @@ export const HomeScreen: React.FC = () => {
             isDarkMode={isDarkMode}
             hasMore={hasMore}
             loadMore={loadMore}
+            refreshTakes={refreshTakes}
             loading={takesLoading}
             externalStatsCard={selectedTakeForStats}
             onExternalStatsCardDismiss={() => setSelectedTakeForStats(null)}
