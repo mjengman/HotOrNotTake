@@ -119,15 +119,20 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         styles.content,
         { paddingHorizontal: adaptiveSpacing.contentPadding }
       ]}>
-        <Text style={[
-          styles.takeText, 
-          { 
-            color: theme.text,
-            fontSize: adaptiveTextSize,
-            // Adjust line height proportionally to font size
-            lineHeight: adaptiveTextSize * 1.4,
-          }
-        ]}>
+        <Text 
+          style={[
+            styles.takeText, 
+            { 
+              color: theme.text,
+              fontSize: adaptiveTextSize,
+              // Adjust line height proportionally to font size
+              lineHeight: adaptiveTextSize * 1.4,
+            }
+          ]}
+          numberOfLines={8}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+        >
           {take.text}
         </Text>
       </View>
@@ -154,13 +159,18 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               ]}>
                 {showStats ? take.notVotes.toLocaleString() : '?'}
               </Text>
-              <Text style={[
-                styles.statLabel, 
-                { 
-                  color: theme.textSecondary,
-                  fontSize: responsive.fontSize.small
-                }
-              ]}>
+              <Text 
+                style={[
+                  styles.statLabel, 
+                  { 
+                    color: theme.textSecondary,
+                    fontSize: responsive.fontSize.small
+                  }
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
                 ❄️ NOT
               </Text>
             </TouchableOpacity>
@@ -182,13 +192,18 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               ]}>
                 {showStats ? take.hotVotes.toLocaleString() : '?'}
               </Text>
-              <Text style={[
-                styles.statLabel, 
-                { 
-                  color: theme.textSecondary,
-                  fontSize: responsive.fontSize.small
-                }
-              ]}>
+              <Text 
+                style={[
+                  styles.statLabel, 
+                  { 
+                    color: theme.textSecondary,
+                    fontSize: responsive.fontSize.small
+                  }
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
                 🔥 HOT
               </Text>
             </TouchableOpacity>

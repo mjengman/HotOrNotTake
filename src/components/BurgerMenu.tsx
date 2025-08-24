@@ -108,8 +108,18 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 onPress={() => handleMenuItemPress(onMyTakes)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.menuIcon}>📝</Text>
-                <Text style={[styles.menuText, { color: theme.text }]}>My Takes</Text>
+                <Text 
+                  style={styles.menuIcon}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >📝</Text>
+                <Text 
+                  style={[styles.menuText, { color: theme.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >My Takes</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -117,8 +127,18 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 onPress={() => handleMenuItemPress(onLeaderboard)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.menuIcon}>🏆</Text>
-                <Text style={[styles.menuText, { color: theme.text }]}>Leaderboard</Text>
+                <Text 
+                  style={styles.menuIcon}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >🏆</Text>
+                <Text 
+                  style={[styles.menuText, { color: theme.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >Leaderboard</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -126,8 +146,18 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 onPress={() => handleMenuItemPress(onRecentVotes)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.menuIcon}>📊</Text>
-                <Text style={[styles.menuText, { color: theme.text }]}>Recent Votes</Text>
+                <Text 
+                  style={styles.menuIcon}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >📊</Text>
+                <Text 
+                  style={[styles.menuText, { color: theme.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >Recent Votes</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -135,8 +165,18 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 onPress={() => handleMenuItemPress(onInstructions)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.menuIcon}>❓</Text>
-                <Text style={[styles.menuText, { color: theme.text }]}>Instructions</Text>
+                <Text 
+                  style={styles.menuIcon}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >❓</Text>
+                <Text 
+                  style={[styles.menuText, { color: theme.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >Instructions</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -144,8 +184,18 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 onPress={() => handleMenuItemPress(onToggleTheme)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.menuIcon}>{isDarkMode ? '☀️' : '🌙'}</Text>
-                <Text style={[styles.menuText, { color: theme.text }]}>
+                <Text 
+                  style={styles.menuIcon}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >{isDarkMode ? '☀️' : '🌙'}</Text>
+                <Text 
+                  style={[styles.menuText, { color: theme.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
                   {isDarkMode ? 'Light Mode' : 'Dark Mode'}
                 </Text>
               </TouchableOpacity>

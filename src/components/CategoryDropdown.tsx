@@ -77,7 +77,12 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
         onPress={() => setIsOpen(true)}
         activeOpacity={0.8}
       >
-        <Text style={[styles.dropdownText, { color: theme.text }]}>
+        <Text 
+          style={[styles.dropdownText, { color: theme.text }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+        >
           {selectedCategoryData.emoji} {selectedCategoryData.label.replace(/^🎲 |^🍕 |^💼 |^🐕 |^📱 |^🌟 |^🎬 |^🌱 |^💪 |^🏛️ |^🗳️ |^⚽ |^✈️ |^💕 /, '')}
         </Text>
         <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>

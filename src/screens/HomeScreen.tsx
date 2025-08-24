@@ -432,10 +432,13 @@ export const HomeScreen: React.FC = () => {
         {/* Vote Counter Row - showing personal and community totals */}
         <View style={styles.voteCounterRow}>
           <View style={[styles.voteCounter, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-            <Text style={[styles.voteCounterText, { color: theme.text }]}>
-              <Text style={{ color: '#4CAF50', fontWeight: 'bold' }}>Your votes: {stats.totalVotes}</Text>
-              <Text style={{ color: theme.textSecondary }}> | </Text>
-              <Text style={{ color: theme.textSecondary }}>Community: {communityTotalVotes.toLocaleString()}</Text>
+            <Text 
+              style={[styles.voteCounterText, { color: theme.textSecondary }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+            >
+              Your votes: {stats.totalVotes} | Community: {communityTotalVotes.toLocaleString()}
             </Text>
           </View>
         </View>
@@ -449,6 +452,9 @@ export const HomeScreen: React.FC = () => {
                 opacity: fadeAnim 
               }
             ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
           >
             {instructionTexts[currentInstructionIndex]}
           </Animated.Text>
