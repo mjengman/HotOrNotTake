@@ -102,6 +102,20 @@ service cloud.firestore {
       
       // No deletes allowed
       allow delete: if false;
+      
+      // Votes subcollection (existing pattern)
+      match /votes/{voteId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // Favorites subcollection
+      match /favorites/{favoriteId} {
+        // Users can read, create, and delete their own favorites
+        allow read, create, delete: if isOwner(userId);
+        
+        // No updates needed for favorites (just add/remove)
+        allow update: if false;
+      }
     }
     
     // Deny all other operations

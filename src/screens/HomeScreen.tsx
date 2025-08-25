@@ -25,6 +25,7 @@ import { SubmitTakeScreen } from './SubmitTakeScreen';
 import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecentVotesScreen } from './RecentVotesScreen';
+import { MyFavoritesScreen } from './MyFavoritesScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
 import { useResponsive } from '../hooks/useResponsive';
 import { deleteVote, getUserVoteForTake } from '../services/voteService';
@@ -42,6 +43,7 @@ export const HomeScreen: React.FC = () => {
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
   const [showRecentVotesModal, setShowRecentVotesModal] = useState(false);
+  const [showFavoritesModal, setShowFavoritesModal] = useState(false);
   const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: any, vote: 'hot' | 'not'} | null>(null);
   const [lastVotedTake, setLastVotedTake] = useState<any | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
@@ -141,6 +143,10 @@ export const HomeScreen: React.FC = () => {
         setShowRecentVotesModal(false);
         return true;
       }
+      if (showFavoritesModal) {
+        setShowFavoritesModal(false);
+        return true;
+      }
       if (showLeaderboardModal) {
         setShowLeaderboardModal(false);
         return true;
@@ -163,7 +169,7 @@ export const HomeScreen: React.FC = () => {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [showSubmitModal, showRecentVotesModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, selectedTakeForStats]);
+  }, [showSubmitModal, showRecentVotesModal, showFavoritesModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, selectedTakeForStats]);
 
   // Rotate instruction text every 4 seconds with fade animation
   useEffect(() => {
@@ -326,6 +332,7 @@ export const HomeScreen: React.FC = () => {
             onMyTakes={() => setShowMyTakesModal(true)}
             onLeaderboard={() => setShowLeaderboardModal(true)}
             onRecentVotes={() => setShowRecentVotesModal(true)}
+            onFavorites={() => setShowFavoritesModal(true)}
             onInstructions={() => setShowInstructionsModal(true)}
             onToggleTheme={toggleTheme}
           />
@@ -545,6 +552,30 @@ export const HomeScreen: React.FC = () => {
             onClose={() => setShowRecentVotesModal(false)}
             onShowTakeStats={(take, vote) => {
               setSelectedTakeForStats({ take, vote });
+            }}
+            isDarkMode={isDarkMode}
+          />
+        </View>
+      )}
+
+      {/* My Favorites Modal - Conditional Rendering */}
+      {showFavoritesModal && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          zIndex: 1700, // Higher than other modals
+          paddingTop: StatusBar.currentHeight || 44, // Safe area for status bar
+        }}>
+          <MyFavoritesScreen
+            onClose={() => setShowFavoritesModal(false)}
+            onShowTakeStats={(take, vote) => {
+              if (vote) {
+                setSelectedTakeForStats({ take, vote });
+              }
             }}
             isDarkMode={isDarkMode}
           />

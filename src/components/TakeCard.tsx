@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
 import { Take } from '../types';
 import { colors, dimensions } from '../constants';
 import { useResponsive } from '../hooks/useResponsive';
+import { useAuth } from '../hooks/useAuth';
+import { addToFavorites, removeFromFavorites, isInFavorites } from '../services/favoritesService';
 
 interface TakeCardProps {
   take: Take;
@@ -36,6 +38,9 @@ export const TakeCard: React.FC<TakeCardProps> = ({
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
   const responsive = useResponsive();
+  const { user } = useAuth();
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
   
   // Dynamic text sizing based on card height
   // For smaller cards (< 400px), reduce text size for better readability
@@ -80,6 +85,22 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   // Some takes may not have totalVotes, so calculate from individual votes
   const totalVotes = take.totalVotes || (take.hotVotes + take.notVotes) || 0;
   
+  // Check if this take is favorited
+  useEffect(() => {
+    const checkFavoriteStatus = async () => {
+      if (user) {
+        try {
+          const favorited = await isInFavorites(user.uid, take.id);
+          setIsFavorited(favorited);
+        } catch (error) {
+          console.error('Error checking favorite status:', error);
+        }
+      }
+    };
+    
+    checkFavoriteStatus();
+  }, [user, take.id]);
+  
   const handleShare = async () => {
     try {
       const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
@@ -92,6 +113,25 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       });
     } catch (error) {
       console.log('Share error:', error);
+    }
+  };
+  
+  const handleFavoriteToggle = async () => {
+    if (!user || favoriteLoading) return;
+    
+    setFavoriteLoading(true);
+    try {
+      if (isFavorited) {
+        await removeFromFavorites(user.uid, take.id);
+        setIsFavorited(false);
+      } else {
+        await addToFavorites(user.uid, take.id);
+        setIsFavorited(true);
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    } finally {
+      setFavoriteLoading(false);
     }
   };
   
@@ -338,18 +378,34 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               </Text>
             </View>
             
-            {/* Share Button */}
-            <View style={{ minHeight: 40, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
-              <TouchableOpacity
-                style={[styles.shareButton, { backgroundColor: theme.primary + '20' }]}
-                onPress={handleShare}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.shareIcon, { color: theme.primary }]}>↗️</Text>
-                <Text style={[styles.shareText, { color: theme.primary, fontSize: responsive.fontSize.small }]}>
-                  Share
-                </Text>
-              </TouchableOpacity>
+            {/* Action Buttons */}
+            <View style={{ minHeight: 50, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
+              <View style={styles.actionButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: theme.accent + '20' }]}
+                  onPress={handleFavoriteToggle}
+                  activeOpacity={0.7}
+                  disabled={favoriteLoading}
+                >
+                  <Text style={[styles.actionIcon, { color: theme.accent }]}>
+                    {isFavorited ? '⭐' : '☆'}
+                  </Text>
+                  <Text style={[styles.actionText, { color: theme.accent, fontSize: responsive.fontSize.small }]}>
+                    {isFavorited ? 'Saved' : 'Save'}
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: theme.primary + '20' }]}
+                  onPress={handleShare}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.actionIcon, { color: theme.primary }]}>↗️</Text>
+                  <Text style={[styles.actionText, { color: theme.primary, fontSize: responsive.fontSize.small }]}>
+                    Share
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         )}
@@ -489,7 +545,11 @@ const styles = StyleSheet.create({
     marginTop: dimensions.spacing.md,
     fontStyle: 'italic',
   },
-  shareButton: {
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -497,10 +557,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 4,
   },
-  shareIcon: {
+  actionIcon: {
     fontSize: 14,
   },
-  shareText: {
+  actionText: {
     fontWeight: '600',
   },
 });

@@ -17,6 +17,7 @@ interface BurgerMenuProps {
   onMyTakes: () => void;
   onLeaderboard: () => void;
   onRecentVotes: () => void;
+  onFavorites: () => void;
   onInstructions: () => void;
   onToggleTheme: () => void;
 }
@@ -26,6 +27,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   onMyTakes,
   onLeaderboard,
   onRecentVotes,
+  onFavorites,
   onInstructions,
   onToggleTheme,
 }) => {
@@ -158,6 +160,25 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
                 >Recent Votes</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { borderBottomColor: theme.border }]}
+                onPress={() => handleMenuItemPress(onFavorites)}
+                activeOpacity={0.7}
+              >
+                <Text 
+                  style={styles.menuIcon}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >⭐</Text>
+                <Text 
+                  style={[styles.menuText, { color: theme.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >My Favorites</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
