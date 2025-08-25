@@ -12,6 +12,7 @@ import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { TakeCard } from '../components/TakeCard';
 import { useAuth } from '../hooks/useAuth';
 import { getUserFavorites, FavoriteItem } from '../services/favoritesService';
+import { getUserVoteForTake } from '../services/voteService';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Take } from '../types/Take';
@@ -93,11 +94,20 @@ export const MyFavoritesScreen: React.FC<MyFavoritesScreenProps> = ({
     loadFavorites();
   }, [user]);
 
-  const handleTakePress = (favorite: FavoriteItem & { take?: Take }) => {
-    if (favorite.take) {
-      // We don't know the user's vote from here, so pass null
-      onShowTakeStats(favorite.take, null);
-      onClose(); // Close the modal after selecting a take
+  const handleTakePress = async (favorite: FavoriteItem & { take?: Take }) => {
+    if (favorite.take && user) {
+      try {
+        // Look up the user's vote for this take
+        const userVoteRecord = await getUserVoteForTake(favorite.take.id, user.uid);
+        const vote = userVoteRecord ? userVoteRecord.vote : null;
+        
+        onShowTakeStats(favorite.take, vote);
+        // Don't close the modal immediately - let the stats modal show on top
+      } catch (error) {
+        console.error('Error getting user vote:', error);
+        // Fallback to showing stats without vote
+        onShowTakeStats(favorite.take, null);
+      }
     }
   };
 

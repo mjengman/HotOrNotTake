@@ -573,8 +573,14 @@ export const HomeScreen: React.FC = () => {
           <MyFavoritesScreen
             onClose={() => setShowFavoritesModal(false)}
             onShowTakeStats={(take, vote) => {
+              // Show stats even if vote is null (user hasn't voted on this take)
               if (vote) {
                 setSelectedTakeForStats({ take, vote });
+              } else {
+                // For takes without a vote, we still want to show the stats
+                // We'll pass 'hot' as a placeholder since the stats modal needs a vote
+                // but the actual user vote status will be determined inside the modal
+                setSelectedTakeForStats({ take, vote: 'hot' });
               }
             }}
             isDarkMode={isDarkMode}
