@@ -102,11 +102,14 @@ export const MyFavoritesScreen: React.FC<MyFavoritesScreenProps> = ({
         const vote = userVoteRecord ? userVoteRecord.vote : null;
         
         onShowTakeStats(favorite.take, vote);
-        // Don't close the modal immediately - let the stats modal show on top
+        // Close the favorites modal so user can see the stats clearly
+        onClose();
       } catch (error) {
         console.error('Error getting user vote:', error);
         // Fallback to showing stats without vote
         onShowTakeStats(favorite.take, null);
+        // Close the modal even on error
+        onClose();
       }
     }
   };
