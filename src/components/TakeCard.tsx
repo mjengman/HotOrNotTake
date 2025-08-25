@@ -185,9 +185,9 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               lineHeight: adaptiveTextSize * 1.4,
             }
           ]}
-          numberOfLines={8}
+          numberOfLines={10}
           adjustsFontSizeToFit
-          minimumFontScale={0.85}
+          minimumFontScale={0.95}
         >
           {take.text}
         </Text>
