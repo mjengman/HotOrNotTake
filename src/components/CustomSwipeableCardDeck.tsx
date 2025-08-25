@@ -739,7 +739,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
             refreshing={refreshing}
             onRefresh={handleRefresh}
             tintColor={theme.primary}
-            title="Pull to check for new takes"
+            title="Pull down to check for new takes"
             titleColor={theme.textSecondary}
           />
         }
@@ -751,8 +751,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           </Text>
           <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
             {noCards 
-              ? 'Be the first to submit a hot take!'
-              : 'Submit more takes to keep the conversation going!'
+              ? 'Submit a new hot take to keep the fun going!'
+              : 'Submit more takes to keep the fun going!'
             }
           </Text>
           
@@ -768,7 +768,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           )}
           
           <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
-            Tap the memo icon (📝) to see all your takes
+            Tap the memo icon 📝 to see all your takes
           </Text>
           
           <Text style={[styles.pullHint, { color: theme.textSecondary, opacity: 0.5, marginTop: 20 }]}>
