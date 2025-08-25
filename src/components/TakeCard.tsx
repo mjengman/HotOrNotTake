@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  Share,
 } from 'react-native';
 import { Take } from '../types';
 import { colors, dimensions } from '../constants';
@@ -78,6 +79,21 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   // Calculate percentages for the reveal
   // Some takes may not have totalVotes, so calculate from individual votes
   const totalVotes = take.totalVotes || (take.hotVotes + take.notVotes) || 0;
+  
+  const handleShare = async () => {
+    try {
+      const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
+      const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
+      
+      const shareMessage = `"${take.text}"\n\n🔥 ${hotPercentage}% HOT | ❄️ ${notPercentage}% NOT\n(${totalVotes.toLocaleString()} total votes)\n\nDownload Hot or Not Takes to vote on more!`;
+      
+      await Share.share({
+        message: shareMessage,
+      });
+    } catch (error) {
+      console.log('Share error:', error);
+    }
+  };
   
   
   // Calculate percentages for the reveal (already calculated totalVotes above for debug)
@@ -321,6 +337,20 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 {totalVotes.toLocaleString()} total votes
               </Text>
             </View>
+            
+            {/* Share Button */}
+            <View style={{ minHeight: 40, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
+              <TouchableOpacity
+                style={[styles.shareButton, { backgroundColor: theme.primary + '20' }]}
+                onPress={handleShare}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.shareIcon, { color: theme.primary }]}>↗️</Text>
+                <Text style={[styles.shareText, { color: theme.primary, fontSize: responsive.fontSize.small }]}>
+                  Share
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -458,5 +488,19 @@ const styles = StyleSheet.create({
     // fontSize now set dynamically with responsive sizing
     marginTop: dimensions.spacing.md,
     fontStyle: 'italic',
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  shareIcon: {
+    fontSize: 14,
+  },
+  shareText: {
+    fontWeight: '600',
   },
 });
