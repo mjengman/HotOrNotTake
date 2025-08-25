@@ -185,7 +185,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               lineHeight: adaptiveTextSize * 1.4,
             }
           ]}
-          numberOfLines={12}
+          numberOfLines={15}
         >
           {take.text}
         </Text>
@@ -302,26 +302,26 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 )}
               </View>
             )}
-            <View style={[styles.percentageContainer, { minHeight: 80, justifyContent: 'center', alignItems: 'center' }]}>
-              <View style={[styles.percentageItem, { minHeight: 60, justifyContent: 'center', alignItems: 'center' }]}>
-                <View style={{ minHeight: 40, justifyContent: 'center', alignItems: 'center' }}>
+            <View style={[styles.percentageContainer, { minHeight: 50, justifyContent: 'center', alignItems: 'center' }]}>
+              <View style={[styles.percentageItem, { minHeight: 40, justifyContent: 'center', alignItems: 'center' }]}>
+                <View style={{ justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={[
                     styles.bigPercentage, 
                     { 
                       color: theme.not,
-                      fontSize: responsive.fontSize.xxlarge + 4,
+                      fontSize: responsive.fontSize.xlarge + 2,
                       textAlign: 'center'
                     }
                   ]}>
                     {notPercentage}%
                   </Text>
                 </View>
-                <View style={{ minHeight: 25, justifyContent: 'center', alignItems: 'center' }}>
+                <View style={{ justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={[
                     styles.percentageLabel, 
                     { 
                       color: theme.textSecondary,
-                      fontSize: responsive.fontSize.medium,
+                      fontSize: responsive.fontSize.small,
                       textAlign: 'center'
                     }
                   ]}>
@@ -333,28 +333,28 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 styles.percentageDivider,
                 { 
                   backgroundColor: theme.border,
-                  height: responsive.spacing.xxl + responsive.spacing.sm
+                  height: responsive.spacing.xl
                 }
               ]} />
-              <View style={[styles.percentageItem, { minHeight: 60, justifyContent: 'center', alignItems: 'center' }]}>
-                <View style={{ minHeight: 40, justifyContent: 'center', alignItems: 'center' }}>
+              <View style={[styles.percentageItem, { minHeight: 40, justifyContent: 'center', alignItems: 'center' }]}>
+                <View style={{ justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={[
                     styles.bigPercentage, 
                     { 
                       color: theme.hot,
-                      fontSize: responsive.fontSize.xxlarge + 4,
+                      fontSize: responsive.fontSize.xlarge + 2,
                       textAlign: 'center'
                     }
                   ]}>
                     {hotPercentage}%
                   </Text>
                 </View>
-                <View style={{ minHeight: 25, justifyContent: 'center', alignItems: 'center' }}>
+                <View style={{ justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={[
                     styles.percentageLabel, 
                     { 
                       color: theme.textSecondary,
-                      fontSize: responsive.fontSize.medium,
+                      fontSize: responsive.fontSize.small,
                       textAlign: 'center'
                     }
                   ]}>
@@ -363,7 +363,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 </View>
               </View>
             </View>
-            <View style={{ minHeight: 25, justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ justifyContent: 'center', alignItems: 'center', marginTop: 4 }}>
               <Text style={[
                 styles.totalVotes, 
                 { 
@@ -377,7 +377,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
             </View>
             
             {/* Action Buttons */}
-            <View style={{ minHeight: 50, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
+            <View style={{ justifyContent: 'center', alignItems: 'center', marginTop: 6 }}>
               <View style={styles.actionButtonsRow}>
                 <TouchableOpacity
                   style={[styles.actionButton, { backgroundColor: theme.accent + '20' }]}
