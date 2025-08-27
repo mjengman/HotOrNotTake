@@ -38,7 +38,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>4</string>
+    <string>5</string>
     <key>GADApplicationIdentifier</key>
     <string>ca-app-pub-3940256099942544~1458002511</string>
     <key>GADDelayAppMeasurementInit</key>
@@ -80,5 +80,7 @@
     <string>Light</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>This app creates visual share cards to share with friends. No photos are accessed from your library.</string>
   </dict>
 </plist>
