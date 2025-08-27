@@ -47,6 +47,7 @@ interface CustomSwipeableCardDeckProps {
   onExternalStatsCardDismiss?: () => void;
   onShowRecentVotes?: () => void;
   onChangeVote?: (take: Take) => void;
+  onVoteNow?: (take: Take) => void;
   totalVotes?: number;
 }
 
@@ -76,6 +77,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   onExternalStatsCardDismiss,
   onShowRecentVotes,
   onChangeVote,
+  onVoteNow,
   totalVotes = 0,
 }) => {
   const responsive = useResponsive();
@@ -889,6 +891,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
                 userVote={lastVote}
                 isFlipped={true}
                 onChangeVote={handleChangeVote}
+                onVoteNow={onVoteNow}
               />
             </Animated.View>
           )}

@@ -302,6 +302,21 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  const handleVoteNow = async (take: any) => {
+    if (!user) return;
+    
+    try {
+      // Close stats modal immediately
+      setSelectedTakeForStats(null);
+      
+      // Add the take to the front of the deck for voting
+      prependTake(take);
+      
+    } catch (error) {
+      console.error('Error preparing take for voting:', error);
+    }
+  };
+
   const handleShowLastVote = async () => {
     if (!lastVotedTake || !user) return;
     
@@ -395,6 +410,7 @@ export const HomeScreen: React.FC = () => {
             onExternalStatsCardDismiss={() => setSelectedTakeForStats(null)}
             onShowRecentVotes={handleShowLastVote}
             onChangeVote={handleChangeVote}
+            onVoteNow={handleVoteNow}
             totalVotes={stats.totalVotes}
           />
         )}

@@ -23,6 +23,7 @@ interface TakeCardProps {
   userVote?: 'hot' | 'not' | null;
   isFlipped?: boolean;
   onChangeVote?: (take: Take) => void;
+  onVoteNow?: (take: Take) => void;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -36,6 +37,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   userVote = null,
   isFlipped = false,
   onChangeVote,
+  onVoteNow,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
   const responsive = useResponsive();
@@ -275,38 +277,73 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               backgroundColor: theme.card,
             }
           ]}>
-            {userVote && (
-              <View style={[styles.voteSection, { minHeight: 40, justifyContent: 'center', alignItems: 'center' }]}>
-                <Text style={[
-                  styles.yourVote, 
-                  { 
-                    color: theme.text,
-                    fontSize: responsive.fontSize.medium,
-                    textAlign: 'center'
-                  }
-                ]}>
-                  You voted {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
-                </Text>
-                {onChangeVote && (
-                  <TouchableOpacity
-                    style={styles.changeVoteButton}
-                    onPress={() => onChangeVote(take)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.changeVoteText, 
-                      { 
-                        color: theme.primary,
-                        fontSize: responsive.fontSize.small,
-                        textAlign: 'center'
-                      }
-                    ]}>
-                      Change your vote
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
+            <View style={[styles.voteSection, { minHeight: 40, justifyContent: 'center', alignItems: 'center' }]}>
+              {userVote ? (
+                <>
+                  <Text style={[
+                    styles.yourVote, 
+                    { 
+                      color: theme.text,
+                      fontSize: responsive.fontSize.medium,
+                      textAlign: 'center'
+                    }
+                  ]}>
+                    You voted {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
+                  </Text>
+                  {onChangeVote && (
+                    <TouchableOpacity
+                      style={styles.changeVoteButton}
+                      onPress={() => onChangeVote(take)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.changeVoteText, 
+                        { 
+                          color: theme.primary,
+                          fontSize: responsive.fontSize.small,
+                          textAlign: 'center'
+                        }
+                      ]}>
+                        Change your vote
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text style={[
+                    styles.yourVote, 
+                    { 
+                      color: theme.textSecondary,
+                      fontSize: responsive.fontSize.medium,
+                      textAlign: 'center',
+                      fontStyle: 'italic'
+                    }
+                  ]}>
+                    🤷 You haven't voted yet
+                  </Text>
+                  {onVoteNow && (
+                    <TouchableOpacity
+                      style={[styles.changeVoteButton, { backgroundColor: theme.primary + '15' }]}
+                      onPress={() => onVoteNow(take)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.changeVoteText, 
+                        { 
+                          color: theme.primary,
+                          fontSize: responsive.fontSize.small,
+                          textAlign: 'center',
+                          fontWeight: 'bold'
+                        }
+                      ]}>
+                        🗳️ Vote now!
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
             <View style={[styles.percentageContainer, { minHeight: 50, justifyContent: 'center', alignItems: 'center' }]}>
               <View style={[styles.percentageItem, { minHeight: 40, justifyContent: 'center', alignItems: 'center' }]}>
                 <View style={{ justifyContent: 'center', alignItems: 'center' }}>
