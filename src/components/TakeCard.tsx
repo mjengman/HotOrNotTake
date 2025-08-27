@@ -320,7 +320,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                       fontStyle: 'italic'
                     }
                   ]}>
-                    🤷 You haven't voted yet
+                    You haven't voted yet
                   </Text>
                   {onVoteNow && (
                     <TouchableOpacity

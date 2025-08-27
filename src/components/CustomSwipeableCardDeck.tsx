@@ -148,6 +148,16 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       flipSV.value = 1;
       promoteSV.value = 1;
       animatingSV.value = 0;
+    } else if (externalStatsCard === null && isCardFlipped) {
+      // Reset when external stats card is dismissed
+      setIsCardFlipped(false);
+      setLastVote(null);
+      setCurrentVote(null);
+      
+      // Reset animation values
+      flipSV.value = 0;
+      promoteSV.value = 0;
+      animatingSV.value = 0;
     }
   }, [externalStatsCard]);
 

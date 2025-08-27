@@ -122,7 +122,7 @@ export const TakeStatsModal: React.FC<TakeStatsModalProps> = ({
                     styles.userVoteText,
                     { color: theme.textSecondary }
                   ]}>
-                    🤷 You haven't voted yet
+                    You haven't voted yet
                   </Text>
                 </View>
               )}
