@@ -44,7 +44,7 @@ export const HomeScreen: React.FC = () => {
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
   const [showRecentVotesModal, setShowRecentVotesModal] = useState(false);
   const [showFavoritesModal, setShowFavoritesModal] = useState(false);
-  const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: any, vote: 'hot' | 'not'} | null>(null);
+  const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: any, vote: 'hot' | 'not' | null} | null>(null);
   const [lastVotedTake, setLastVotedTake] = useState<any | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -511,12 +511,23 @@ export const HomeScreen: React.FC = () => {
           <MyTakesScreen
             onClose={() => setShowMyTakesModal(false)}
             onOpenSubmit={() => setShowSubmitModal(true)}
-            onShowTakeStats={(take, vote) => {
+            onShowTakeStats={async (take, vote) => {
               if (vote) {
                 setSelectedTakeForStats({ take, vote });
               } else {
-                // For user's own takes, pass 'hot' as placeholder since stats modal needs a vote
-                setSelectedTakeForStats({ take, vote: 'hot' });
+                // Look up user's actual vote for this take
+                try {
+                  if (user) {
+                    const userVoteRecord = await getUserVoteForTake(take.id, user.uid);
+                    const actualVote = userVoteRecord ? userVoteRecord.vote : null;
+                    setSelectedTakeForStats({ take, vote: actualVote });
+                  } else {
+                    setSelectedTakeForStats({ take, vote: null });
+                  }
+                } catch (error) {
+                  console.error('Error getting user vote:', error);
+                  setSelectedTakeForStats({ take, vote: null });
+                }
               }
             }}
             isDarkMode={isDarkMode}
@@ -539,12 +550,23 @@ export const HomeScreen: React.FC = () => {
         }}>
           <LeaderboardScreen
             onClose={() => setShowLeaderboardModal(false)}
-            onShowTakeStats={(take, vote) => {
+            onShowTakeStats={async (take, vote) => {
               if (vote) {
                 setSelectedTakeForStats({ take, vote });
               } else {
-                // For leaderboard takes, pass 'hot' as placeholder since stats modal needs a vote
-                setSelectedTakeForStats({ take, vote: 'hot' });
+                // Look up user's actual vote for this take
+                try {
+                  if (user) {
+                    const userVoteRecord = await getUserVoteForTake(take.id, user.uid);
+                    const actualVote = userVoteRecord ? userVoteRecord.vote : null;
+                    setSelectedTakeForStats({ take, vote: actualVote });
+                  } else {
+                    setSelectedTakeForStats({ take, vote: null });
+                  }
+                } catch (error) {
+                  console.error('Error getting user vote:', error);
+                  setSelectedTakeForStats({ take, vote: null });
+                }
               }
             }}
             isDarkMode={isDarkMode}
@@ -588,15 +610,24 @@ export const HomeScreen: React.FC = () => {
         }}>
           <MyFavoritesScreen
             onClose={() => setShowFavoritesModal(false)}
-            onShowTakeStats={(take, vote) => {
+            onShowTakeStats={async (take, vote) => {
               // Show stats even if vote is null (user hasn't voted on this take)
               if (vote) {
                 setSelectedTakeForStats({ take, vote });
               } else {
-                // For takes without a vote, we still want to show the stats
-                // We'll pass 'hot' as a placeholder since the stats modal needs a vote
-                // but the actual user vote status will be determined inside the modal
-                setSelectedTakeForStats({ take, vote: 'hot' });
+                // Look up user's actual vote for this take
+                try {
+                  if (user) {
+                    const userVoteRecord = await getUserVoteForTake(take.id, user.uid);
+                    const actualVote = userVoteRecord ? userVoteRecord.vote : null;
+                    setSelectedTakeForStats({ take, vote: actualVote });
+                  } else {
+                    setSelectedTakeForStats({ take, vote: null });
+                  }
+                } catch (error) {
+                  console.error('Error getting user vote:', error);
+                  setSelectedTakeForStats({ take, vote: null });
+                }
               }
             }}
             isDarkMode={isDarkMode}

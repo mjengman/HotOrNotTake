@@ -15,7 +15,7 @@ import { colors, dimensions } from '../constants';
 interface TakeStatsModalProps {
   visible: boolean;
   take: Take;
-  userVote: 'hot' | 'not';
+  userVote: 'hot' | 'not' | null;
   onClose: () => void;
   onChangeVote?: (take: Take) => void;
   isDarkMode?: boolean;
@@ -80,31 +80,51 @@ export const TakeStatsModal: React.FC<TakeStatsModalProps> = ({
             {/* Your Vote */}
             <View style={styles.voteSection}>
               <Text style={[styles.sectionTitle, { color: theme.text }]}>Your Vote</Text>
-              <View style={[
-                styles.userVoteBadge,
-                { 
-                  backgroundColor: userVote === 'hot' ? '#FF6B4720' : '#4A9EFF20',
-                  borderColor: userVote === 'hot' ? '#FF6B47' : '#4A9EFF',
-                }
-              ]}>
-                <Text style={[
-                  styles.userVoteText,
-                  { color: userVote === 'hot' ? '#FF6B47' : '#4A9EFF' }
+              {userVote ? (
+                <>
+                  <View style={[
+                    styles.userVoteBadge,
+                    { 
+                      backgroundColor: userVote === 'hot' ? '#FF6B4720' : '#4A9EFF20',
+                      borderColor: userVote === 'hot' ? '#FF6B47' : '#4A9EFF',
+                    }
+                  ]}>
+                    <Text style={[
+                      styles.userVoteText,
+                      { color: userVote === 'hot' ? '#FF6B47' : '#4A9EFF' }
+                    ]}>
+                      {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
+                    </Text>
+                  </View>
+                  
+                  {onChangeVote && (
+                    <TouchableOpacity
+                      style={styles.changeVoteButton}
+                      onPress={() => onChangeVote(take)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.changeVoteText, { color: theme.textSecondary }]}>
+                        Change your vote
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              ) : (
+                <View style={[
+                  styles.userVoteBadge,
+                  { 
+                    backgroundColor: theme.surface,
+                    borderColor: theme.textSecondary,
+                    borderStyle: 'dashed',
+                  }
                 ]}>
-                  {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
-                </Text>
-              </View>
-              
-              {onChangeVote && (
-                <TouchableOpacity
-                  style={styles.changeVoteButton}
-                  onPress={() => onChangeVote(take)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.changeVoteText, { color: theme.textSecondary }]}>
-                    Change your vote
+                  <Text style={[
+                    styles.userVoteText,
+                    { color: theme.textSecondary }
+                  ]}>
+                    🤷 You haven't voted yet
                   </Text>
-                </TouchableOpacity>
+                </View>
               )}
             </View>
 

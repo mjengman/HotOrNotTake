@@ -43,7 +43,7 @@ interface CustomSwipeableCardDeckProps {
   loadMore?: (count?: number) => Promise<void>;
   refreshTakes?: () => Promise<void>;
   loading?: boolean;
-  externalStatsCard?: {take: Take, vote: 'hot' | 'not'} | null;
+  externalStatsCard?: {take: Take, vote: 'hot' | 'not' | null} | null;
   onExternalStatsCardDismiss?: () => void;
   onShowRecentVotes?: () => void;
   onChangeVote?: (take: Take) => void;
