@@ -5,23 +5,13 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  ScrollView,
   Dimensions,
   SafeAreaView,
   BackHandler,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  PanGestureHandler, 
-  PanGestureHandlerGestureEvent,
-  GestureHandlerRootView 
-} from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  useAnimatedGestureHandler,
-  runOnJS,
-} from 'react-native-reanimated';
+// Gesture handling removed for simplicity - using button navigation only
+import { ScrollView } from 'react-native';
 import { colors } from '../constants';
 
 interface InstructionsModalProps {
@@ -30,8 +20,7 @@ interface InstructionsModalProps {
   isDarkMode?: boolean;
 }
 
-const { width: screenWidth } = Dimensions.get('window');
-const SWIPE_THRESHOLD = screenWidth * 0.15; // 15% of screen width to trigger navigation (more sensitive)
+// Swipe functionality removed - using button navigation only
 
 export const InstructionsModal: React.FC<InstructionsModalProps> = ({
   visible,
@@ -40,7 +29,6 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState(0);
   const theme = isDarkMode ? colors.dark : colors.light;
-  const translateX = useSharedValue(0);
 
   // Reset to first page when modal closes
   useEffect(() => {
@@ -284,44 +272,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
     }
   };
 
-  const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
-    onActive: (event) => {
-      // Only respond to horizontal swipes, ignore vertical scrolling
-      const isHorizontalSwipe = Math.abs(event.translationX) > Math.abs(event.translationY);
-      
-      if (isHorizontalSwipe) {
-        // Limit the translation to prevent over-stretching
-        const maxTranslation = screenWidth * 0.3;
-        translateX.value = Math.max(-maxTranslation, Math.min(maxTranslation, event.translationX));
-      }
-    },
-    onEnd: (event) => {
-      // Only trigger navigation if it's primarily a horizontal swipe
-      const isHorizontalSwipe = Math.abs(event.translationX) > Math.abs(event.translationY);
-      
-      if (isHorizontalSwipe) {
-        const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
-        const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
-
-        if (shouldSwipeLeft) {
-          // Swipe left = go to next page
-          runOnJS(handleNext)();
-        } else if (shouldSwipeRight) {
-          // Swipe right = go to previous page
-          runOnJS(handlePrevious)();
-        }
-      }
-
-      // Instant return to center (no animation)
-      translateX.value = 0;
-    },
-  });
-
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ translateX: translateX.value }],
-    };
-  });
+  // Gesture handling removed - using simple button navigation
 
   return (
     <Modal
@@ -330,25 +281,13 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
           <View style={styles.header} />
 
-          <PanGestureHandler 
-            onGestureEvent={gestureHandler} 
-            simultaneousHandlers={[]}
-            activeOffsetX={[-10, 10]}
-            failOffsetY={[-10, 10]}
+          <ScrollView 
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
           >
-            <Animated.View style={[{ flex: 1 }, animatedStyle]}>
-              <ScrollView 
-                contentContainerStyle={styles.content}
-                showsVerticalScrollIndicator={true}
-                scrollEnabled={true}
-                style={{ flex: 1 }}
-                bounces={true}
-                nestedScrollEnabled={true}
-              >
                 <LinearGradient
                   colors={['#FF6B6B', '#FF8B8B']}
                   start={{ x: 0, y: 0 }}
@@ -362,8 +301,6 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
                   {pages[currentPage].content}
                 </View>
               </ScrollView>
-            </Animated.View>
-          </PanGestureHandler>
 
         <View style={styles.footer}>
           <View style={styles.pagination}>
@@ -406,7 +343,6 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
           </View>
         </View>
         </SafeAreaView>
-      </GestureHandlerRootView>
     </Modal>
   );
 };

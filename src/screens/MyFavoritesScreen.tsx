@@ -168,6 +168,7 @@ export const MyFavoritesScreen: React.FC<MyFavoritesScreenProps> = ({
       ) : (
         <ScrollView 
           style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           {favorites.map((favorite, index) => (
@@ -289,7 +290,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: dimensions.spacing.lg,
+    paddingBottom: dimensions.spacing.lg,
   },
   favoriteItem: {
     marginVertical: dimensions.spacing.sm,

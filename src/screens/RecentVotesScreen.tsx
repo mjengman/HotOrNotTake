@@ -159,6 +159,7 @@ export const RecentVotesScreen: React.FC<RecentVotesScreenProps> = ({
       ) : (
         <ScrollView 
           style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           {recentVotes.map((vote, index) => (
@@ -277,7 +278,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: dimensions.spacing.lg,
+    paddingBottom: dimensions.spacing.lg,
   },
   voteItem: {
     marginVertical: dimensions.spacing.sm,

@@ -291,6 +291,7 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
       {/* Takes List */}
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -387,6 +388,9 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   takesContainer: {
     paddingHorizontal: dimensions.spacing.lg,
