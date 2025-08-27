@@ -3,7 +3,7 @@ export default () => ({
   expo: {
     name: "Hot or Not Takes",
     slug: "HotOrNotTakes",
-    version: "1.0.0",
+    version: "1.0.2",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
