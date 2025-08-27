@@ -31,7 +31,7 @@ interface InstructionsModalProps {
 }
 
 const { width: screenWidth } = Dimensions.get('window');
-const SWIPE_THRESHOLD = screenWidth * 0.25; // 25% of screen width to trigger navigation
+const SWIPE_THRESHOLD = screenWidth * 0.15; // 15% of screen width to trigger navigation (more sensitive)
 
 export const InstructionsModal: React.FC<InstructionsModalProps> = ({
   visible,
@@ -166,14 +166,18 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
                 <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>Leaderboards</Text>
               </View>
               <View style={styles.buttonItem}>
-                <Text style={styles.buttonIcon}>🌙/☀️</Text>
-                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>Dark/Light</Text>
+                <Text style={styles.buttonIcon}>⭐</Text>
+                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>Favorites</Text>
+              </View>
+              <View style={styles.buttonItem}>
+                <Text style={styles.buttonIcon}>↩️</Text>
+                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>Recent Votes</Text>
               </View>
             </View>
           </View>
 
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Actions</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Voting Actions</Text>
             
             <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
               <Text style={styles.instructionEmoji}>👆</Text>
@@ -200,6 +204,38 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
               <Text style={styles.instructionEmoji}>↕️</Text>
               <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
                 <Text style={[styles.bold, { color: theme.text }]}>SWIPE UP or DOWN</Text> to skip ⏭️ if you're unsure
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>After Voting</Text>
+            
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>📊</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>TAP takes</Text> in Favorites, My Takes, or Leaderboard to see full stats
+              </Text>
+            </View>
+
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>🔄</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>CHANGE votes</Text> by tapping "Change your vote" on any stats card
+              </Text>
+            </View>
+
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>🗳️</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>VOTE NOW</Text> on takes you haven't voted on yet by tapping the vote button
+              </Text>
+            </View>
+
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>📤</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>SHARE</Text> interesting takes using the share button on stats cards
               </Text>
             </View>
           </View>
@@ -467,6 +503,7 @@ const styles = StyleSheet.create({
   buttonItem: {
     alignItems: 'center',
     flex: 1,
+    minWidth: 60,
   },
   buttonIcon: {
     fontSize: 24,
