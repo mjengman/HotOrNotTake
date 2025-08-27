@@ -222,7 +222,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
       title: "Other Features 🌟",
       content: (
         <>
-          <View style={styles.section}>
+          <View style={[styles.section, { marginBottom: 5 }]}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>After Voting</Text>
             
             <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
@@ -235,21 +235,21 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
               <Text style={styles.instructionEmoji}>⭐</Text>
               <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-                <Text style={[styles.bold, { color: theme.text }]}>FAVORITES</Text> - Save takes to check later
+                <Text style={[styles.bold, { color: theme.text }]}>FAVORITES</Text> - Save takes to check on later
               </Text>
             </View>
 
             <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
               <Text style={styles.instructionEmoji}>🔄</Text>
               <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-                <Text style={[styles.bold, { color: theme.text }]}>CHANGE VOTES</Text> - Fix wrong swipes anytime
+                <Text style={[styles.bold, { color: theme.text }]}>CHANGE VOTES</Text> - Fix a wrong swipe anytime
               </Text>
             </View>
 
             <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
               <Text style={styles.instructionEmoji}>📤</Text>
               <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-                <Text style={[styles.bold, { color: theme.text }]}>SHARE</Text> - Send interesting takes to friends
+                <Text style={[styles.bold, { color: theme.text }]}>SHARE</Text> - Send interesting hot take results to friends
               </Text>
             </View>
           </View>

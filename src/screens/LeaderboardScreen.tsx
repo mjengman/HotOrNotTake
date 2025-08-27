@@ -276,6 +276,9 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                   color: activeTab === tab.key ? '#FFFFFF' : theme.text,
                 },
               ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.8}
             >
               {tab.label}
             </Text>
@@ -412,6 +415,8 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: dimensions.fontSize.small,
     fontWeight: '600',
+    textAlign: 'center',
+    flexShrink: 1,
   },
   scrollView: {
     flex: 1,
