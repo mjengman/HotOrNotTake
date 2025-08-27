@@ -19,6 +19,7 @@ import { getUserSubmittedTakes, deleteTake } from '../services/takeService';
 interface MyTakesScreenProps {
   onClose: () => void;
   onOpenSubmit: () => void;
+  onShowTakeStats?: (take: Take, vote: 'hot' | 'not' | null) => void;
   isDarkMode?: boolean;
   refreshTrigger?: number; // Timestamp to trigger refresh
 }
@@ -26,6 +27,7 @@ interface MyTakesScreenProps {
 export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
   onClose,
   onOpenSubmit,
+  onShowTakeStats,
   isDarkMode = false,
   refreshTrigger,
 }) => {
@@ -134,6 +136,15 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
     );
   };
 
+  const handleTakePress = (take: Take) => {
+    if (onShowTakeStats && take.isApproved) {
+      // For user's own takes, we don't know their vote (they created it, not voted)
+      onShowTakeStats(take, null);
+      // Close the My Takes modal so user can see the stats clearly
+      onClose();
+    }
+  };
+
   const renderTakeCard = (take: Take) => (
     <View key={take.id} style={[styles.takeCard, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
       {/* Status Header */}
@@ -152,67 +163,82 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Take Text */}
-      <Text style={[styles.takeText, { color: theme.text }]}>
-        {take.text}
-      </Text>
-
-      {/* Category */}
-      <View style={styles.categoryContainer}>
-        <Text style={[styles.categoryText, { color: theme.textSecondary }]}>
-          #{take.category}
+      {/* Tappable Content Area - only for approved takes */}
+      <TouchableOpacity
+        onPress={() => handleTakePress(take)}
+        activeOpacity={take.isApproved ? 0.7 : 1}
+        disabled={!take.isApproved}
+        style={styles.tappableContent}
+      >
+        {/* Take Text */}
+        <Text style={[styles.takeText, { color: theme.text }]}>
+          {take.text}
         </Text>
-      </View>
 
-      {/* Performance Metrics (only for approved takes) */}
-      {take.status === 'approved' && take.totalVotes > 0 && (
-        <View style={styles.metricsContainer}>
-          <Text style={[styles.metricsTitle, { color: theme.text }]}>
-            Performance
+        {/* Category */}
+        <View style={styles.categoryContainer}>
+          <Text style={[styles.categoryText, { color: theme.textSecondary }]}>
+            #{take.category}
           </Text>
-          
-          <View style={styles.voteStats}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: '#4A90E2' }]}>
-                {take.notVotes}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-                ❄️ Not ({formatPercentage(take.notVotes, take.totalVotes)})
-              </Text>
-            </View>
+        </View>
+
+        {/* Performance Metrics (only for approved takes) */}
+        {take.status === 'approved' && take.totalVotes > 0 && (
+          <View style={styles.metricsContainer}>
+            <Text style={[styles.metricsTitle, { color: theme.text }]}>
+              Performance
+            </Text>
             
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.primary }]}>
-                {take.hotVotes}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-                🔥 Hot ({formatPercentage(take.hotVotes, take.totalVotes)})
-              </Text>
-            </View>
-            
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.text }]}>
-                {take.totalVotes}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-                Total Votes
-              </Text>
+            <View style={styles.voteStats}>
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, { color: '#4A90E2' }]}>
+                  {take.notVotes}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                  ❄️ Not ({formatPercentage(take.notVotes, take.totalVotes)})
+                </Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, { color: theme.primary }]}>
+                  {take.hotVotes}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                  🔥 Hot ({formatPercentage(take.hotVotes, take.totalVotes)})
+                </Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, { color: theme.text }]}>
+                  {take.totalVotes}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                  Total Votes
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
-      )}
+        )}
 
-      {/* Rejection Reason (if rejected) */}
-      {take.status === 'rejected' && take.rejectionReason && (
-        <View style={styles.rejectionContainer}>
-          <Text style={[styles.rejectionTitle, { color: theme.error }]}>
-            Rejection Reason:
+        {/* Tap hint for approved takes */}
+        {take.isApproved && take.totalVotes > 0 && (
+          <Text style={[styles.tapHint, { color: theme.textSecondary }]}>
+            Tap to view full stats and share
           </Text>
-          <Text style={[styles.rejectionReason, { color: theme.textSecondary }]}>
-            {take.rejectionReason}
-          </Text>
-        </View>
-      )}
+        )}
+
+        {/* Rejection Reason (if rejected) */}
+        {take.status === 'rejected' && take.rejectionReason && (
+          <View style={styles.rejectionContainer}>
+            <Text style={[styles.rejectionTitle, { color: theme.error }]}>
+              Rejection Reason:
+            </Text>
+            <Text style={[styles.rejectionReason, { color: theme.textSecondary }]}>
+              {take.rejectionReason}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
     </View>
   );
 
@@ -370,6 +396,15 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     borderRadius: 12,
     padding: dimensions.spacing.lg,
     marginBottom: dimensions.spacing.lg,
+  },
+  tappableContent: {
+    flex: 1,
+  },
+  tapHint: {
+    fontSize: dimensions.fontSize.small,
+    fontStyle: 'italic',
+    textAlign: 'right',
+    marginTop: dimensions.spacing.xs,
   },
   statusHeader: {
     flexDirection: 'row',

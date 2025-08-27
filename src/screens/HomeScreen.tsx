@@ -511,6 +511,14 @@ export const HomeScreen: React.FC = () => {
           <MyTakesScreen
             onClose={() => setShowMyTakesModal(false)}
             onOpenSubmit={() => setShowSubmitModal(true)}
+            onShowTakeStats={(take, vote) => {
+              if (vote) {
+                setSelectedTakeForStats({ take, vote });
+              } else {
+                // For user's own takes, pass 'hot' as placeholder since stats modal needs a vote
+                setSelectedTakeForStats({ take, vote: 'hot' });
+              }
+            }}
             isDarkMode={isDarkMode}
             refreshTrigger={myTakesRefreshTrigger}
           />
