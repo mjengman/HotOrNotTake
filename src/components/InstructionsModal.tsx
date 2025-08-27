@@ -111,7 +111,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
               <Text style={[styles.voteDescription, { color: theme.textSecondary }]}>
                 I AGREE with this take{'\n'}
                 YES, this is true{'\n'}
-                This opinion is VALID
+                This opinion is GOOD
               </Text>
             </View>
 
@@ -125,7 +125,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
               <Text style={[styles.voteDescription, { color: theme.textSecondary }]}>
                 I DISAGREE with this take{'\n'}
                 NO, this is wrong{'\n'}
-                This opinion is TRASH
+                This opinion is BAD
               </Text>
             </View>
 
@@ -159,19 +159,19 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             <View style={styles.buttonGrid}>
               <View style={styles.buttonItem}>
                 <Text style={styles.buttonIcon}>📝</Text>
-                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>My Takes</Text>
+                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]} numberOfLines={1}>My Takes</Text>
               </View>
               <View style={styles.buttonItem}>
                 <Text style={styles.buttonIcon}>🏆</Text>
-                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>Leaderboards</Text>
+                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]} numberOfLines={1}>Leaders</Text>
               </View>
               <View style={styles.buttonItem}>
                 <Text style={styles.buttonIcon}>⭐</Text>
-                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>Favorites</Text>
+                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]} numberOfLines={1}>Favorites</Text>
               </View>
               <View style={styles.buttonItem}>
                 <Text style={styles.buttonIcon}>↩️</Text>
-                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]}>Recent Votes</Text>
+                <Text style={[styles.buttonLabel, { color: theme.textSecondary }]} numberOfLines={1}>Recent</Text>
               </View>
             </View>
           </View>
@@ -208,37 +208,6 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             </View>
           </View>
 
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>After Voting</Text>
-            
-            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-              <Text style={styles.instructionEmoji}>📊</Text>
-              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-                <Text style={[styles.bold, { color: theme.text }]}>TAP takes</Text> in Favorites, My Takes, or Leaderboard to see full stats
-              </Text>
-            </View>
-
-            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-              <Text style={styles.instructionEmoji}>🔄</Text>
-              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-                <Text style={[styles.bold, { color: theme.text }]}>CHANGE votes</Text> by tapping "Change your vote" on any stats card
-              </Text>
-            </View>
-
-            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-              <Text style={styles.instructionEmoji}>🗳️</Text>
-              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-                <Text style={[styles.bold, { color: theme.text }]}>VOTE NOW</Text> on takes you haven't voted on yet by tapping the vote button
-              </Text>
-            </View>
-
-            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-              <Text style={styles.instructionEmoji}>📤</Text>
-              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
-                <Text style={[styles.bold, { color: theme.text }]}>SHARE</Text> interesting takes using the share button on stats cards
-              </Text>
-            </View>
-          </View>
 
           {/* <View style={styles.tipBox}>
             <Text style={styles.tipText}>
@@ -246,9 +215,54 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             </Text>
           </View> */}
 
-          <View style={[styles.tipBox, { backgroundColor: '#E8F5E8', marginTop: -10 }]}>
+        </>
+      ),
+    },
+    {
+      title: "Other Features 🌟",
+      content: (
+        <>
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>After Voting</Text>
+            
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>↩️</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>PREVIOUS BUTTON</Text> - See stats of your last vote
+              </Text>
+            </View>
+
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>⭐</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>FAVORITES</Text> - Save takes to check later
+              </Text>
+            </View>
+
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>🔄</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>CHANGE VOTES</Text> - Fix wrong swipes anytime
+              </Text>
+            </View>
+
+            <View style={[styles.instructionItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+              <Text style={styles.instructionEmoji}>📤</Text>
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
+                <Text style={[styles.bold, { color: theme.text }]}>SHARE</Text> - Send interesting takes to friends
+              </Text>
+            </View>
+          </View>
+
+          <View style={[styles.tipBox, { backgroundColor: '#E8F5E8' }]}>
             <Text style={[styles.tipText, { color: '#2E7D32' }]}>
               🚀 Pro Tip: The more you swipe in a session, the fewer ads you'll see! Keep swiping for longer uninterrupted streaks.
+            </Text>
+          </View>
+
+          <View style={[styles.tipBox, { backgroundColor: '#E3F2FD', marginTop: 10 }]}>
+            <Text style={[styles.tipText, { color: '#1565C0' }]}>
+              💡 All your takes are anonymous. Only you can see and manage your submissions!
             </Text>
           </View>
         </>
@@ -272,20 +286,30 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
 
   const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
     onActive: (event) => {
-      // Limit the translation to prevent over-stretching
-      const maxTranslation = screenWidth * 0.3;
-      translateX.value = Math.max(-maxTranslation, Math.min(maxTranslation, event.translationX));
+      // Only respond to horizontal swipes, ignore vertical scrolling
+      const isHorizontalSwipe = Math.abs(event.translationX) > Math.abs(event.translationY);
+      
+      if (isHorizontalSwipe) {
+        // Limit the translation to prevent over-stretching
+        const maxTranslation = screenWidth * 0.3;
+        translateX.value = Math.max(-maxTranslation, Math.min(maxTranslation, event.translationX));
+      }
     },
     onEnd: (event) => {
-      const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
-      const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
+      // Only trigger navigation if it's primarily a horizontal swipe
+      const isHorizontalSwipe = Math.abs(event.translationX) > Math.abs(event.translationY);
+      
+      if (isHorizontalSwipe) {
+        const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
+        const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
 
-      if (shouldSwipeLeft) {
-        // Swipe left = go to next page
-        runOnJS(handleNext)();
-      } else if (shouldSwipeRight) {
-        // Swipe right = go to previous page
-        runOnJS(handlePrevious)();
+        if (shouldSwipeLeft) {
+          // Swipe left = go to next page
+          runOnJS(handleNext)();
+        } else if (shouldSwipeRight) {
+          // Swipe right = go to previous page
+          runOnJS(handlePrevious)();
+        }
       }
 
       // Instant return to center (no animation)
@@ -310,12 +334,20 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
           <View style={styles.header} />
 
-          <PanGestureHandler onGestureEvent={gestureHandler}>
+          <PanGestureHandler 
+            onGestureEvent={gestureHandler} 
+            simultaneousHandlers={[]}
+            activeOffsetX={[-10, 10]}
+            failOffsetY={[-10, 10]}
+          >
             <Animated.View style={[{ flex: 1 }, animatedStyle]}>
               <ScrollView 
                 contentContainerStyle={styles.content}
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={true}
                 scrollEnabled={true}
+                style={{ flex: 1 }}
+                bounces={true}
+                nestedScrollEnabled={true}
               >
                 <LinearGradient
                   colors={['#FF6B6B', '#FF8B8B']}
@@ -388,8 +420,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   content: {
-    flexGrow: 1,
     paddingHorizontal: 20,
+    paddingBottom: 40,
+    flexGrow: 1,
   },
   titleContainer: {
     borderRadius: 15,
@@ -404,7 +437,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   pageContent: {
-    flex: 1,
+    // Remove flex: 1 to allow natural content expansion
   },
   section: {
     marginBottom: 25,
@@ -499,11 +532,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginTop: 10,
+    gap: 8,
   },
   buttonItem: {
     alignItems: 'center',
     flex: 1,
-    minWidth: 60,
+    minWidth: 75,
+    maxWidth: 90,
   },
   buttonIcon: {
     fontSize: 24,
