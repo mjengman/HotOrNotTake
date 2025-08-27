@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,16 @@ import {
   TouchableOpacity,
   Share,
   Platform,
+  InteractionManager,
 } from 'react-native';
+import ViewShot from 'react-native-view-shot';
+import RNShare from 'react-native-share';
 import { Take } from '../types';
 import { colors, dimensions } from '../constants';
 import { useResponsive } from '../hooks/useResponsive';
 import { useAuth } from '../hooks/useAuth';
 import { addToFavorites, removeFromFavorites, isInFavorites } from '../services/favoritesService';
+import { VisualShareCard } from './VisualShareCard';
 
 interface TakeCardProps {
   take: Take;
@@ -26,7 +30,7 @@ interface TakeCardProps {
   onVoteNow?: (take: Take) => void;
 }
 
-const { width, height } = Dimensions.get('window');
+// const { width, height } = Dimensions.get('window');
 
 export const TakeCard: React.FC<TakeCardProps> = ({ 
   take, 
@@ -44,6 +48,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const { user } = useAuth();
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const visualShareRef = useRef<ViewShot>(null);
   
   // Dynamic text sizing based on card height
   // For smaller cards (< 400px), reduce text size for better readability
@@ -106,20 +111,99 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   
   const handleShare = async () => {
     try {
+      const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
+      
+      // Try visual sharing first
+      if (visualShareRef.current?.capture) {
+        try {
+          console.log('🖼️ Generating visual share card...');
+          
+          // 1) Ensure the card is fully laid out before capture
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+              InteractionManager.runAfterInteractions(() => resolve());
+            });
+          });
+
+          // 2) Capture the card at a social-friendly size
+          const imageUri = await visualShareRef.current.capture({
+            format: 'png',
+            quality: 0.92,
+            result: 'tmpfile',   // ensures file:// path on iOS
+            width: 1200,         // scales your 400x600 layout up proportionally
+            height: 1800,        // same ratio as your VisualShareCard (400x600)
+          });
+
+          if (!imageUri) throw new Error('Capture failed / imageUri missing');
+          console.log('✅ Visual share card generated:', imageUri);
+          
+          // Platform-specific sharing for optimal UX
+          if (Platform.OS === 'ios') {
+            // iOS: primary item = URL (clickable), preview = our card via LP metadata
+            await RNShare.open({
+              activityItemSources: [
+                {
+                  // Primary, tappable item
+                  placeholderItem: { type: 'url', content: SMART_LINK },
+                  item: {
+                    default: { type: 'url', content: SMART_LINK },
+                  },
+                  subject: 'Hot or Not Takes',
+                  // Link Presentation metadata
+                  linkMetadata: {
+                    title: '🔥 Hot or Not Takes — Join the debate',
+                    originalUrl: SMART_LINK,
+                    url: SMART_LINK,
+                    // RNShare maps this to LPLinkMetadata.iconProvider under the hood
+                    icon: imageUri,  // use the card image as the preview
+                  } as any,
+                },
+                // Secondary: raw image (for apps that ignore link previews)
+                {
+                  placeholderItem: { type: 'image', content: imageUri },
+                  item: { default: { type: 'image', content: imageUri } },
+                } as any,
+              ],
+              failOnCancel: false,
+            });
+          } else {
+            // Android: multi-item share usually keeps both
+            await RNShare.open({
+              urls: [imageUri, SMART_LINK],
+              message: `Check out this hot take! ${SMART_LINK}`,
+              title: 'Hot or Not Takes',
+              failOnCancel: false,
+            });
+          }
+          
+          return; // Success - exit early
+          
+        } catch (visualError) {
+          console.log('⚠️ Visual sharing failed, falling back to text:', visualError);
+        }
+      }
+      
+      // Fallback to enhanced text sharing
       const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
       const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
       
-      // Smart link that auto-redirects to the right store
-      const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
+      const shareMessage = `🔥 CHECK OUT THIS HOT TAKE! 🔥\n\n"${take.text}"\n\n📊 COMMUNITY VERDICT:\n🔥 ${hotPercentage}% HOT\n❄️ ${notPercentage}% NOT\n\n👥 ${totalVotes.toLocaleString()} total votes\n\n${userVote ? `I voted ${userVote.toUpperCase()}! ` : ''}What's your take?\n\nJoin the debate: ${SMART_LINK}`;
       
-      const shareMessage = `"${take.text}"\n\n🔥 ${hotPercentage}% HOT | ❄️ ${notPercentage}% NOT\n(${totalVotes.toLocaleString()} total votes)\n\n${Platform.OS === 'ios' ? '' : SMART_LINK}`;
-      
-      await Share.share({
+      await RNShare.open({
+        title: 'Hot or Not Takes',
         message: shareMessage,
-        ...(Platform.OS === 'ios' && { url: SMART_LINK }), // iOS uses url field
+        failOnCancel: false,
       });
+      
     } catch (error) {
-      console.log('Share error:', error);
+      console.log('All sharing failed:', error);
+      // Final fallback to built-in Share
+      try {
+        const fallbackMessage = `"${take.text}"\n\nCheck out this hot take! https://hot-or-not-takes.web.app/download`;
+        await Share.share({ message: fallbackMessage });
+      } catch (finalError) {
+        console.log('Final fallback failed:', finalError);
+      }
     }
   };
   
@@ -450,6 +534,17 @@ export const TakeCard: React.FC<TakeCardProps> = ({
           </View>
         )}
       </View>
+      
+      {/* Off-screen VisualShareCard for image generation */}
+      <View style={styles.offScreenContainer} collapsable={false}>
+        <ViewShot ref={visualShareRef}>
+          <VisualShareCard 
+            take={take} 
+            userVote={userVote} 
+            isDarkMode={isDarkMode}
+          />
+        </ViewShot>
+      </View>
     </View>
   );
 };
@@ -602,5 +697,12 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontWeight: '600',
+  },
+  offScreenContainer: {
+    position: 'absolute',
+    left: -9999,
+    top: -9999,
+    width: 400,
+    height: 600,
   },
 });
