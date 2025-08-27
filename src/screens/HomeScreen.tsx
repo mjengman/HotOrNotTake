@@ -306,11 +306,14 @@ export const HomeScreen: React.FC = () => {
     if (!user) return;
     
     try {
-      // Close stats modal immediately
+      // Close stats modal immediately to start dismissal animation
       setSelectedTakeForStats(null);
       
-      // Add the take to the front of the deck for voting
-      prependTake(take);
+      // Add the take to the front of the deck for voting after a brief delay
+      // This allows the dismissal animation to start before the new take appears
+      setTimeout(() => {
+        prependTake(take);
+      }, 100);
       
     } catch (error) {
       console.error('Error preparing take for voting:', error);
