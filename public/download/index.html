@@ -1,0 +1,90 @@
+<!doctype html>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Hot or Not Takes — Get the app</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    text-align: center;
+    padding: 40px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    min-height: 100vh;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  #msg {
+    font-size: 24px;
+    margin-bottom: 20px;
+  }
+  #fallback {
+    background: white;
+    color: #333;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    max-width: 400px;
+  }
+  #fallback p {
+    margin: 15px 0;
+  }
+  #fallback a {
+    display: inline-block;
+    padding: 12px 24px;
+    margin: 8px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: transform 0.2s;
+  }
+  #fallback a:hover {
+    transform: scale(1.05);
+  }
+  .ios-link {
+    background: #000;
+    color: white;
+  }
+  .android-link {
+    background: #3DDC84;
+    color: white;
+  }
+  .loading {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+</style>
+<div id="msg" class="loading">🔥 Redirecting to your app store...</div>
+<div id="fallback" hidden>
+  <h2>🔥 Hot or Not Takes</h2>
+  <p>Vote on the spiciest opinions!</p>
+  <p>Choose your store:</p>
+  <p><a href="https://apps.apple.com/app/id6738304327" class="ios-link">📱 App Store</a></p>
+  <p><a href="https://play.google.com/store/apps/details?id=com.anonymous.HotOrNotTakes" class="android-link">🤖 Google Play (Coming Soon)</a></p>
+</div>
+<script>
+  (function () {
+    const ua = (navigator.userAgent||"").toLowerCase();
+    const isAndroid = ua.includes("android");
+    const isIOS = /iphone|ipad|ipod/.test(ua);
+    const ios = "https://apps.apple.com/app/id6738304327";
+    // TODO: Update with real Play Store link when Android launches
+    const android = "https://play.google.com/store/apps/details?id=com.anonymous.HotOrNotTakes";
+    
+    const dest = isIOS ? ios : isAndroid ? android : null;
+    
+    if (dest) {
+      // Redirect after a brief moment to show the loading message
+      setTimeout(() => location.replace(dest), 500);
+    } else {
+      // Show fallback for desktop/unknown devices
+      document.getElementById("msg").hidden = true;
+      document.getElementById("fallback").hidden = false;
+    }
+  })();
+</script>

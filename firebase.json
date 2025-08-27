@@ -2,5 +2,29 @@
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "public",
+    "appAssociation": "NONE",
+    "headers": [
+      {
+        "source": "/.well-known/apple-app-site-association",
+        "headers": [{ "key": "Content-Type", "value": "application/json" }]
+      },
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [{ "key": "Content-Type", "value": "application/json" }]
+      }
+    ],
+    "rewrites": [
+      { "source": "/download", "destination": "/download/index.html" },
+      { "source": "/t/**", "destination": "/download/index.html" },
+      { "source": "/take/**", "destination": "/download/index.html" }
+    ],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
   }
 }

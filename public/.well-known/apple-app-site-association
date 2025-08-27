@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["2B3YJHLC3Q.com.hotornottakes.app"],
+        "paths": ["/t/*", "/take/*", "/download", "/"]
+      }
+    ]
+  }
+}

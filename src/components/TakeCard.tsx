@@ -6,6 +6,7 @@ import {
   Dimensions,
   TouchableOpacity,
   Share,
+  Platform,
 } from 'react-native';
 import { Take } from '../types';
 import { colors, dimensions } from '../constants';
@@ -106,10 +107,14 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
       const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
       
-      const shareMessage = `"${take.text}"\n\n🔥 ${hotPercentage}% HOT | ❄️ ${notPercentage}% NOT\n(${totalVotes.toLocaleString()} total votes)\n\nDownload Hot or Not Takes to vote on more!`;
+      // Smart link that auto-redirects to the right store
+      const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
+      
+      const shareMessage = `"${take.text}"\n\n🔥 ${hotPercentage}% HOT | ❄️ ${notPercentage}% NOT\n(${totalVotes.toLocaleString()} total votes)\n\n${Platform.OS === 'ios' ? '' : SMART_LINK}`;
       
       await Share.share({
         message: shareMessage,
+        ...(Platform.OS === 'ios' && { url: SMART_LINK }), // iOS uses url field
       });
     } catch (error) {
       console.log('Share error:', error);
