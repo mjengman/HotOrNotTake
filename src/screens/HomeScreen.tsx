@@ -539,6 +539,14 @@ export const HomeScreen: React.FC = () => {
         }}>
           <LeaderboardScreen
             onClose={() => setShowLeaderboardModal(false)}
+            onShowTakeStats={(take, vote) => {
+              if (vote) {
+                setSelectedTakeForStats({ take, vote });
+              } else {
+                // For leaderboard takes, pass 'hot' as placeholder since stats modal needs a vote
+                setSelectedTakeForStats({ take, vote: 'hot' });
+              }
+            }}
             isDarkMode={isDarkMode}
           />
         </View>

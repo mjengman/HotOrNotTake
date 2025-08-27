@@ -19,6 +19,7 @@ import {
 
 interface LeaderboardScreenProps {
   onClose: () => void;
+  onShowTakeStats?: (take: Take, vote: 'hot' | 'not' | null) => void;
   isDarkMode?: boolean;
 }
 
@@ -26,6 +27,7 @@ type LeaderboardTab = 'hottest' | 'nottest' | 'skipped';
 
 export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   onClose,
+  onShowTakeStats,
   isDarkMode = false,
 }) => {
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('hottest');
@@ -125,6 +127,15 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     loadLeaderboards();
   }, []);
 
+  const handleTakePress = (take: Take) => {
+    if (onShowTakeStats) {
+      // For leaderboard takes, we don't know the user's vote
+      onShowTakeStats(take, null);
+      // Close the leaderboard modal so user can see the stats clearly
+      onClose();
+    }
+  };
+
   const renderTakeItem = (take: Take, rank: number, subtitle: string) => {
     // Get medal emoji for top 3, otherwise show number
     const getRankDisplay = (rank: number) => {
@@ -137,7 +148,12 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     };
 
     return (
-      <View key={take.id} style={[styles.takeItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+      <TouchableOpacity
+        key={take.id}
+        style={[styles.takeItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
+        onPress={() => handleTakePress(take)}
+        activeOpacity={0.7}
+      >
         <View style={[
           styles.rankBadge, 
           rank <= 3 ? styles.medalBadge : styles.numberBadge
@@ -162,8 +178,13 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             {subtitle}
           </Text>
         </View>
+        {onShowTakeStats && (
+          <Text style={[styles.tapHint, { color: theme.textSecondary }]}>
+            Tap to view full stats
+          </Text>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
     );
   };
 
@@ -416,6 +437,11 @@ const styles = StyleSheet.create({
     padding: dimensions.spacing.md,
     borderRadius: 12,
     alignItems: 'flex-start',
+  },
+  tapHint: {
+    fontSize: dimensions.fontSize.small,
+    fontStyle: 'italic',
+    marginTop: dimensions.spacing.xs,
   },
   rankBadge: {
     width: 32,
