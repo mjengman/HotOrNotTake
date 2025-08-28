@@ -124,13 +124,43 @@ export const TakeCard: React.FC<TakeCardProps> = ({
           if (!imageUri) throw new Error('Capture failed / imageUri missing');
           console.log('✅ Visual share card generated:', imageUri);
           
-          // Share with visual card + message
-          await RNShare.open({
-            message: `Check out this hot take! ${SMART_LINK}`,
-            url: imageUri,
-            title: 'Hot or Not Takes',
-            failOnCancel: false,
-          });
+          // Platform-specific sharing for best results
+          if (Platform.OS === 'ios') {
+            // iOS: URL as primary item with visual card as Link Presentation preview
+            await RNShare.open({
+              activityItemSources: [
+                {
+                  // Primary item: the clickable URL
+                  placeholderItem: { type: 'url', content: SMART_LINK },
+                  item: {
+                    default: { type: 'url', content: SMART_LINK },
+                  },
+                  subject: 'Hot or Not Takes',
+                  // Link Presentation metadata for preview
+                  linkMetadata: {
+                    title: '🔥 Hot or Not Takes — Download the app',
+                    originalUrl: SMART_LINK,
+                    url: SMART_LINK,
+                    icon: imageUri,  // Use our visual card as the preview
+                  },
+                },
+                // Secondary: raw image for apps that don't support link previews
+                {
+                  placeholderItem: { type: 'image', content: imageUri },
+                  item: { default: { type: 'image', content: imageUri } },
+                },
+              ] as any,
+              failOnCancel: false,
+            });
+          } else {
+            // Android: Simple approach that works well
+            await RNShare.open({
+              message: `Check out this hot take! ${SMART_LINK}`,
+              url: imageUri,
+              title: 'Hot or Not Takes',
+              failOnCancel: false,
+            });
+          }
           
           return; // Success - exit early
           
