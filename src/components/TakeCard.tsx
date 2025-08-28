@@ -118,63 +118,19 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         try {
           console.log('🖼️ Generating visual share card...');
           
-          // 1) Ensure the card is fully laid out before capture
-          await new Promise<void>((resolve) => {
-            requestAnimationFrame(() => {
-              InteractionManager.runAfterInteractions(() => resolve());
-            });
-          });
-
-          // 2) Capture the card at a social-friendly size
-          const imageUri = await visualShareRef.current.capture({
-            format: 'png',
-            quality: 0.92,
-            result: 'tmpfile',   // ensures file:// path on iOS
-            width: 1200,         // scales your 400x600 layout up proportionally
-            height: 1800,        // same ratio as your VisualShareCard (400x600)
-          });
+          // Capture the visual share card as image
+          const imageUri = await visualShareRef.current.capture();
 
           if (!imageUri) throw new Error('Capture failed / imageUri missing');
           console.log('✅ Visual share card generated:', imageUri);
           
-          // Platform-specific sharing for optimal UX
-          if (Platform.OS === 'ios') {
-            // iOS: primary item = URL (clickable), preview = our card via LP metadata
-            await RNShare.open({
-              activityItemSources: [
-                {
-                  // Primary, tappable item
-                  placeholderItem: { type: 'url', content: SMART_LINK },
-                  item: {
-                    default: { type: 'url', content: SMART_LINK },
-                  },
-                  subject: 'Hot or Not Takes',
-                  // Link Presentation metadata
-                  linkMetadata: {
-                    title: '🔥 Hot or Not Takes — Join the debate',
-                    originalUrl: SMART_LINK,
-                    url: SMART_LINK,
-                    // RNShare maps this to LPLinkMetadata.iconProvider under the hood
-                    icon: imageUri,  // use the card image as the preview
-                  } as any,
-                },
-                // Secondary: raw image (for apps that ignore link previews)
-                {
-                  placeholderItem: { type: 'image', content: imageUri },
-                  item: { default: { type: 'image', content: imageUri } },
-                } as any,
-              ],
-              failOnCancel: false,
-            });
-          } else {
-            // Android: multi-item share usually keeps both
-            await RNShare.open({
-              urls: [imageUri, SMART_LINK],
-              message: `Check out this hot take! ${SMART_LINK}`,
-              title: 'Hot or Not Takes',
-              failOnCancel: false,
-            });
-          }
+          // Share with visual card + message
+          await RNShare.open({
+            message: `Check out this hot take! ${SMART_LINK}`,
+            url: imageUri,
+            title: 'Hot or Not Takes',
+            failOnCancel: false,
+          });
           
           return; // Success - exit early
           
@@ -536,8 +492,11 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       </View>
       
       {/* Off-screen VisualShareCard for image generation */}
-      <View style={styles.offScreenContainer} collapsable={false}>
-        <ViewShot ref={visualShareRef}>
+      <View style={styles.offScreenContainer}>
+        <ViewShot 
+          ref={visualShareRef}
+          options={{ format: "png", quality: 0.9 }}
+        >
           <VisualShareCard 
             take={take} 
             userVote={userVote} 
