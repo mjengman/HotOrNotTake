@@ -438,21 +438,6 @@ export const HomeScreen: React.FC = () => {
       <View style={styles.fixedFooter}>
         {/* Bottom Buttons Row - moved closer to instructions */}
         <View style={styles.bottomButtonsRow}>
-          {/* Invite Button */}
-          <AnimatedPressable 
-            style={[
-              styles.bottomButton,
-              isDarkMode 
-                ? { backgroundColor: theme.surface, borderWidth: 0 } 
-                : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }
-            ]} 
-            onPress={handleInviteFriends}
-            scaleValue={0.9}
-            hapticIntensity={8}
-          >
-            <Text style={[styles.buttonIcon, isDarkMode ? { color: theme.text } : { color: '#333' }]}>📲</Text>
-          </AnimatedPressable>
-
           {/* Recent Votes Button */}
           <AnimatedPressable 
             style={[
@@ -683,6 +668,15 @@ export const HomeScreen: React.FC = () => {
           />
         </View>
       )}
+
+      {/* Invite Friends FAB */}
+      <TouchableOpacity
+        style={[styles.inviteFabButton, { backgroundColor: theme.accent }]}
+        onPress={handleInviteFriends}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabText}>💌</Text>
+      </TouchableOpacity>
 
       {/* Floating Action Button for Submit */}
       <TouchableOpacity
@@ -919,6 +913,25 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     bottom: 160, // Moved up by 10px from 130
     right: responsive.spacing.lg,
     width: responsive.iconSize.xlarge + 8, // Scale from 56 to responsive
+    height: responsive.iconSize.xlarge + 8,
+    borderRadius: (responsive.iconSize.xlarge + 8) / 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    zIndex: 10, // Higher than footer (200)
+  },
+  inviteFabButton: {
+    position: 'absolute',
+    bottom: 160, // Same level as submit FAB
+    left: responsive.spacing.lg, // Left side of screen
+    width: responsive.iconSize.xlarge + 8,
     height: responsive.iconSize.xlarge + 8,
     borderRadius: (responsive.iconSize.xlarge + 8) / 2,
     justifyContent: 'center',
