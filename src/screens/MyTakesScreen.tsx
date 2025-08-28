@@ -532,21 +532,22 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     position: 'absolute',
     bottom: 160, // Keep original correct position
     right: responsive.spacing.lg,
-    width: responsive.iconSize.xlarge + 8, // Use responsive sizing
-    height: responsive.iconSize.xlarge + 8,
-    borderRadius: (responsive.iconSize.xlarge + 8) / 2,
+    width: 45, // Match invite button size
+    height: 45, // Match invite button size
+    borderRadius: 40, // Match invite button border radius
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
+    elevation: 4, // Match invite button elevation
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 2,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   fabText: {
-    fontSize: responsive.fontSize.xlarge,
+    fontSize: responsive.fontSize.large,
+    fontWeight: 'bold',
   },
 });

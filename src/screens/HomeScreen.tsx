@@ -243,7 +243,7 @@ export const HomeScreen: React.FC = () => {
   const handleInviteFriends = async () => {
     try {
       const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
-      const inviteMessage = `Try Hot or Not Takes - Vote on spicy community debates! 🔥 ${SMART_LINK}`;
+      const inviteMessage = `Try Hot or Not Takes - Vote on spicy hot takes! 🔥 ${SMART_LINK}`;
       
       await RNShare.open({
         title: 'Invite Friends to Hot or Not Takes',
@@ -684,7 +684,7 @@ export const HomeScreen: React.FC = () => {
         onPress={() => setShowSubmitModal(true)}
         activeOpacity={0.8}
       >
-        <Text style={styles.fabText}>✏️</Text>
+        <Text style={styles.buttonIcon}>✏️</Text>
       </TouchableOpacity>
 
       {/* Instructions Modal */}
@@ -912,19 +912,19 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     position: 'absolute',
     bottom: 160, // Moved up by 10px from 130
     right: responsive.spacing.lg,
-    width: responsive.iconSize.xlarge + 8, // Scale from 56 to responsive
-    height: responsive.iconSize.xlarge + 8,
-    borderRadius: (responsive.iconSize.xlarge + 8) / 2,
+    width: 45, // Match invite button size
+    height: 45, // Match invite button size
+    borderRadius: 40, // Match invite button border radius
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
+    elevation: 4, // Match invite button elevation
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 2,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
     zIndex: 10, // Higher than footer (200)
   },
   inviteFabButton: {
