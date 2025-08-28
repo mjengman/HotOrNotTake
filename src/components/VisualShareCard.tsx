@@ -63,14 +63,6 @@ export const VisualShareCard: React.FC<VisualShareCardProps> = ({
         </Text>
       </View>
       
-      {/* Vote Status */}
-      <View style={styles.voteStatusSection}>
-        <Text style={[styles.voteStatus, { 
-          color: userVote ? theme.text : theme.textSecondary 
-        }]}>
-          {userVote ? `You voted ${userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}` : 'Community Results'}
-        </Text>
-      </View>
       
       {/* Main Stats - Exactly like TakeCard percentages */}
       <View style={styles.percentageContainer}>
@@ -98,14 +90,8 @@ export const VisualShareCard: React.FC<VisualShareCardProps> = ({
         </View>
       </View>
       
-      {/* Vote Details */}
+      {/* Total Votes Only */}
       <View style={styles.voteDetails}>
-        <Text style={[styles.voteCount, { color: theme.hot }]}>
-          🔥 {take.hotVotes.toLocaleString()} votes
-        </Text>
-        <Text style={[styles.voteCount, { color: theme.not }]}>
-          ❄️ {take.notVotes.toLocaleString()} votes
-        </Text>
         <Text style={[styles.totalVotes, { color: theme.textSecondary }]}>
           {totalVotes.toLocaleString()} total votes
         </Text>
@@ -117,7 +103,7 @@ export const VisualShareCard: React.FC<VisualShareCardProps> = ({
           Join the debate
         </Text>
         <Text style={[styles.ctaSubtitle, { color: theme.textSecondary }]}>
-          Download Hot or Not Takes
+          Download the app!
         </Text>
       </View>
     </View>

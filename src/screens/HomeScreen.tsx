@@ -35,6 +35,7 @@ import { useInterstitialAds } from '../hooks/useInterstitialAds';
 // Removed class-based ad service (API issue)
 // import adService from '../services/adService';
 import { colors } from '../constants';
+import RNShare from 'react-native-share';
 
 export const HomeScreen: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -239,6 +240,21 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  const handleInviteFriends = async () => {
+    try {
+      const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
+      const inviteMessage = `Try Hot or Not Takes - Vote on spicy community debates! 🔥 ${SMART_LINK}`;
+      
+      await RNShare.open({
+        title: 'Invite Friends to Hot or Not Takes',
+        message: inviteMessage,
+        failOnCancel: false,
+      });
+    } catch (error) {
+      console.log('Invite sharing failed:', error);
+    }
+  };
+
   const toggleTheme = () => {
     setIsDarkMode(prev => !prev);
   };
@@ -422,6 +438,21 @@ export const HomeScreen: React.FC = () => {
       <View style={styles.fixedFooter}>
         {/* Bottom Buttons Row - moved closer to instructions */}
         <View style={styles.bottomButtonsRow}>
+          {/* Invite Button */}
+          <AnimatedPressable 
+            style={[
+              styles.bottomButton,
+              isDarkMode 
+                ? { backgroundColor: theme.surface, borderWidth: 0 } 
+                : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }
+            ]} 
+            onPress={handleInviteFriends}
+            scaleValue={0.9}
+            hapticIntensity={8}
+          >
+            <Text style={[styles.buttonIcon, isDarkMode ? { color: theme.text } : { color: '#333' }]}>📲</Text>
+          </AnimatedPressable>
+
           {/* Recent Votes Button */}
           <AnimatedPressable 
             style={[
