@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import mobileAds, { useInterstitialAd, TestIds } from 'react-native-google-mobile-ads';
 
 const PROD_ANDROID = 'ca-app-pub-1745058833253836/4423842963';
-const PROD_IOS = TestIds.INTERSTITIAL; // TODO: replace with your real iOS unit
+const PROD_IOS = 'ca-app-pub-1745058833253836/9192270099'; // iOS interstitial ID
 
 const getAdUnitId = () =>
   __DEV__

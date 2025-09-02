@@ -13,9 +13,11 @@ interface AdBannerProps {
 const USE_PRODUCTION_ADS = true; // Use production ads for release
 
 const adUnitId = Platform.select({
-  ios: TestIds.BANNER, // Keep test ID for iOS for now
+  ios: USE_PRODUCTION_ADS
+    ? 'ca-app-pub-1745058833253836/7308079457' // iOS banner ID
+    : TestIds.BANNER,
   android: USE_PRODUCTION_ADS 
-    ? 'ca-app-pub-1745058833253836/2017171479' // Your real banner ID
+    ? 'ca-app-pub-1745058833253836/2017171479' // Android banner ID
     : TestIds.BANNER,
 }) ?? '';
 

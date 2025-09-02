@@ -13,9 +13,11 @@ const { InterstitialAd } = require('react-native-google-mobile-ads');
 const USE_PRODUCTION_ADS = true; // Set to true for production builds
 
 const interstitialAdUnitId = Platform.select({
-  ios: TestIds.INTERSTITIAL, // Keep test ID for iOS for now
+  ios: USE_PRODUCTION_ADS
+    ? 'ca-app-pub-1745058833253836/9192270099' // iOS interstitial ID
+    : TestIds.INTERSTITIAL,
   android: USE_PRODUCTION_ADS 
-    ? 'ca-app-pub-1745058833253836/4423842963' // Your real interstitial ID
+    ? 'ca-app-pub-1745058833253836/4423842963' // Android interstitial ID
     : TestIds.INTERSTITIAL,
 }) ?? '';
 
