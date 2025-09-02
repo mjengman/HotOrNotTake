@@ -174,6 +174,7 @@ export const RecentVotesScreen: React.FC<RecentVotesScreenProps> = ({
               ]}
               onPress={() => handleTakePress(vote)}
               activeOpacity={0.7}
+              delayPressIn={100}
             >
               <View style={styles.voteHeader}>
                 <Text style={[
