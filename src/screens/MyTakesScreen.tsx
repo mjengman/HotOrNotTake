@@ -169,7 +169,6 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
         activeOpacity={take.isApproved ? 0.7 : 1}
         disabled={!take.isApproved}
         style={styles.tappableContent}
-        delayPressIn={100}
       >
         {/* Take Text */}
         <Text style={[styles.takeText, { color: theme.text }]}>

@@ -183,7 +183,6 @@ export const MyFavoritesScreen: React.FC<MyFavoritesScreenProps> = ({
               ]}
               onPress={() => handleTakePress(favorite)}
               activeOpacity={0.7}
-              delayPressIn={100}
             >
               <View style={styles.favoriteHeader}>
                 <Text style={[styles.favoritedTime, { color: theme.textSecondary }]}>

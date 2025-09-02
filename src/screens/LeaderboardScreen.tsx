@@ -153,7 +153,6 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         style={[styles.takeItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
         onPress={() => handleTakePress(take)}
         activeOpacity={0.7}
-        delayPressIn={100}
       >
         <View style={[
           styles.rankBadge, 
