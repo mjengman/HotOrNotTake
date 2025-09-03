@@ -32,6 +32,7 @@ export const RecentVotesScreen: React.FC<RecentVotesScreenProps> = ({
   const [recentVotes, setRecentVotes] = useState<(TakeVote & { take?: Take })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const theme = isDarkMode ? colors.dark : colors.light;
 
@@ -161,6 +162,7 @@ export const RecentVotesScreen: React.FC<RecentVotesScreenProps> = ({
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={scrollEnabled}
         >
           {recentVotes.map((vote, index) => (
             <TouchableOpacity
@@ -174,6 +176,8 @@ export const RecentVotesScreen: React.FC<RecentVotesScreenProps> = ({
               ]}
               onPress={() => handleTakePress(vote)}
               activeOpacity={0.7}
+              onPressIn={() => setScrollEnabled(false)}
+              onPressOut={() => setScrollEnabled(true)}
             >
               <View style={styles.voteHeader}>
                 <Text style={[

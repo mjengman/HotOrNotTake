@@ -37,6 +37,7 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
   const [takes, setTakes] = useState<Take[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
   
   const theme = isDarkMode ? colors.dark : colors.light;
   
@@ -169,6 +170,8 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
         activeOpacity={take.isApproved ? 0.7 : 1}
         disabled={!take.isApproved}
         style={styles.tappableContent}
+        onPressIn={() => setScrollEnabled(false)}
+        onPressOut={() => setScrollEnabled(true)}
       >
         {/* Take Text */}
         <Text style={[styles.takeText, { color: theme.text }]}>
@@ -296,6 +299,7 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
+        scrollEnabled={scrollEnabled}
       >
         {loading ? (
           <View style={styles.loadingContainer}>

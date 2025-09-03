@@ -33,6 +33,7 @@ export const MyFavoritesScreen: React.FC<MyFavoritesScreenProps> = ({
   const [favorites, setFavorites] = useState<(FavoriteItem & { take?: Take })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const theme = isDarkMode ? colors.dark : colors.light;
 
@@ -170,6 +171,7 @@ export const MyFavoritesScreen: React.FC<MyFavoritesScreenProps> = ({
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={scrollEnabled}
         >
           {favorites.map((favorite, index) => (
             <TouchableOpacity
@@ -183,6 +185,8 @@ export const MyFavoritesScreen: React.FC<MyFavoritesScreenProps> = ({
               ]}
               onPress={() => handleTakePress(favorite)}
               activeOpacity={0.7}
+              onPressIn={() => setScrollEnabled(false)}
+              onPressOut={() => setScrollEnabled(true)}
             >
               <View style={styles.favoriteHeader}>
                 <Text style={[styles.favoritedTime, { color: theme.textSecondary }]}>

@@ -34,6 +34,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isAtTop, setIsAtTop] = useState(true);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
   
   const [hottestTakes, setHottestTakes] = useState<Record<string, Take[]>>({});
   const [nottestTakes, setNottestTakes] = useState<Record<string, Take[]>>({});
@@ -153,6 +154,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         style={[styles.takeItem, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
         onPress={() => handleTakePress(take)}
         activeOpacity={0.7}
+        onPressIn={() => setScrollEnabled(false)}
+        onPressOut={() => setScrollEnabled(true)}
       >
         <View style={[
           styles.rankBadge, 
@@ -298,6 +301,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        scrollEnabled={scrollEnabled}
       >
         {loading ? (
           <View style={styles.loadingContainer}>
