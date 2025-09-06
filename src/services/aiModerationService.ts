@@ -23,14 +23,20 @@ const OPENAI_API_KEY =
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 // ChatGPT's enhanced debug logging
-console.log('🔐 OpenAI Debug Info (ChatGPT Method):');
-console.log('  Key present?', !!OPENAI_API_KEY);
-console.log('  Key preview:', String(OPENAI_API_KEY || '').slice(0, 7) + '…');
-console.log('  Key source:', 
-  (Constants.expoConfig as any)?.extra?.openaiApiKey ? 'expoConfig' : 
-  process.env.EXPO_PUBLIC_OPENAI_API_KEY ? 'process.env' : 'none'
-);
-console.log('  Environment:', __DEV__ ? 'DEVELOPMENT' : 'PRODUCTION');
+if (__DEV__) {
+  console.log('🔐 OpenAI Debug Info (ChatGPT Method):');
+  console.log('  Key present?', !!OPENAI_API_KEY);
+  console.log('  Key preview:', String(OPENAI_API_KEY || '').slice(0, 7) + '…');
+  console.log(
+    '  Key source:',
+    (Constants.expoConfig as any)?.extra?.openaiApiKey
+      ? 'expoConfig'
+      : process.env.EXPO_PUBLIC_OPENAI_API_KEY
+      ? 'process.env'
+      : 'none'
+  );
+  console.log('  Environment:', __DEV__ ? 'DEVELOPMENT' : 'PRODUCTION');
+}
 
 // Test OpenAI API connection (Grok's suggestion)
 export const testOpenAIConnection = async (): Promise<{ success: boolean; error?: string }> => {
@@ -166,13 +172,17 @@ export const moderateUserTake = async (takeText: string): Promise<ModerationResu
     console.error('⚠️ Make sure EXPO_PUBLIC_OPENAI_API_KEY is set in EAS secrets');
     throw new Error('AI moderation unavailable - missing API key');
   }
-  
+
   // Additional debugging for device builds
-  console.log(`🔑 API Key exists: ${OPENAI_API_KEY ? 'YES' : 'NO'}`);
-  console.log(`🔑 API Key length: ${OPENAI_API_KEY ? OPENAI_API_KEY.length : 0}`);
-  console.log(`🔑 API Key starts with sk-: ${OPENAI_API_KEY ? OPENAI_API_KEY.startsWith('sk-') : 'NO'}`);
-  console.log(`📱 Environment: ${__DEV__ ? 'DEVELOPMENT' : 'PRODUCTION'}`);
-  console.log(`🌐 API URL: ${OPENAI_API_URL}`);
+  if (__DEV__) {
+    console.log(`🔑 API Key exists: ${OPENAI_API_KEY ? 'YES' : 'NO'}`);
+    console.log(`🔑 API Key length: ${OPENAI_API_KEY ? OPENAI_API_KEY.length : 0}`);
+    console.log(
+      `🔑 API Key starts with sk-: ${OPENAI_API_KEY ? OPENAI_API_KEY.startsWith('sk-') : 'NO'}`
+    );
+    console.log(`📱 Environment: ${__DEV__ ? 'DEVELOPMENT' : 'PRODUCTION'}`);
+    console.log(`🌐 API URL: ${OPENAI_API_URL}`);
+  }
 
   try {
     console.log(`🛡️ Moderating take: "${takeText.substring(0, 50)}..."`);
