@@ -36,6 +36,7 @@ import { useInterstitialAds } from '../hooks/useInterstitialAds';
 // import adService from '../services/adService';
 import { colors } from '../constants';
 import RNShare from 'react-native-share';
+import { Take } from '../types/Take';
 
 export const HomeScreen: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -45,8 +46,8 @@ export const HomeScreen: React.FC = () => {
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
   const [showRecentVotesModal, setShowRecentVotesModal] = useState(false);
   const [showFavoritesModal, setShowFavoritesModal] = useState(false);
-  const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: any, vote: 'hot' | 'not' | null} | null>(null);
-  const [lastVotedTake, setLastVotedTake] = useState<any | null>(null);
+  const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: Take, vote: 'hot' | 'not' | null} | null>(null);
+  const [lastVotedTake, setLastVotedTake] = useState<Take | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
@@ -213,7 +214,7 @@ export const HomeScreen: React.FC = () => {
       if (votedTake) {
         const updatedHotVotes = vote === 'hot' ? votedTake.hotVotes + 1 : votedTake.hotVotes;
         const updatedNotVotes = vote === 'not' ? votedTake.notVotes + 1 : votedTake.notVotes;
-        const updatedTake = {
+        const updatedTake: Take = {
           ...votedTake,
           hotVotes: updatedHotVotes,
           notVotes: updatedNotVotes,
@@ -285,7 +286,7 @@ export const HomeScreen: React.FC = () => {
   // Removed pull-to-refresh due to fixed layout structure
   // Can be re-implemented with a different trigger if needed
 
-  const handleChangeVote = async (take: any) => {
+  const handleChangeVote = async (take: Take) => {
     if (!user) return;
     
     try {
@@ -300,7 +301,7 @@ export const HomeScreen: React.FC = () => {
       await refreshStats();
       
       // Update the take's vote counts to reflect the deletion
-      const updatedTake = {
+      const updatedTake: Take = {
         ...take,
         hotVotes: userVote.vote === 'hot' ? take.hotVotes - 1 : take.hotVotes,
         notVotes: userVote.vote === 'not' ? take.notVotes - 1 : take.notVotes,
@@ -318,7 +319,7 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  const handleVoteNow = async (take: any) => {
+  const handleVoteNow = async (take: Take) => {
     if (!user) return;
     
     try {
