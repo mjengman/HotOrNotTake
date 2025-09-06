@@ -337,7 +337,7 @@ HotOrNotTakes/
 │   ├── components/          # Reusable UI components
 │   │   ├── TakeCard.tsx
 │   │   ├── VoteIndicator.tsx
-│   │   ├── SwipeableCardDeck.tsx
+│   │   ├── CustomSwipeableCardDeck.tsx
 │   │   └── common/
 │   ├── screens/             # Screen components
 │   │   ├── HomeScreen.tsx
