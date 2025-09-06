@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  GestureResponderEvent,
   TouchableOpacity,
   TouchableOpacityProps,
   Vibration,
@@ -41,7 +42,7 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
 
-  const handlePressIn = (event: any) => {
+  const handlePressIn = (event: GestureResponderEvent) => {
     if (!disabled) {
       scale.value = withSpring(scaleValue, springConfig);
       opacity.value = withTiming(0.8, { duration: 100 });
@@ -54,7 +55,7 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
     onPressIn?.(event);
   };
 
-  const handlePressOut = (event: any) => {
+  const handlePressOut = (event: GestureResponderEvent) => {
     if (!disabled) {
       scale.value = withSpring(1, springConfig);
       opacity.value = withTiming(1, { duration: 150 });
@@ -63,7 +64,7 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
     onPressOut?.(event);
   };
 
-  const handlePress = (event: any) => {
+  const handlePress = (event: GestureResponderEvent) => {
     if (!disabled && onPress) {
       // Add a slight delay to ensure the animation is visible
       setTimeout(() => {
