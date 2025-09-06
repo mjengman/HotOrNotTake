@@ -4,7 +4,6 @@ import {
   getDocs,
   addDoc,
   updateDoc,
-  deleteDoc,
   query,
   where,
   orderBy,
@@ -331,14 +330,28 @@ export const getUserSubmittedTakes = async (userId: string): Promise<Take[]> => 
 // Delete a take (only by the original author)
 export const deleteTake = async (takeId: string, userId: string): Promise<void> => {
   try {
-    // Delete the take document - Firebase security rules will ensure
-    // only the original author can delete their own takes
+    // Reference to the take document
     const takeRef = doc(db, TAKES_COLLECTION, takeId);
-    await deleteDoc(takeRef);
-    
-    // TODO: Consider cleaning up associated votes and skips
-    // For now we'll leave them for analytics purposes
-    
+
+    // Query associated votes and skips
+    const [votesSnapshot, skipsSnapshot] = await Promise.all([
+      getDocs(query(collection(db, 'votes'), where('takeId', '==', takeId))),
+      getDocs(query(collection(db, 'skips'), where('takeId', '==', takeId))),
+    ]);
+
+    // Use a batch to ensure all deletions occur together
+    const batch = writeBatch(db);
+
+    // Delete the take document (Firebase security rules enforce ownership)
+    batch.delete(takeRef);
+
+    // Delete associated votes and skips
+    votesSnapshot.forEach((voteDoc) => batch.delete(voteDoc.ref));
+    skipsSnapshot.forEach((skipDoc) => batch.delete(skipDoc.ref));
+
+    // Commit the batch
+    await batch.commit();
+
   } catch (error) {
     console.error('Error deleting take:', error);
     if (error.code === 'permission-denied') {
