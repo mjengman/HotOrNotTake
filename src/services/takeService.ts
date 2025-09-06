@@ -22,12 +22,16 @@ import { moderateUserTake, validateTakeCategory } from './aiModerationService';
 // Collection references
 const TAKES_COLLECTION = 'takes';
 
-// Convert Firestore timestamp to Date
-const convertTimestampToDate = (timestamp: any): Date => {
-  if (timestamp && typeof timestamp.toDate === 'function') {
+// Convert Firestore timestamp to Date with validation
+const convertTimestampToDate = (timestamp: any): Date | null => {
+  if (!timestamp) {
+    return new Date();
+  }
+  if (typeof timestamp.toDate === 'function') {
     return timestamp.toDate();
   }
-  return new Date(timestamp);
+  const date = new Date(timestamp);
+  return isNaN(date.getTime()) ? null : date;
 };
 
 // Convert Take from Firestore format to app format
@@ -38,13 +42,18 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   hotVotes: data.hotVotes || 0,
   notVotes: data.notVotes || 0,
   totalVotes: data.totalVotes || 0,
-  createdAt: convertTimestampToDate(data.createdAt),
+  createdAt: convertTimestampToDate(data.createdAt) || new Date(),
   userId: data.userId,
   isApproved: data.isApproved || false, // Backward compatibility
   status: data.status || (data.isApproved ? 'approved' : 'pending'), // Migrate old data
-  submittedAt: convertTimestampToDate(data.submittedAt || data.createdAt),
-  approvedAt: data.approvedAt ? convertTimestampToDate(data.approvedAt) : undefined,
-  rejectedAt: data.rejectedAt ? convertTimestampToDate(data.rejectedAt) : undefined,
+  submittedAt:
+    convertTimestampToDate(data.submittedAt || data.createdAt) || new Date(),
+  approvedAt: data.approvedAt
+    ? convertTimestampToDate(data.approvedAt) || undefined
+    : undefined,
+  rejectedAt: data.rejectedAt
+    ? convertTimestampToDate(data.rejectedAt) || undefined
+    : undefined,
   rejectionReason: data.rejectionReason,
   reportCount: data.reportCount || 0,
   isAIGenerated: data.isAIGenerated || false, // AI flag
