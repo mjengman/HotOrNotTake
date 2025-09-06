@@ -3,6 +3,7 @@ import {
   View,
   StyleSheet,
   Alert,
+  Text,
 } from 'react-native';
 import CardStack, { Card } from 'react-native-deck-swiper';
 import { Take, TakeVote } from '../types';
