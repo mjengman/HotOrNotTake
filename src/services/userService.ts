@@ -16,7 +16,8 @@ import {
 } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { User, UserFirestore, UserStats } from '../types/User';
-import { getUserVotingStats } from './voteService';
+import { getUserVotingStats, getUserVotes } from './voteService';
+import { getTopCategories } from '../utils/stats';
 
 // Collection references
 const USERS_COLLECTION = 'users';
@@ -152,9 +153,10 @@ export const incrementUserSubmissionCount = async (
 // Get comprehensive user statistics
 export const getUserStats = async (userId: string): Promise<UserStats> => {
   try {
-    const [user, votingStats] = await Promise.all([
+    const [user, votingStats, votes] = await Promise.all([
       getUser(userId),
       getUserVotingStats(userId),
+      getUserVotes(userId),
     ]);
 
     if (!user) {
@@ -169,13 +171,30 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
       };
     }
 
+    const categoryCounts: Record<string, number> = {};
+    await Promise.all(
+      votes.map(async (vote) => {
+        try {
+          const takeSnap = await getDoc(doc(db, 'takes', vote.takeId));
+          if (takeSnap.exists()) {
+            const category = takeSnap.data().category || 'unknown';
+            categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+          }
+        } catch (err) {
+          console.error('Error fetching take for vote:', err);
+        }
+      })
+    );
+
+    const favoriteCategories = getTopCategories(categoryCounts);
+
     return {
       totalVotes: user.totalVotes,
       hotVotesGiven: votingStats.hotVotes,
       notVotesGiven: votingStats.notVotes,
       takesSubmitted: user.totalSubmissions,
       votingStreak: votingStats.votingStreak,
-      favoriteCategories: [], // TODO: Calculate from vote history
+      favoriteCategories,
       joinedAt: user.joinedAt,
     };
   } catch (error) {
