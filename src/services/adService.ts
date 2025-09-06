@@ -25,7 +25,7 @@ console.log('🎯 Using interstitial ad ID:', interstitialAdUnitId);
 console.log('📱 Platform:', Platform.OS);
 
 class AdService {
-  private interstitialAd: InterstitialAd;
+  private interstitialAd: InterstitialAd | null;
   private isInterstitialLoaded = false;
   private swipeCount = 0;
   private readonly SWIPES_UNTIL_AD = 12; // Show ad every 12 swipes
@@ -46,14 +46,23 @@ class AdService {
     } catch (error) {
       console.error('❌ Failed to create InterstitialAd:', error);
       // Create a dummy to prevent crashes
-      this.interstitialAd = null as any;
+      this.interstitialAd = null;
     }
 
-    this.setupInterstitialListeners();
-    this.loadInterstitialAd();
+    if (this.interstitialAd) {
+      this.setupInterstitialListeners();
+      this.loadInterstitialAd();
+    } else {
+      console.error('⚠️ InterstitialAd instance was not created');
+    }
   }
 
   private setupInterstitialListeners() {
+    if (!this.interstitialAd) {
+      console.log('⚠️ No interstitial ad instance available, skipping listener registration');
+      return;
+    }
+
     this.interstitialAd.addAdEventListener(AdEventType.LOADED, () => {
       console.log('🎯 Interstitial ad loaded successfully');
       this.isInterstitialLoaded = true;
@@ -80,6 +89,11 @@ class AdService {
   }
 
   private loadInterstitialAd() {
+    if (!this.interstitialAd) {
+      console.log('🚫 No interstitial ad instance available to load');
+      return;
+    }
+
     if (!this.isInterstitialLoaded) {
       console.log('📥 Loading interstitial ad...');
       this.interstitialAd.load();
@@ -109,6 +123,11 @@ class AdService {
   }
 
   private showInterstitialAd() {
+    if (!this.interstitialAd) {
+      console.log('🚫 No interstitial ad instance to show');
+      return;
+    }
+
     if (this.isInterstitialLoaded) {
       console.log('🎬 Showing interstitial ad');
       this.interstitialAd.show();
