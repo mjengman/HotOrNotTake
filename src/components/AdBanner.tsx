@@ -1,41 +1,35 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import { useAdFlags } from '../../App';
 
 interface AdBannerProps {
   size?: BannerAdSize;
 }
 
-// Ad unit IDs
-// NOTE: "no-fill" errors are NORMAL for new apps and emulators
-// The implementation is working correctly when you see these errors
-// Real devices with real users will have better fill rates
-const USE_PRODUCTION_ADS = true; // Use production ads for release
+const USE_PRODUCTION_ADS = true;
 
 const adUnitId = Platform.select({
-  ios: USE_PRODUCTION_ADS
-    ? 'ca-app-pub-1745058833253836/7308079457' // iOS banner ID
-    : TestIds.BANNER,
-  android: USE_PRODUCTION_ADS 
-    ? 'ca-app-pub-1745058833253836/2017171479' // Android banner ID
-    : TestIds.BANNER,
+  ios: USE_PRODUCTION_ADS ? 'ca-app-pub-1745058833253836/7308079457' : TestIds.BANNER,
+  android: USE_PRODUCTION_ADS ? 'ca-app-pub-1745058833253836/2017171479' : TestIds.BANNER,
 }) ?? '';
 
-export const AdBanner: React.FC<AdBannerProps> = ({ 
-  size = BannerAdSize.BANNER 
-}) => {
+export const AdBanner: React.FC<AdBannerProps> = ({ size = BannerAdSize.BANNER }) => {
+  const { canRequestAds, personalized, ready } = useAdFlags();
+
+  // Don't request until consent ready AND allowed
+  if (!ready || !canRequestAds) return null;
+
+  const requestOptions = personalized ? undefined : { requestNonPersonalizedAdsOnly: true };
+
   return (
     <View style={styles.container}>
       <BannerAd
         unitId={adUnitId}
         size={size}
-        // AdMob SDK handles GDPR consent automatically
-        onAdLoaded={() => {
-          console.log('🎯 Banner ad loaded successfully');
-        }}
-        onAdFailedToLoad={(error) => {
-          console.log('❌ Banner ad failed to load:', error);
-        }}
+        requestOptions={requestOptions}
+        onAdLoaded={() => console.log('🎯 Banner ad loaded successfully', { personalized })}
+        onAdFailedToLoad={(error) => console.log('❌ Banner ad failed to load:', error, { personalized })}
       />
     </View>
   );

@@ -6,6 +6,8 @@ import mobileAds, {
   AdsConsentDebugGeography,
 } from 'react-native-google-mobile-ads';
 
+let adsInitialized = false; // module-level flag to prevent duplicate initialization
+
 export type ConsentState = {
   status: AdsConsentStatus;
   canRequestAds: boolean;
@@ -63,18 +65,22 @@ export async function initAdsAndConsent(debug?: {
       personalized = true;
     }
 
-    // 4) Initialize SDK ONLY when allowed to request ads
-    if (canRequestAds) {
+    // 4) Initialize SDK ONLY when allowed to request ads (and only once)
+    if (canRequestAds && !adsInitialized) {
       await mobileAds().initialize();
+      adsInitialized = true;
     }
 
     console.log('🎯 Ads consent initialized:', { status, canRequestAds, personalized, gdprApplies });
     return { status, canRequestAds, personalized };
   } catch (error) {
     console.error('❌ Error initializing ads consent:', error);
-    // Fail-safe: initialize SDK and force NPA
+    // Fail-safe: initialize SDK and force NPA (only once)
     try {
-      await mobileAds().initialize();
+      if (!adsInitialized) {
+        await mobileAds().initialize();
+        adsInitialized = true;
+      }
     } catch (initError) {
       console.error('❌ Error initializing mobile ads SDK:', initError);
     }
@@ -86,19 +92,24 @@ export async function initAdsAndConsent(debug?: {
   }
 }
 
-export async function openPrivacyOptionsForm(): Promise<void> {
+// For Settings screen - show privacy options form (ChatGPT-5's recommendation)
+export async function showPrivacyOptionsForm(): Promise<void> {
   try {
-    // Prefer the dedicated privacy options method if available
-    if (typeof AdsConsent.showPrivacyOptionsForm === 'function') {
-      await AdsConsent.showPrivacyOptionsForm();
-    } else if (typeof (AdsConsent as any).gatherConsent === 'function') {
-      // Fallback for versions exposing only gatherConsent()
+    const consentInfo = await AdsConsent.getConsentInfo();
+    console.log('🔧 Privacy options status:', consentInfo);
+
+    // Always try to show the consent form—UMP decides if it should display
+    if (typeof (AdsConsent as any).gatherConsent === 'function') {
       await (AdsConsent as any).gatherConsent();
     } else if (typeof AdsConsent.loadAndShowConsentFormIfRequired === 'function') {
       await AdsConsent.loadAndShowConsentFormIfRequired();
     }
-    console.log('✅ Privacy options flow completed');
+
+    console.log('✅ Privacy options form completed');
   } catch (error) {
     console.error('❌ Error showing privacy options form:', error);
   }
 }
+
+// Legacy alias for backward compatibility
+export const openPrivacyOptionsForm = showPrivacyOptionsForm;
