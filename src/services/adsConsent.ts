@@ -5,28 +5,11 @@ import mobileAds, {
   AdsConsentStatus,
   AdsConsentDebugGeography,
 } from 'react-native-google-mobile-ads';
-import { Platform } from 'react-native';
 
 let adsInitialized = false; // module-level flag to prevent duplicate initialization
 
-// iOS ATT helper - requests App Tracking Transparency permission if available
-async function requestATTIfNeeded(): Promise<void> {
-  if (Platform.OS !== 'ios') return;
-  
-  try {
-    // Try to dynamically import ATT library if available
-    const ATT = await import('react-native-tracking-transparency').catch(() => null);
-    if (!ATT) return; // Library not installed
-    
-    const status = await ATT.getTrackingStatus();
-    if (status === 'not-determined') {
-      console.log('📱 Requesting iOS App Tracking Transparency permission...');
-      await ATT.requestTrackingPermission();
-    }
-  } catch (error) {
-    console.log('📱 ATT request skipped:', error.message);
-  }
-}
+// Note: iOS ATT can be handled automatically by UMP SDK when configured in AdMob
+// or manually with react-native-tracking-transparency library if needed
 
 export type ConsentState = {
   status: AdsConsentStatus;
@@ -113,12 +96,7 @@ export async function initAdsAndConsent(debug?: {
       personalized = false;
     }
 
-    // 4) Request iOS App Tracking Transparency if appropriate
-    if (canRequestAds && personalized) {
-      await requestATTIfNeeded();
-    }
-
-    // 5) Initialize SDK ONLY when allowed to request ads (and only once)
+    // 4) Initialize SDK ONLY when allowed to request ads (and only once)
     if (canRequestAds && !adsInitialized) {
       await mobileAds().initialize();
       adsInitialized = true;
