@@ -29,9 +29,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({
       <BannerAd
         unitId={adUnitId}
         size={size}
-        requestOptions={{
-          requestNonPersonalizedAdsOnly: true, // GDPR compliance
-        }}
+        // AdMob SDK handles GDPR consent automatically
         onAdLoaded={() => {
           console.log('🎯 Banner ad loaded successfully');
         }}
