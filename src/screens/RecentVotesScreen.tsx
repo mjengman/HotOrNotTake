@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   SafeAreaView,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { TakeCard } from '../components/TakeCard';
 import { useAuth } from '../hooks/useAuth';

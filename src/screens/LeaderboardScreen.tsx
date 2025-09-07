@@ -5,9 +5,9 @@ import {
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
-  ScrollView,
   RefreshControl,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { colors, dimensions } from '../constants';
 import { Take } from '../types';
 import {
