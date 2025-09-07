@@ -9,7 +9,7 @@ import mobileAds, {
 export type ConsentState = {
   status: AdsConsentStatus;
   canRequestAds: boolean;
-  personalized: boolean; // true only if the user consented
+  personalized: boolean; // true only if the user consented to personalized ads
 };
 
 export async function initAdsAndConsent(debug?: {
@@ -17,76 +17,87 @@ export async function initAdsAndConsent(debug?: {
   eea?: boolean; // force EEA geography for testing only
 }): Promise<ConsentState> {
   try {
-    // Optional: global request configuration (do this before mobileAds().initialize())
+    // Configure BEFORE initialize()
     await mobileAds().setRequestConfiguration({
       maxAdContentRating: MaxAdContentRating.PG,
       testDeviceIdentifiers: debug?.testDeviceIds ?? [],
+      // tagForChildDirectedTreatment, tagForUnderAgeOfConsent can be added here if relevant
     });
 
-    // 1) Request consent info with debug settings (ONLY for testing!)
+    // 1) Refresh consent info (with optional debug)
     await AdsConsent.requestInfoUpdate({
       debugGeography: debug?.eea ? AdsConsentDebugGeography.EEA : undefined,
       testDeviceIdentifiers: debug?.testDeviceIds ?? [],
     });
 
-    // 2) Use the simplified gatherConsent method that handles everything
-    await AdsConsent.gatherConsent();
+    // 2) Show consent / privacy form if required
+    // (Use gatherConsent() if that's what your lib version documents;
+    // otherwise use loadAndShowConsentFormIfRequired()).
+    if (typeof (AdsConsent as any).gatherConsent === 'function') {
+      await (AdsConsent as any).gatherConsent();
+    } else if (typeof AdsConsent.loadAndShowConsentFormIfRequired === 'function') {
+      await AdsConsent.loadAndShowConsentFormIfRequired();
+    }
 
-    // 2) Get final consent info after consent gathering
-    const consentInfo = await AdsConsent.getConsentInfo();
-    const { status, canRequestAds } = consentInfo;
+    // 3) Read final state
+    const info = await AdsConsent.getConsentInfo();
+    const { status, canRequestAds } = info;
 
-    // Check if we have GDPR consent for personalized ads
+    // Prefer SDK-provided booleans; fall back to a conservative default.
+    // In many versions, if GDPR applies and user did not consent, canRequestAds can still be true
+    // (but only for NPA). So we derive "personalized" as:
     const gdprApplies = await AdsConsent.getGdprApplies();
     let personalized = false;
-    
+
+    // If your version exposes a consent type API, use that instead:
+    // const type = await AdsConsent.getConsentType?.();
+    // personalized = type === 'PERSONALIZED';
+
     if (gdprApplies) {
-      // For GDPR regions, check purpose consent (purpose 1 is personalized ads)
-      const purposeConsents = await AdsConsent.getPurposeConsents();
-      personalized = purposeConsents.startsWith("1"); // "1" means consent given for purpose 1
+      // In GDPR regions, treat as personalized only if status is OBTAINED
+      // and your version indicates consent for personalized ads.
+      // Without a dedicated API, keep this conservative:
+      personalized = status === AdsConsentStatus.OBTAINED;
     } else {
-      // For non-GDPR regions, personalized ads are allowed
+      // Outside GDPR, personalized is allowed by default
       personalized = true;
     }
 
-    // 3) Initialize the Mobile Ads SDK AFTER consent resolution
+    // 4) Initialize SDK ONLY when allowed to request ads
     if (canRequestAds) {
       await mobileAds().initialize();
     }
 
     console.log('🎯 Ads consent initialized:', { status, canRequestAds, personalized, gdprApplies });
-
     return { status, canRequestAds, personalized };
   } catch (error) {
     console.error('❌ Error initializing ads consent:', error);
-    
-    // If anything fails, stay safe: use non-personalized and initialize SDK
+    // Fail-safe: initialize SDK and force NPA
     try {
       await mobileAds().initialize();
     } catch (initError) {
       console.error('❌ Error initializing mobile ads SDK:', initError);
     }
-    
-    // If UMP fails, still allow non-personalized ads rather than no ads
-    return { 
-      status: AdsConsentStatus.NOT_REQUIRED, 
-      canRequestAds: true, 
-      personalized: false 
+    return {
+      status: AdsConsentStatus.NOT_REQUIRED,
+      canRequestAds: true,
+      personalized: false, // safe default = NPA
     };
   }
 }
 
-// Show privacy options form from Settings screen (ChatGPT-5's recommendation)
 export async function openPrivacyOptionsForm(): Promise<void> {
   try {
-    // Check if privacy options are available for this user
-    const consentInfo = await AdsConsent.getConsentInfo();
-    console.log('🔧 Privacy options status:', consentInfo);
-    
-    // Always try to show the consent form - let UMP decide if it should be shown
-    await AdsConsent.gatherConsent();
-    
-    console.log('✅ Privacy options form completed');
+    // Prefer the dedicated privacy options method if available
+    if (typeof AdsConsent.showPrivacyOptionsForm === 'function') {
+      await AdsConsent.showPrivacyOptionsForm();
+    } else if (typeof (AdsConsent as any).gatherConsent === 'function') {
+      // Fallback for versions exposing only gatherConsent()
+      await (AdsConsent as any).gatherConsent();
+    } else if (typeof AdsConsent.loadAndShowConsentFormIfRequired === 'function') {
+      await AdsConsent.loadAndShowConsentFormIfRequired();
+    }
+    console.log('✅ Privacy options flow completed');
   } catch (error) {
     console.error('❌ Error showing privacy options form:', error);
   }

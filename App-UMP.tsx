@@ -1,51 +1,82 @@
-import React, { useEffect, useState, createContext, useContext } from 'react';
+import React, { useEffect, useState, createContext, useContext, useMemo } from 'react';
+import { AppState, AppStateStatus, View, Text } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Text } from 'react-native';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { initAdsAndConsent, ConsentState } from './src/services/adsConsent';
+import { AdsConsentStatus } from 'react-native-google-mobile-ads';
 
-// Context to share consent state throughout the app
-const ConsentContext = createContext<ConsentState>({
-  status: 'UNKNOWN' as any,
+type ConsentCtx = ConsentState & { ready: boolean };
+
+const ConsentContext = createContext<ConsentCtx>({
+  status: AdsConsentStatus.UNKNOWN,
   canRequestAds: false,
   personalized: false,
+  ready: false,
 });
 
 export const useConsent = () => useContext(ConsentContext);
 
+// Optional: a tiny selector hook to avoid prop drilling and extra renders
+export const useAdFlags = () => {
+  const { canRequestAds, personalized, ready } = useConsent();
+  return useMemo(() => ({ canRequestAds, personalized, ready }), [canRequestAds, personalized, ready]);
+};
+
 export default function App() {
-  const [consent, setConsent] = useState<ConsentState & { ready: boolean }>({
-    status: 'UNKNOWN' as any,
+  const [consent, setConsent] = useState<ConsentCtx>({
+    status: AdsConsentStatus.UNKNOWN,
     canRequestAds: false,
     personalized: false,
     ready: false,
   });
 
   useEffect(() => {
-    (async () => {
+    let mounted = true;
+
+    const boot = async () => {
       try {
         console.log('🔧 Initializing ads and consent...');
         const consentState = await initAdsAndConsent(
-          __DEV__ ? { 
-            testDeviceIds: ['EMULATOR'], 
-            eea: false // Set to true to test GDPR consent flow
-          } : undefined
+          __DEV__
+            ? {
+                testDeviceIds: ['EMULATOR'],
+                eea: false, // flip to true to QA the GDPR flow
+              }
+            : undefined
         );
-        
+        if (!mounted) return;
         setConsent({ ...consentState, ready: true });
         console.log('📱 App ready with consent state:', consentState);
       } catch (error) {
         console.error('❌ Error during app initialization:', error);
-        // If anything fails, stay safe: use non-personalized (ChatGPT-5's recommendation)
-        setConsent({ 
-          status: 'NOT_REQUIRED' as any,
-          canRequestAds: true, 
-          personalized: false, 
-          ready: true 
+        if (!mounted) return;
+        // Safe fallback: allow ad requests, but only NPA
+        setConsent({
+          status: AdsConsentStatus.NOT_REQUIRED,
+          canRequestAds: true,
+          personalized: false,
+          ready: true,
         });
       }
-    })();
+    };
+
+    boot();
+
+    // (Optional) Refresh consent when app returns to foreground; UMP will be a quick no-op if unchanged
+    const onAppStateChange = (state: AppStateStatus) => {
+      if (state === 'active') {
+        initAdsAndConsent(__DEV__ ? { testDeviceIds: ['EMULATOR'] } : undefined)
+          .then((s) => setConsent((prev) => ({ ...prev, ...s })))
+          .catch(() => {});
+      }
+    };
+    const sub = AppState.addEventListener('change', onAppStateChange);
+
+    return () => {
+      mounted = false;
+      sub.remove();
+    };
   }, []);
 
   if (!consent.ready) {
