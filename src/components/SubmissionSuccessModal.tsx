@@ -143,7 +143,14 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
                 onPress={onSubmitAnother}
                 activeOpacity={0.8}
               >
-                <Text style={styles.secondaryButtonText}>More To Say? 🚀</Text>
+                <Text 
+                  style={styles.secondaryButtonText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.8}
+                >
+                  More To Say? 🚀
+                </Text>
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -260,6 +267,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   secondaryButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.25)',

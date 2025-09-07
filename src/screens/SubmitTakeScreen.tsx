@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { ScrollView as GHScrollView, NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useAuth, useFirebaseTakes } from '../hooks';
 import { colors, dimensions } from '../constants';
 import { TakeCard } from '../components/TakeCard';
@@ -18,23 +19,13 @@ import { SubmissionSuccessModal } from '../components/SubmissionSuccessModal';
 import { Take } from '../types';
 
 const CATEGORIES = [
-  'food',
-  'work',
-  'pets',
-  'technology',
-  'life',
-  'entertainment',
-  'environment',
-  'wellness',
-  'society',
-  'politics',
-  'sports',
-  'travel',
-  'relationships',
+  'food', 'work', 'pets', 'technology', 'life', 'entertainment', 'environment',
+  'wellness', 'society', 'politics', 'sports', 'travel', 'relationships',
 ] as const;
 
 const MIN_LENGTH = 10;
 const MAX_LENGTH = 150;
+const OVERFLOW_SLACK = 50; // Allow users to paste then trim
 
 interface SubmitTakeScreenProps {
   onClose: () => void;
@@ -49,6 +40,9 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
 }) => {
   const { user } = useAuth();
   const { submitNewTake } = useFirebaseTakes();
+  const textInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef(null);
+  const inputGRef = useRef(null);
   
   const [text, setText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -66,6 +60,25 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
   const characterCount = text.length;
   const isNearLimit = characterCount > MAX_LENGTH * 0.8;
   const isOverLimit = characterCount > MAX_LENGTH;
+
+  const previewTake: Take = useMemo(
+    () => ({
+      id: 'preview',
+      text,
+      category: selectedCategory,
+      hotVotes: 0,
+      notVotes: 0,
+      totalVotes: 0,
+      createdAt: new Date(),
+      userId: user?.uid || '',
+      isApproved: false,
+      status: 'pending',
+      submittedAt: new Date(),
+      reportCount: 0,
+      isAIGenerated: false,
+    }),
+    [text, selectedCategory, user?.uid]
+  );
 
   const handleSubmitAnother = () => {
     setText('');
@@ -121,20 +134,6 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
     }
   };
 
-  const previewTake: Take = {
-    id: 'preview',
-    text,
-    category: selectedCategory,
-    hotVotes: 0,
-    notVotes: 0,
-    totalVotes: 0,
-    createdAt: new Date(),
-    userId: user?.uid || '',
-    isApproved: false,
-    status: 'pending',
-    submittedAt: new Date(),
-    reportCount: 0,
-  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -142,12 +141,25 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {(() => {
+          const ScrollComponent = Platform.OS === 'android' ? GHScrollView : ScrollView;
+          return (
+            <ScrollComponent
+              ref={Platform.OS === 'android' ? scrollRef : undefined}
+              style={styles.scrollView} 
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="always"
+              keyboardDismissMode="none"
+              nestedScrollEnabled={true}
+            >
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
               style={[styles.closeButton, { backgroundColor: theme.surface }]}
               onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close submit take screen"
             >
               <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
             </TouchableOpacity>
@@ -160,6 +172,8 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
               style={[styles.previewButton, { backgroundColor: theme.surface }]}
               onPress={() => setShowPreview(!showPreview)}
               disabled={!isValidText || !isValidCategory}
+              accessibilityRole="button"
+              accessibilityLabel={showPreview ? 'Switch to edit mode' : 'Preview your take'}
             >
               <Text style={[
                 styles.previewButtonText, 
@@ -219,29 +233,88 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>
                   Your Hot Take
                 </Text>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: theme.surface,
-                      color: theme.text,
+                {Platform.OS === 'android' ? (
+                  // Android-specific wrapper with NativeViewGestureHandler
+                  <View
+                    pointerEvents="box-none"
+                    style={{
+                      borderWidth: 1,
+                      borderRadius: 12,
                       borderColor: isOverLimit ? theme.error : theme.border,
-                    },
-                  ]}
-                  placeholder="What's your controversial opinion?"
-                  placeholderTextColor={theme.textSecondary}
-                  value={text}
-                  onChangeText={(newText) => {
-                    setText(newText);
-                    // Clear moderation error when user starts editing
-                    if (moderationError) {
-                      setModerationError(null);
-                    }
-                  }}
-                  multiline
-                  textAlignVertical="top"
-                  maxLength={MAX_LENGTH + 50} // Allow some overage for user feedback
-                />
+                      backgroundColor: theme.surface,
+                    }}
+                  >
+                    <NativeViewGestureHandler
+                      ref={inputGRef}
+                      disallowInterruption
+                      simultaneousHandlers={scrollRef}
+                    >
+                      <TextInput
+                        ref={textInputRef}
+                        style={[
+                          styles.textInput,
+                          {
+                            backgroundColor: theme.surface,
+                            color: theme.text,
+                            borderWidth: 0, // Remove border since wrapper has it
+                            textAlign: 'left',
+                          },
+                        ]}
+                        placeholder="What's your controversial opinion?"
+                        placeholderTextColor={theme.textSecondary}
+                        value={text}
+                        onChangeText={(newText) => {
+                          setText(newText);
+                          if (moderationError) {
+                            setModerationError(null);
+                          }
+                        }}
+                        multiline
+                        textAlignVertical="top"
+                        maxLength={MAX_LENGTH + OVERFLOW_SLACK}
+                        numberOfLines={5}
+                        scrollEnabled={true}
+                        disableFullscreenUI={true}
+                        underlineColorAndroid="transparent"
+                        importantForAutofill="no"
+                        selectTextOnFocus={false}
+                        autoCapitalize="sentences"
+                        autoCorrect={true}
+                        selectionColor={theme.primary}
+                        accessibilityLabel="Enter your hot take"
+                        accessibilityHint="Type your controversial opinion here, minimum 10 characters"
+                        // No touch handlers needed - RNGH handles it all
+                      />
+                    </NativeViewGestureHandler>
+                  </View>
+                ) : (
+                  // iOS - works fine without wrapper
+                  <TextInput
+                    ref={textInputRef}
+                    style={[
+                      styles.textInput,
+                      {
+                        backgroundColor: theme.surface,
+                        color: theme.text,
+                        borderColor: isOverLimit ? theme.error : theme.border,
+                      },
+                    ]}
+                    placeholder="What's your controversial opinion?"
+                    placeholderTextColor={theme.textSecondary}
+                    value={text}
+                    onChangeText={(newText) => {
+                      setText(newText);
+                      if (moderationError) {
+                        setModerationError(null);
+                      }
+                    }}
+                    multiline
+                    textAlignVertical="top"
+                    maxLength={MAX_LENGTH + OVERFLOW_SLACK}
+                    accessibilityLabel="Enter your hot take"
+                    accessibilityHint="Type your controversial opinion here, minimum 10 characters"
+                  />
+                )}
                 <View style={styles.textInputFooter}>
                   <Text style={[
                     styles.characterCount,
@@ -287,6 +360,9 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
                         },
                       ]}
                       onPress={() => setSelectedCategory(category)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select ${category} category`}
+                      accessibilityState={{ selected: selectedCategory === category }}
                     >
                       <Text
                         style={[
@@ -319,6 +395,9 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
               ]}
               onPress={handleSubmit}
               disabled={!canSubmit}
+              accessibilityRole="button"
+              accessibilityLabel={isSubmitting ? 'Submitting your take' : 'Submit your hot take'}
+              accessibilityState={{ disabled: !canSubmit }}
             >
               <Text style={[
                 styles.submitButtonText,
@@ -332,7 +411,9 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
               Your take will appear immediately in the voting queue
             </Text>
           </View>
-        </ScrollView>
+            </ScrollComponent>
+          );
+        })()}
       </KeyboardAvoidingView>
       
       {/* Success Modal */}
@@ -355,6 +436,9 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   header: {
     flexDirection: 'row',
