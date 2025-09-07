@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import { useConsent } from '../../App';
 
 interface AdBannerProps {
   size?: BannerAdSize;
@@ -24,14 +25,24 @@ const adUnitId = Platform.select({
 export const AdBanner: React.FC<AdBannerProps> = ({ 
   size = BannerAdSize.BANNER 
 }) => {
+  const consent = useConsent();
+
+  // Don't show ads if we can't request them
+  if (!consent.canRequestAds) {
+    return null;
+  }
+
   return (
     <View style={styles.container}>
       <BannerAd
         unitId={adUnitId}
         size={size}
-        // AdMob SDK handles GDPR consent automatically
+        requestOptions={{
+          // Use personalized ads only when user has consented
+          requestNonPersonalizedAdsOnly: !consent.personalized,
+        }}
         onAdLoaded={() => {
-          console.log('🎯 Banner ad loaded successfully');
+          console.log('🎯 Banner ad loaded successfully', { personalized: consent.personalized });
         }}
         onAdFailedToLoad={(error) => {
           console.log('❌ Banner ad failed to load:', error);
