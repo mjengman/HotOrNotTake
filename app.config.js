@@ -36,7 +36,7 @@ export default () => ({
           androidAppId: "ca-app-pub-1745058833253836~8031915483",
           iosAppId: "ca-app-pub-1745058833253836~9865797363",
           delayAppMeasurementInit: true, // GDPR compliance - delay until consent
-          userTrackingUsageDescription: "This identifier will be used to deliver personalized ads to you." // iOS ATT
+          userTrackingUsageDescription: "This identifier will be used to deliver personalized ads to you." // iOS ATT - UMP can handle ATT automatically, or use react-native-tracking-transparency for manual control
         }
       ]
     ],

@@ -5,8 +5,28 @@ import mobileAds, {
   AdsConsentStatus,
   AdsConsentDebugGeography,
 } from 'react-native-google-mobile-ads';
+import { Platform } from 'react-native';
 
 let adsInitialized = false; // module-level flag to prevent duplicate initialization
+
+// iOS ATT helper - requests App Tracking Transparency permission if available
+async function requestATTIfNeeded(): Promise<void> {
+  if (Platform.OS !== 'ios') return;
+  
+  try {
+    // Try to dynamically import ATT library if available
+    const ATT = await import('react-native-tracking-transparency').catch(() => null);
+    if (!ATT) return; // Library not installed
+    
+    const status = await ATT.getTrackingStatus();
+    if (status === 'not-determined') {
+      console.log('📱 Requesting iOS App Tracking Transparency permission...');
+      await ATT.requestTrackingPermission();
+    }
+  } catch (error) {
+    console.log('📱 ATT request skipped:', error.message);
+  }
+}
 
 export type ConsentState = {
   status: AdsConsentStatus;
@@ -27,45 +47,78 @@ export async function initAdsAndConsent(debug?: {
     });
 
     // 1) Refresh consent info (with optional debug)
-    await AdsConsent.requestInfoUpdate({
-      debugGeography: debug?.eea ? AdsConsentDebugGeography.EEA : undefined,
-      testDeviceIdentifiers: debug?.testDeviceIds ?? [],
-    });
-
-    // 2) Show consent / privacy form if required
-    // (Use gatherConsent() if that's what your lib version documents;
-    // otherwise use loadAndShowConsentFormIfRequired()).
-    if (typeof (AdsConsent as any).gatherConsent === 'function') {
-      await (AdsConsent as any).gatherConsent();
-    } else if (typeof AdsConsent.loadAndShowConsentFormIfRequired === 'function') {
-      await AdsConsent.loadAndShowConsentFormIfRequired();
+    let consentRequired = false;
+    try {
+      await AdsConsent.requestInfoUpdate({
+        debugGeography: debug?.eea ? AdsConsentDebugGeography.EEA : undefined,
+        testDeviceIdentifiers: debug?.testDeviceIds ?? [],
+      });
+      consentRequired = true;
+    } catch (error: any) {
+      // Handle common UMP configuration errors gracefully
+      if (error?.message?.includes('no form(s) configured') || 
+          error?.message?.includes('Publisher misconfiguration')) {
+        console.log('📝 UMP forms not configured - proceeding without consent dialog (common in development)');
+        consentRequired = false;
+      } else {
+        throw error; // Re-throw unexpected errors
+      }
     }
 
-    // 3) Read final state
-    const info = await AdsConsent.getConsentInfo();
+    // 2) Show consent / privacy form if required and available
+    if (consentRequired) {
+      try {
+        if (typeof (AdsConsent as any).gatherConsent === 'function') {
+          await (AdsConsent as any).gatherConsent();
+        } else if (typeof AdsConsent.loadAndShowConsentFormIfRequired === 'function') {
+          await AdsConsent.loadAndShowConsentFormIfRequired();
+        }
+      } catch (formError: any) {
+        console.log('📝 Consent form error (proceeding):', formError?.message || formError);
+      }
+    }
+
+    // 3) Read final state (with fallback if UMP unavailable)
+    let info: any, gdprApplies: boolean | undefined;
+    try {
+      info = await AdsConsent.getConsentInfo();
+      gdprApplies = await AdsConsent.getGdprApplies();
+    } catch (error: any) {
+      console.log('📝 UMP info unavailable, using defaults:', error?.message || error);
+      info = { status: AdsConsentStatus.NOT_REQUIRED, canRequestAds: true };
+      gdprApplies = undefined;
+    }
+    
     const { status, canRequestAds } = info;
 
     // Prefer SDK-provided booleans; fall back to a conservative default.
     // In many versions, if GDPR applies and user did not consent, canRequestAds can still be true
     // (but only for NPA). So we derive "personalized" as:
-    const gdprApplies = await AdsConsent.getGdprApplies();
     let personalized = false;
 
     // If your version exposes a consent type API, use that instead:
     // const type = await AdsConsent.getConsentType?.();
     // personalized = type === 'PERSONALIZED';
 
-    if (gdprApplies) {
+    if (gdprApplies === true) {
       // In GDPR regions, treat as personalized only if status is OBTAINED
       // and your version indicates consent for personalized ads.
       // Without a dedicated API, keep this conservative:
       personalized = status === AdsConsentStatus.OBTAINED;
-    } else {
+    } else if (gdprApplies === false) {
       // Outside GDPR, personalized is allowed by default
       personalized = true;
+    } else {
+      // Unknown GDPR status - safest default is NPA
+      personalized = false;
     }
 
-    // 4) Initialize SDK ONLY when allowed to request ads (and only once)
+    // 4) Request iOS App Tracking Transparency if appropriate
+    if (canRequestAds && personalized) {
+      await requestATTIfNeeded();
+    }
+
+    // 5) Initialize SDK ONLY when allowed to request ads (and only once)
     if (canRequestAds && !adsInitialized) {
       await mobileAds().initialize();
       adsInitialized = true;

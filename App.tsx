@@ -1,27 +1,11 @@
-import React, { useEffect, useState, createContext, useContext, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppState, AppStateStatus, View, Text } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { HomeScreen } from './src/screens/HomeScreen';
-import { initAdsAndConsent, ConsentState } from './src/services/adsConsent';
+import { initAdsAndConsent } from './src/services/adsConsent';
 import { AdsConsentStatus } from 'react-native-google-mobile-ads';
-
-type ConsentCtx = ConsentState & { ready: boolean };
-
-const ConsentContext = createContext<ConsentCtx>({
-  status: AdsConsentStatus.UNKNOWN,
-  canRequestAds: false,
-  personalized: false,
-  ready: false,
-});
-
-export const useConsent = () => useContext(ConsentContext);
-
-// Optimized selector hook to avoid prop drilling and extra renders
-export const useAdFlags = () => {
-  const { canRequestAds, personalized, ready } = useConsent();
-  return useMemo(() => ({ canRequestAds, personalized, ready }), [canRequestAds, personalized, ready]);
-};
+import { ConsentContext, ConsentCtx } from './src/contexts/ConsentContext';
 
 export default function App() {
   const [consent, setConsent] = useState<ConsentCtx>({
