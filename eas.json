@@ -23,6 +23,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "ios": {
+        "image": "macos-sequoia-15.6-xcode-26.0"
+      },
       "env": {
         "EAS_BUILD": "true",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyB0mxVn3UsaErbWb1FIRuXJaTQpnPwpZRM",
