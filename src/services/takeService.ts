@@ -20,11 +20,20 @@ import { Take, TakeSubmission, TakeStatus } from '../types/Take';
 // Collection references
 const TAKES_COLLECTION = 'takes';
 const SUBMIT_TAKE_URL = 'https://us-central1-hot-or-not-takes.cloudfunctions.net/submitTake';
+const GENERATE_TAKES_URL = 'https://us-central1-hot-or-not-takes.cloudfunctions.net/generateTakes';
 
 interface SubmitTakeResponse {
   takeId: string;
   status: TakeStatus;
   reason?: string;
+}
+
+interface GenerateTakesResponse {
+  requestedCategory: string;
+  category: string;
+  generatedCount: number;
+  addedCount: number;
+  takeIds?: string[];
 }
 
 const callSubmitTakeFunction = async (data: {
@@ -59,6 +68,37 @@ const callSubmitTakeFunction = async (data: {
   }
 
   return body.result as SubmitTakeResponse;
+};
+
+export const requestGeneratedTakes = async (category: string): Promise<GenerateTakesResponse> => {
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) {
+    throw new Error('User must be signed in to generate takes');
+  }
+
+  const response = await fetch(GENERATE_TAKES_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Firebase-Auth': `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({
+      data: {
+        category: category || 'all',
+      },
+    }),
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.error) {
+    throw new Error(body.error?.message || 'Failed to generate takes');
+  }
+
+  if (typeof body.result?.addedCount !== 'number') {
+    throw new Error('Generation service returned an invalid response');
+  }
+
+  return body.result as GenerateTakesResponse;
 };
 
 // Convert Firestore timestamp to Date

@@ -62,7 +62,14 @@ User submissions are moderated by the `submitTake` Firebase HTTPS function befor
 - If OpenAI moderation fails, the function creates the take as `status: pending` / `isApproved: false`; pending takes are invisible to everyone except the submitter until manually reviewed in Firebase Console.
 - Firebase Cloud Functions secrets require the Firebase project to be on the Blaze plan.
 
-Legacy AI content generation is disabled in client builds. If generated content is needed again, build it as trusted server tooling rather than restoring a client API key.
+AI content generation is server-side only:
+
+- `useFirebaseTakes` asks the `generateTakes` HTTPS function for more content when the visible feed drops to 3 takes or fewer.
+- The client sends only the selected category and Firebase ID token; it never sends, stores, or derives an OpenAI key.
+- If the selected category is `all`, the function chooses the valid category with the fewest approved takes in Firestore so the library stays balanced over time.
+- Generated takes are moderated through the same local policy and OpenAI moderation path before they are written.
+- Approved generated takes are written with `status: approved`, `isApproved: true`, `isAIGenerated: true`, and `userId: ai-system`.
+- Generation failures are swallowed by the client; the user should never see an error or spinner because background generation failed.
 
 ## Build and Release Guardrails
 
@@ -91,7 +98,7 @@ Do not hide these warnings. Resolve dependency/tooling drift in a dedicated main
 
 ## Product Backlog
 
-Use `FUTURE_FEATURES.md` as the product idea backlog. Sprint 2 is currently focused on server-side submission moderation.
+Use `FUTURE_FEATURES.md` as the product idea backlog. Keep completed sprint notes here only when they change current operating behavior.
 
 ## Git Hygiene
 
