@@ -2,14 +2,15 @@
 
 /**
  * Simple Take Generator - Just shows the structure
- * Replace YOUR_API_KEY_HERE with a valid OpenAI API key
+ * Set OPENAI_API_KEY in your shell or a local .env file.
  */
 
 require('dotenv').config();
 const fetch = require('node-fetch');
 
-// Your API key - set via environment variable or .env file
-const API_KEY = process.env.OPENAI_API_KEY || process.env.EXPO_PUBLIC_OPENAI_API_KEY || 'YOUR_API_KEY_HERE';
+// Your API key - set via environment variable or local .env file.
+// Do not use EXPO_PUBLIC_* variables for secrets; those are bundled into apps.
+const API_KEY = process.env.OPENAI_API_KEY || 'YOUR_API_KEY_HERE';
 
 const categories = ['food', 'technology', 'politics', 'work', 'life'];
 

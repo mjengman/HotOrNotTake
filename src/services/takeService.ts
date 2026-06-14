@@ -11,16 +11,26 @@ import {
   limit,
   onSnapshot,
   Timestamp,
-  writeBatch,
   increment,
   startAfter,
 } from 'firebase/firestore';
-import { db } from './firebase';
-import { Take, TakeFirestore, TakeSubmission, TakeStatus } from '../types/Take';
-import { moderateUserTake, validateTakeCategory } from './aiModerationService';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from './firebase';
+import { Take, TakeSubmission, TakeStatus } from '../types/Take';
 
 // Collection references
 const TAKES_COLLECTION = 'takes';
+
+interface SubmitTakeResponse {
+  takeId: string;
+  status: TakeStatus;
+  reason?: string;
+}
+
+const submitTakeCallable = httpsCallable<
+  { text: string; category: string },
+  SubmitTakeResponse
+>(functions, 'submitTake');
 
 // Convert Firestore timestamp to Date
 const convertTimestampToDate = (timestamp: any): Date => {
@@ -152,87 +162,43 @@ export const submitTake = async (
   isAIGenerated: boolean = false
 ): Promise<string> => {
   try {
-    const now = new Date();
-    let isApproved = true;
-    let status: TakeStatus = 'approved';
-    let approvedAt: Date | undefined = now;
-    let rejectedAt: Date | undefined = undefined;
-    let rejectionReason: string | undefined = undefined;
-
-    // Only moderate user-submitted content (skip AI content)
-    if (!isAIGenerated) {
-      console.log(`🛡️ Moderating user-submitted take: "${takeData.text.substring(0, 50)}..."`);
-      
-      // Step 1: Content moderation (check for serious issues first)
-      const moderationResult = await moderateUserTake(takeData.text);
-      
-      if (!moderationResult.approved) {
-        console.log(`❌ Take rejected by AI moderation: ${moderationResult.reason}`);
-        isApproved = false;
-        status = 'rejected';
-        approvedAt = undefined;
-        rejectedAt = now;
-        rejectionReason = moderationResult.reason || 'Content violates community guidelines';
-      } else {
-        console.log(`✅ Take approved by AI moderation`);
-        
-        // Step 2: Validate category match (only if content is safe)
-        const categoryValidation = await validateTakeCategory(takeData.text, takeData.category);
-        
-        if (!categoryValidation.matches) {
-          console.log(`❌ Take rejected - wrong category: ${categoryValidation.reason}`);
-          isApproved = false;
-          status = 'rejected';
-          approvedAt = undefined;
-          rejectedAt = now;
-          rejectionReason = categoryValidation.reason || 'Please choose a more appropriate category.';
-        } else {
-          console.log(`✅ Take matches category: ${takeData.category}`);
-          // Keep default approved values (isApproved = true, status = 'approved', etc.)
-        }
-      }
-    } else {
-      console.log(`🤖 Skipping moderation for AI-generated content`);
+    if (isAIGenerated) {
+      throw new Error('AI content generation is disabled in client builds');
     }
 
-    const firestoreData: any = {
+    // userId is still accepted by this public API, but the Cloud Function trusts
+    // only Firebase Auth context and ignores client-provided identity.
+    void userId;
+
+    const result = await submitTakeCallable({
       text: takeData.text.trim(),
-      category: takeData.category.toLowerCase(),
-      hotVotes: 0,
-      notVotes: 0,
-      totalVotes: 0,
-      createdAt: Timestamp.fromDate(now),
-      submittedAt: Timestamp.fromDate(now),
-      userId,
-      isApproved,
-      status,
-      reportCount: 0,
-      isAIGenerated, // Flag for AI content
-    };
+      category: takeData.category,
+    });
 
-    // Only add optional timestamp fields if they have values
-    if (approvedAt) {
-      firestoreData.approvedAt = Timestamp.fromDate(approvedAt);
-    }
-    if (rejectedAt) {
-      firestoreData.rejectedAt = Timestamp.fromDate(rejectedAt);
-    }
-    if (rejectionReason) {
-      firestoreData.rejectionReason = rejectionReason;
-    }
-
-    // Only save approved takes to avoid permissions issues
-    if (isApproved) {
-      const docRef = await addDoc(collection(db, TAKES_COLLECTION), firestoreData);
-      return docRef.id;
+    if (result.data.status === 'pending') {
+      console.log(`🕒 Take submitted for moderation review: ${result.data.takeId}`);
     } else {
-      // Don't save rejected takes - just throw error for UI feedback
-      throw new Error(`Take rejected: ${rejectionReason}`);
+      console.log(`✅ Take approved by server moderation: ${result.data.takeId}`);
     }
+
+    return result.data.takeId;
   } catch (error) {
-    console.error(`Failed to submit take:`, error);
-    // Re-throw the original error without wrapping it
-    throw error;
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : '';
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Failed to submit take';
+
+    console.error('Failed to submit take:', error);
+
+    if (code === 'functions/failed-precondition') {
+      throw new Error(`Take rejected: ${message}`);
+    }
+
+    throw new Error(message);
   }
 };
 

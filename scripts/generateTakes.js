@@ -31,8 +31,9 @@
 require('dotenv').config();
 const fetch = require('node-fetch');
 
-// Your OpenAI API key - set via environment variable
-const API_KEY = process.env.OPENAI_API_KEY || process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+// Your OpenAI API key - set via environment variable or local .env file.
+// Do not use EXPO_PUBLIC_* variables for secrets; those are bundled into apps.
+const API_KEY = process.env.OPENAI_API_KEY;
 
 const MODEL = 'gpt-4o-mini';
 const MAX_LENGTH = 100;

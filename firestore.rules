@@ -29,14 +29,14 @@ service cloud.firestore {
       allow read: if resource.data.isApproved == true || 
                      isOwner(resource.data.userId);
       
-      // Authenticated users can create takes (auto-approved for development)
+      // Authenticated clients may submit only pending takes.
+      // Approved takes must be created by trusted server code.
       allow create: if isAuthenticated() &&
                    isValidTakeText(request.resource.data.text) &&
                    isValidCategory(request.resource.data.category) &&
                    request.resource.data.userId == request.auth.uid &&
-                   // Allow both approved and pending takes for development
-                   request.resource.data.isApproved in [true, false] &&
-                   request.resource.data.status in ['approved', 'pending'] &&
+                   request.resource.data.isApproved == false &&
+                   request.resource.data.status == 'pending' &&
                    request.resource.data.hotVotes == 0 &&
                    request.resource.data.notVotes == 0 &&
                    request.resource.data.totalVotes == 0 &&

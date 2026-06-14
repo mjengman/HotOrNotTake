@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getFunctions } from 'firebase/functions';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -23,6 +24,7 @@ export const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage)
 });
 export const db = getFirestore(app);
+export const functions = getFunctions(app, 'us-central1');
 
 // Initialize Analytics (only in web environment and if supported)
 export let analytics: ReturnType<typeof getAnalytics> | null = null;

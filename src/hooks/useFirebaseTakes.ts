@@ -330,15 +330,15 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
 
     try {
-      // Submit the take to Firebase (includes AI moderation)
+      // Submit the take through the server moderation function
       const takeId = await submitTake(takeData, user.uid);
       
       // Update user's submission count
       await incrementUserSubmissionCount(user.uid, takeId);
       
-      // The take is now live in the database
-      // Feed will refresh automatically on next navigation or pull
-      console.log(`✅ Take submitted and approved successfully`);
+      // Approved takes are live immediately; moderation failures are queued
+      // as pending and remain visible only to the submitting user.
+      console.log(`✅ Take submitted successfully`);
     } catch (err) {
       // If the error message contains "Take rejected:", it's a moderation rejection
       const errorMessage = err instanceof Error ? err.message : 'Failed to submit take';

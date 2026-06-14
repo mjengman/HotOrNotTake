@@ -113,7 +113,7 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
             
             {/* Subtitle */}
             <Text style={styles.subtitle}>
-              Your hot take is now LIVE!
+              Your hot take is being moderated.
             </Text>
 
             {/* Stats Preview */}
@@ -133,7 +133,7 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
 
             {/* Motivational Text */}
             <Text style={styles.motivationalText}>
-              Let's see if the world can handle it!
+              Approved takes appear in the voting queue automatically.
             </Text>
 
             {/* Action Buttons */}

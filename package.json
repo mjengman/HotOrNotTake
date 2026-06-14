@@ -8,6 +8,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "typecheck:functions": "npm --prefix functions run typecheck",
+    "build:functions": "npm --prefix functions run build",
     "generate": "node scripts/generateTakes-simple.js",
     "generate:all": "node scripts/generateTakes-simple.js all 10"
   },

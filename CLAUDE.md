@@ -51,22 +51,29 @@ The feed filters out voted takes. Skipped takes can reappear by design.
 
 ## AI and Moderation
 
-The app still contains legacy client-side OpenAI moderation/generation code. Treat it as technical debt:
+User submissions are moderated by the `submitTake` Firebase callable function before any take can become visible in the public feed.
 
-- Do not add new client-side OpenAI calls.
-- Do not expose or log API key details in new code.
-- Future moderation/generation should move behind a backend, such as Firebase Cloud Functions.
+- The OpenAI key must live only in Firebase Secret Manager as `OPENAI_API_KEY`.
+- Do not add client-side OpenAI calls, `EXPO_PUBLIC_OPENAI_API_KEY`, EAS OpenAI env vars, or Expo config extras for OpenAI keys.
+- Firestore rules block clients from creating approved takes directly; trusted server code writes approved takes with Admin privileges.
+- Clean submissions are auto-approved by AI and appear in the feed quickly.
+- Rejected submissions return a user-facing reason and are not written as approved content.
+- If OpenAI moderation fails, the function creates the take as `status: pending` / `isApproved: false`; pending takes are invisible to everyone except the submitter until manually reviewed in Firebase Console.
+- Firebase Cloud Functions secrets require the Firebase project to be on the Blaze plan.
+
+Legacy AI content generation is disabled in client builds. If generated content is needed again, build it as trusted server tooling rather than restoring a client API key.
 
 ## Build and Release Guardrails
 
 Before merging release-affecting changes:
 
 1. Run `npx tsc --noEmit`.
-2. Run `npx expo-doctor` and review warnings.
-3. Verify `app.config.js`, `ios/`, and `android/` agree where native config matters.
-4. Confirm the Android package remains `com.anonymous.HotOrNotTakes`.
-5. Confirm the iOS bundle identifier remains `com.hotornottakes.app`.
-6. Human smoke-test both iOS and Android simulators before any OTA update or store submission.
+2. If `functions/` changed, run `npm --prefix functions run typecheck`.
+3. Run `npx expo-doctor` and review warnings.
+4. Verify `app.config.js`, `ios/`, and `android/` agree where native config matters.
+5. Confirm the Android package remains `com.anonymous.HotOrNotTakes`.
+6. Confirm the iOS bundle identifier remains `com.hotornottakes.app`.
+7. Human smoke-test both iOS and Android simulators before any OTA update or store submission.
 
 Smoke-test checklist owner: human/PM. Codex can prepare the build and call out expected checks, but a human should verify both emulators look normal after cleanup or release PRs merge.
 
@@ -83,7 +90,7 @@ Do not hide these warnings. Resolve dependency/tooling drift in a dedicated main
 
 ## Product Backlog
 
-Use `FUTURE_FEATURES.md` as the product idea backlog. Sprint 2 candidate: daily voting streaks.
+Use `FUTURE_FEATURES.md` as the product idea backlog. Sprint 2 is currently focused on server-side submission moderation.
 
 ## Git Hygiene
 
