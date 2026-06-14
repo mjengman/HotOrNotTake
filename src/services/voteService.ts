@@ -17,6 +17,33 @@ import { updateTakeVotes } from './takeService';
 // Collection references
 const VOTES_COLLECTION = 'votes';
 
+const getLocalDateKey = (date: Date = new Date()): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateKey = (dateKey: string): Date | null => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day);
+};
+
+const getDateKeyDistance = (olderDateKey: string, newerDateKey: string): number | null => {
+  const olderDate = parseDateKey(olderDateKey);
+  const newerDate = parseDateKey(newerDateKey);
+
+  if (!olderDate || !newerDate) {
+    return null;
+  }
+
+  return Math.round((newerDate.getTime() - olderDate.getTime()) / (1000 * 60 * 60 * 24));
+};
+
 // Convert Firestore vote to app format
 const convertFirestoreVote = (id: string, data: any): TakeVote => ({
   id,
@@ -178,23 +205,34 @@ export const getUserVotingStats = async (userId: string) => {
     const hotVotes = votes.filter(vote => vote.vote === 'hot').length;
     const notVotes = votes.filter(vote => vote.vote === 'not').length;
     
-    // Calculate voting streak (consecutive days with votes)
-    const sortedVotes = votes.sort((a, b) => b.votedAt.getTime() - a.votedAt.getTime());
+    const sortedVotes = [...votes].sort((a, b) => b.votedAt.getTime() - a.votedAt.getTime());
+    const uniqueVoteDates = Array.from(
+      new Set(sortedVotes.map((vote) => getLocalDateKey(vote.votedAt)))
+    ).sort((a, b) => {
+      const aTime = parseDateKey(a)?.getTime() ?? 0;
+      const bTime = parseDateKey(b)?.getTime() ?? 0;
+      return bTime - aTime;
+    });
+
     let streak = 0;
-    let currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
-    
-    for (const vote of sortedVotes) {
-      const voteDate = new Date(vote.votedAt);
-      voteDate.setHours(0, 0, 0, 0);
-      
-      const daysDiff = Math.floor((currentDate.getTime() - voteDate.getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (daysDiff === streak) {
-        streak++;
-        currentDate = voteDate;
-      } else if (daysDiff > streak) {
-        break;
+    if (uniqueVoteDates.length > 0) {
+      const todayKey = getLocalDateKey();
+      const latestVoteDate = uniqueVoteDates[0];
+      const distanceFromToday = getDateKeyDistance(latestVoteDate, todayKey);
+
+      if (distanceFromToday !== null && distanceFromToday <= 1) {
+        streak = 1;
+        let previousDateKey = latestVoteDate;
+
+        for (const voteDateKey of uniqueVoteDates.slice(1)) {
+          const distance = getDateKeyDistance(voteDateKey, previousDateKey);
+          if (distance !== 1) {
+            break;
+          }
+
+          streak += 1;
+          previousDateKey = voteDateKey;
+        }
       }
     }
 

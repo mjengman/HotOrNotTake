@@ -32,6 +32,7 @@ import { deleteVote, getUserVoteForTake } from '../services/voteService';
 import { getCommunityStats } from '../services/userService';
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 import { colors, motion } from '../constants';
+import { StreakUpdateResult } from '../types';
 import RNShare from 'react-native-share';
 
 export const HomeScreen: React.FC = () => {
@@ -49,7 +50,9 @@ export const HomeScreen: React.FC = () => {
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
   const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
   const [communityTotalVotes, setCommunityTotalVotes] = useState<number>(0);
+  const [streakToast, setStreakToast] = useState<{ title: string; subtitle: string } | null>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const streakToastAnim = useRef(new Animated.Value(0)).current;
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
     category: selectedCategory
@@ -68,13 +71,26 @@ export const HomeScreen: React.FC = () => {
   // Create responsive styles
   const styles = useMemo(() => createStyles(responsive, insets), [responsive, insets]);
 
+  const streakInstructionText = useMemo(() => {
+    if (stats.votingStreak <= 0) {
+      return '🔥 Vote today to start a daily streak';
+    }
+
+    if (stats.streakUpdatedToday) {
+      return `🔥 ${stats.votingStreak}-day streak active today`;
+    }
+
+    return `🔥 Vote today to keep your ${stats.votingStreak}-day streak`;
+  }, [stats.streakUpdatedToday, stats.votingStreak]);
+
   // Rotating instruction messages
-  const instructionTexts = [
+  const instructionTexts = useMemo(() => [
     "Swipe right for 🔥 HOT • Swipe left for ❄️ NOT",
+    streakInstructionText,
     "Swipe up ⬆️ or down ⬇️ to SKIP",
     "🚀 More swipes = fewer ads!",
     "☰ Tap the menu button for more options",
-  ];
+  ], [streakInstructionText]);
 
   // Check if this is the first launch
   useEffect(() => {
@@ -191,16 +207,56 @@ export const HomeScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [instructionTexts.length, fadeAnim]);
 
+  const showStreakToast = React.useCallback((streakUpdate: StreakUpdateResult) => {
+    const isMilestone = Boolean(streakUpdate.milestoneReached);
+    const isFirstDay = streakUpdate.currentStreak === 1;
+
+    setStreakToast({
+      title: isMilestone
+        ? `🔥 ${streakUpdate.currentStreak}-day streak!`
+        : isFirstDay
+          ? '🔥 Streak started'
+          : `🔥 ${streakUpdate.currentStreak}-day streak`,
+      subtitle: isMilestone
+        ? 'Milestone hit. Keep it rolling tomorrow.'
+        : 'Come back tomorrow to keep it alive.',
+    });
+
+    streakToastAnim.stopAnimation();
+    streakToastAnim.setValue(0);
+    Animated.sequence([
+      Animated.spring(streakToastAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        damping: motion.spring.press.damping,
+        stiffness: motion.spring.press.stiffness,
+      }),
+      Animated.delay(2400),
+      Animated.timing(streakToastAnim, {
+        toValue: 0,
+        duration: motion.duration.fadeOut,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        setStreakToast(null);
+      }
+    });
+  }, [streakToastAnim]);
+
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
       // Find the take that was voted on
       const votedTake = takes.find(take => take.id === takeId);
       
-      await submitVote(takeId, vote);
+      const streakUpdate = await submitVote(takeId, vote);
       // Track completed card for ad service (called after vote is cast)
       onCardComplete();
       // Update vote counter immediately
       await refreshStats();
+      if (streakUpdate?.didUpdateToday) {
+        showStreakToast(streakUpdate);
+      }
       // Also refresh community stats
       await refreshCommunityStats();
       
@@ -480,7 +536,7 @@ export const HomeScreen: React.FC = () => {
               adjustsFontSizeToFit
               minimumFontScale={0.8}
             >
-              Your votes: {stats.totalVotes} | Community: {communityTotalVotes.toLocaleString()}
+              🔥 {stats.votingStreak}d | Your votes: {stats.totalVotes} | Community: {communityTotalVotes.toLocaleString()}
             </Text>
           </View>
         </View>
@@ -506,6 +562,41 @@ export const HomeScreen: React.FC = () => {
           <AdBanner />
         </View>
       </View>
+
+      {streakToast && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.streakToast,
+            {
+              backgroundColor: isDarkMode ? theme.surface : '#FFF6E2',
+              borderColor: isDarkMode ? theme.border : '#FFD88A',
+              opacity: streakToastAnim,
+              transform: [
+                {
+                  translateY: streakToastAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [12, 0],
+                  }),
+                },
+                {
+                  scale: streakToastAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.96, 1],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <Text style={[styles.streakToastTitle, { color: theme.text }]}>
+            {streakToast.title}
+          </Text>
+          <Text style={[styles.streakToastSubtitle, { color: theme.textSecondary }]}>
+            {streakToast.subtitle}
+          </Text>
+        </Animated.View>
+      )}
 
 
       {/* Submit Take Modal - Conditional Rendering */}
@@ -852,6 +943,37 @@ const createStyles = (responsive: any, insets: any) => {
   voteCounterText: {
     fontSize: responsive.fontSize.medium,
     fontWeight: '600',
+  },
+  streakToast: {
+    position: 'absolute',
+    left: responsive.spacing.xl,
+    right: responsive.spacing.xl,
+    bottom: footerFabBottom + roundControlSize + responsive.spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: responsive.spacing.md,
+    paddingVertical: responsive.spacing.sm,
+    alignItems: 'center',
+    zIndex: 3000,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+  },
+  streakToastTitle: {
+    fontSize: responsive.fontSize.medium,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  streakToastSubtitle: {
+    fontSize: responsive.fontSize.small,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 2,
   },
   emptySubtext: {
     fontSize: responsive.fontSize.medium,

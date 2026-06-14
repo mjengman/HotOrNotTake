@@ -15,14 +15,16 @@ import {
 import { 
   incrementUserSubmissionCount,
   incrementUserVoteCount,
+  updateUserVotingStreak,
 } from '../services/userService';
 import { useAuth } from './useAuth';
+import { StreakUpdateResult } from '../types/User';
 
 interface UseFirebaseTakesResult {
   takes: Take[];
   loading: boolean;
   error: string | null;
-  submitVote: (takeId: string, vote: 'hot' | 'not') => Promise<void>;
+  submitVote: (takeId: string, vote: 'hot' | 'not') => Promise<StreakUpdateResult | null>;
   skipTake: (takeId: string) => Promise<void>;
   submitNewTake: (takeData: TakeSubmission) => Promise<void>;
   getUserVoteForTake: (takeId: string) => Promise<'hot' | 'not' | null>;
@@ -290,7 +292,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const handleSubmitVote = useCallback(async (
     takeId: string,
     vote: 'hot' | 'not'
-  ): Promise<void> => {
+  ): Promise<StreakUpdateResult | null> => {
     if (!user) {
       throw new Error('User must be signed in to vote');
     }
@@ -298,7 +300,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     // Atomic guard against concurrent duplicate submits
     if (inFlightVotesRef.current.has(takeId)) {
       console.log('⚠️ Vote already in progress for take:', takeId);
-      return; // Silent return, don't throw
+      return null; // Silent return, don't throw
     }
 
     try {
@@ -308,7 +310,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         // Silently return instead of throwing to prevent crashes
         // Remove from feed if somehow still there
         setFeed(prev => prev.filter(take => take.id !== takeId));
-        return;
+        return null;
       }
 
       // Mark as in-flight
@@ -331,6 +333,13 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       
       // Update user's vote count
       await incrementUserVoteCount(user.uid);
+
+      let streakUpdate: StreakUpdateResult | null = null;
+      try {
+        streakUpdate = await updateUserVotingStreak(user.uid);
+      } catch (streakError) {
+        console.warn('Voting streak update failed:', streakError);
+      }
       
       // Auto-load more if getting low
       if (feed.length < 10 && hasMore) {
@@ -338,16 +347,18 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       }
       
       console.log(`🗳️ Voted ${vote} on take ${takeId}`);
+      return streakUpdate;
     } catch (err) {
       // Rollback on error
       setInteractedTakeIds(prev => prev.filter(id => id !== takeId));
       console.error('Vote error, but handled gracefully:', err);
       // Don't throw - just log to prevent crashes
+      return null;
     } finally {
       // Always clear in-flight flag
       inFlightVotesRef.current.delete(takeId);
     }
-  }, [user, feed.length, hasMore, loadMore]);
+  }, [user, feed.length, hasMore, loadMore, interactedTakeIds]);
 
   // Skip a take
   const handleSkipTake = useCallback(async (takeId: string): Promise<void> => {
