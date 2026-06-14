@@ -15,7 +15,6 @@ import {
 } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { StreakUpdateResult, User, UserFirestore, UserStats } from '../types/User';
-import { getUserVotingStats } from './voteService';
 
 // Collection references
 const USERS_COLLECTION = 'users';
@@ -272,10 +271,7 @@ export const incrementUserSubmissionCount = async (
 // Get comprehensive user statistics
 export const getUserStats = async (userId: string): Promise<UserStats> => {
   try {
-    const [user, votingStats] = await Promise.all([
-      getUser(userId),
-      getUserVotingStats(userId),
-    ]);
+    const user = await getUser(userId);
 
     if (!user) {
       return {
@@ -292,21 +288,18 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
       };
     }
 
-    const lastStreakDate =
-      user.lastStreakDate ||
-      (votingStats.lastVoteAt ? getLocalDateKey(votingStats.lastVoteAt) : undefined);
+    const lastStreakDate = user.lastStreakDate;
     const todayKey = getLocalDateKey();
     const storedStreakDistance =
       lastStreakDate ? getDateKeyDistance(lastStreakDate, todayKey) : null;
     const storedStreakIsActive =
       storedStreakDistance !== null && storedStreakDistance >= 0 && storedStreakDistance <= 1;
-    const activeStoredStreak = storedStreakIsActive ? user.votingStreak : 0;
-    const votingStreak = activeStoredStreak || votingStats.votingStreak;
+    const votingStreak = storedStreakIsActive ? user.votingStreak : 0;
 
     return {
       totalVotes: user.totalVotes,
-      hotVotesGiven: votingStats.hotVotes,
-      notVotesGiven: votingStats.notVotes,
+      hotVotesGiven: 0,
+      notVotesGiven: 0,
       takesSubmitted: user.totalSubmissions,
       votingStreak,
       longestVotingStreak: Math.max(user.longestVotingStreak, votingStreak),
