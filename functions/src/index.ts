@@ -207,6 +207,7 @@ const createTake = async ({
 export const submitTake = onCall(
   {
     region: 'us-central1',
+    invoker: 'public',
     secrets: [OPENAI_API_KEY],
     timeoutSeconds: 30,
   },
