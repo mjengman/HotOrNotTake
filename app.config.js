@@ -50,7 +50,7 @@ export default () => ({
         projectId: "7d390f1c-4d9b-4414-a359-2d8fd3f3ed43"
       }
     },
-    runtimeVersion: { policy: "sdkVersion" },
+    runtimeVersion: "exposdk:53.0.0",
     updates: {
       enabled: true,
       url: "https://u.expo.dev/7d390f1c-4d9b-4414-a359-2d8fd3f3ed43"
