@@ -6,8 +6,8 @@ import Animated, {
   withRepeat,
   withTiming,
   interpolate,
+  Easing,
 } from 'react-native-reanimated';
-import { colors } from '../../constants';
 
 interface SkeletonLoaderProps {
   width?: DimensionValue;
@@ -25,21 +25,23 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
   isDarkMode = false,
 }) => {
   const shimmerAnimation = useSharedValue(0);
-  const theme = isDarkMode ? colors.dark : colors.light;
 
   useEffect(() => {
     shimmerAnimation.value = withRepeat(
-      withTiming(1, { duration: 1500 }),
+      withTiming(1, {
+        duration: 1400,
+        easing: Easing.inOut(Easing.ease),
+      }),
       -1,
-      false
+      true
     );
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => {
     const opacity = interpolate(
       shimmerAnimation.value,
-      [0, 0.5, 1],
-      [0.3, 0.6, 0.3]
+      [0, 1],
+      [0.35, 0.72]
     );
 
     return {
@@ -47,8 +49,8 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
     };
   });
 
-  const baseColor = isDarkMode ? '#2C2C2E' : '#E1E9EE';
-  const highlightColor = isDarkMode ? '#3A3A3C' : '#F2F8FC';
+  const baseColor = isDarkMode ? '#333333' : '#E7EAEE';
+  const highlightColor = isDarkMode ? '#444444' : '#F8FAFC';
 
   return (
     <View

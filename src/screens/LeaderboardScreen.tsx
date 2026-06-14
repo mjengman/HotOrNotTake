@@ -10,6 +10,7 @@ import {
 import { ScrollView } from 'react-native-gesture-handler';
 import { colors, dimensions, motion } from '../constants';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
+import { LeaderboardSkeleton } from '../components/loading/LeaderboardSkeleton';
 import { Take } from '../types';
 import {
   getHottestTakesByCategory,
@@ -326,10 +327,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         scrollEnabled={scrollEnabled}
       >
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={[styles.loadingText, { color: theme.text }]}>
-              Loading leaderboards...
-            </Text>
+          <View style={styles.contentContainer}>
+            <LeaderboardSkeleton isDarkMode={isDarkMode} />
           </View>
         ) : (
           <View style={styles.contentContainer}>
@@ -525,16 +524,6 @@ const styles = StyleSheet.create({
   statsText: {
     fontSize: dimensions.fontSize.small,
     fontWeight: 'bold',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: dimensions.spacing.xxl,
-  },
-  loadingText: {
-    fontSize: dimensions.fontSize.large,
-    fontWeight: '500',
   },
   emptyContainer: {
     flex: 1,

@@ -2,123 +2,124 @@ import React from 'react';
 import {
   View,
   StyleSheet,
-  useWindowDimensions,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
-import { colors, dimensions } from '../../constants';
+import { colors, motion } from '../../constants';
+import { useResponsive } from '../../hooks/useResponsive';
+import { SkeletonLoader } from './SkeletonLoader';
 
 interface LoadingSkeletonProps {
   isDarkMode?: boolean;
 }
 
-const CARD_HEIGHT = 520;
-
 export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({
   isDarkMode = false,
 }) => {
-  const { width } = useWindowDimensions();
+  const responsive = useResponsive();
   const theme = isDarkMode ? colors.dark : colors.light;
-  const shimmerValue = useSharedValue(0);
-  const cardWidth = Math.min(width * 0.85, 420);
-
-  React.useEffect(() => {
-    shimmerValue.value = withRepeat(
-      withTiming(1, {
-        duration: 1500,
-        easing: Easing.inOut(Easing.ease),
-      }),
-      -1,
-      true
-    );
-  }, []);
-
-  const shimmerStyle = useAnimatedStyle(() => {
-    return {
-      opacity: 0.3 + shimmerValue.value * 0.4,
-    };
-  });
-
-  const baseSkeletonColor = isDarkMode ? '#3A3A3A' : '#E0E0E0';
+  const cardWidth = responsive.card.width;
+  const cardHeight = responsive.card.height;
+  const cardPadding = Math.max(responsive.spacing.lg, 18);
+  const categoryWidth = Math.min(cardWidth * 0.46, 190);
+  const contentLineHeight = Math.max(16, responsive.fontSize.medium);
+  const statBlockWidth = Math.min(cardWidth * 0.22, 86);
 
   return (
-    <View style={styles.container}>
-      {/* Card skeleton */}
-      <View style={[
-        styles.cardSkeleton, 
-        { backgroundColor: theme.surface, width: cardWidth, height: CARD_HEIGHT }
-      ]}>
-        {/* Category badge skeleton */}
-        <Animated.View style={[
-          styles.categoryBadge,
-          { backgroundColor: baseSkeletonColor },
-          shimmerStyle,
-        ]} />
-        
-        {/* Main content area */}
-        <View style={styles.contentArea}>
-          {/* Title lines */}
-          <Animated.View style={[
-            styles.titleLine1,
-            { backgroundColor: baseSkeletonColor },
-            shimmerStyle,
-          ]} />
-          <Animated.View style={[
-            styles.titleLine2,
-            { backgroundColor: baseSkeletonColor },
-            shimmerStyle,
-          ]} />
-          <Animated.View style={[
-            styles.titleLine3,
-            { backgroundColor: baseSkeletonColor },
-            shimmerStyle,
-          ]} />
+    <View
+      style={styles.container}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <View
+        style={[
+          styles.cardSkeleton,
+          styles.backCardSkeleton,
+          {
+            backgroundColor: theme.card,
+            width: cardWidth,
+            height: cardHeight,
+            borderRadius: responsive.card.borderRadius,
+          },
+        ]}
+      />
+
+      <View
+        style={[
+          styles.cardSkeleton,
+          {
+            backgroundColor: theme.card,
+            width: cardWidth,
+            height: cardHeight,
+            borderRadius: responsive.card.borderRadius,
+            padding: cardPadding,
+          },
+        ]}
+      >
+        <View style={styles.header}>
+          <SkeletonLoader
+            width={categoryWidth}
+            height={32}
+            borderRadius={16}
+            isDarkMode={isDarkMode}
+          />
         </View>
-        
-        {/* Stats area skeleton */}
-        <View style={styles.statsArea}>
-          <Animated.View style={[
-            styles.statItem,
-            { backgroundColor: baseSkeletonColor },
-            shimmerStyle,
-          ]} />
-          <Animated.View style={[
-            styles.statItem,
-            { backgroundColor: baseSkeletonColor },
-            shimmerStyle,
-          ]} />
-          <Animated.View style={[
-            styles.statItem,
-            { backgroundColor: baseSkeletonColor },
-            shimmerStyle,
-          ]} />
-        </View>
-      </View>
-      
-      {/* Next card skeleton (slightly smaller and behind) */}
-      <View style={[
-        styles.cardSkeleton,
-        styles.nextCardSkeleton,
-        { backgroundColor: theme.surface, width: cardWidth * 0.95, height: CARD_HEIGHT * 0.95 }
-      ]}>
-        <Animated.View style={[
-          styles.categoryBadge,
-          { backgroundColor: baseSkeletonColor, opacity: 0.6 },
-        ]} />
+
         <View style={styles.contentArea}>
-          <Animated.View style={[
-            styles.titleLine1,
-            { backgroundColor: baseSkeletonColor, opacity: 0.6 },
-          ]} />
-          <Animated.View style={[
-            styles.titleLine2,
-            { backgroundColor: baseSkeletonColor, opacity: 0.6 },
-          ]} />
+          <SkeletonLoader
+            width="92%"
+            height={contentLineHeight}
+            borderRadius={contentLineHeight / 2}
+            isDarkMode={isDarkMode}
+            style={styles.textLine}
+          />
+          <SkeletonLoader
+            width="82%"
+            height={contentLineHeight}
+            borderRadius={contentLineHeight / 2}
+            isDarkMode={isDarkMode}
+            style={styles.textLine}
+          />
+          <SkeletonLoader
+            width="68%"
+            height={contentLineHeight}
+            borderRadius={contentLineHeight / 2}
+            isDarkMode={isDarkMode}
+          />
+        </View>
+
+        <View style={styles.voteArea}>
+          <View style={styles.voteColumn}>
+            <SkeletonLoader
+              width={34}
+              height={20}
+              borderRadius={10}
+              isDarkMode={isDarkMode}
+              style={styles.voteQuestion}
+            />
+            <SkeletonLoader
+              width={statBlockWidth}
+              height={18}
+              borderRadius={9}
+              isDarkMode={isDarkMode}
+            />
+          </View>
+
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+
+          <View style={styles.voteColumn}>
+            <SkeletonLoader
+              width={34}
+              height={20}
+              borderRadius={10}
+              isDarkMode={isDarkMode}
+              style={styles.voteQuestion}
+            />
+            <SkeletonLoader
+              width={statBlockWidth}
+              height={18}
+              borderRadius={9}
+              isDarkMode={isDarkMode}
+            />
+          </View>
         </View>
       </View>
     </View>
@@ -133,8 +134,6 @@ const styles = StyleSheet.create({
   },
   cardSkeleton: {
     position: 'absolute',
-    borderRadius: 20,
-    padding: dimensions.spacing.lg,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: {
@@ -144,50 +143,42 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
   },
-  nextCardSkeleton: {
-    transform: [{ scale: 0.95 }],
-    opacity: 0.5,
+  backCardSkeleton: {
+    transform: [
+      { scale: 0.96 },
+      { translateY: 14 },
+    ],
+    opacity: 0.22,
     zIndex: -1,
   },
-  categoryBadge: {
-    width: 80,
-    height: 24,
-    borderRadius: 12,
-    marginBottom: dimensions.spacing.md,
+  header: {
+    alignItems: 'center',
   },
   contentArea: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: dimensions.spacing.xl,
+    paddingHorizontal: 8,
   },
-  titleLine1: {
-    width: '90%',
-    height: 20,
-    borderRadius: 10,
-    marginBottom: dimensions.spacing.sm,
+  textLine: {
+    marginBottom: 10,
   },
-  titleLine2: {
-    width: '80%',
-    height: 20,
-    borderRadius: 10,
-    marginBottom: dimensions.spacing.sm,
-  },
-  titleLine3: {
-    width: '70%',
-    height: 20,
-    borderRadius: 10,
-    marginBottom: dimensions.spacing.lg,
-  },
-  statsArea: {
+  voteArea: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    paddingTop: dimensions.spacing.md,
+    alignItems: 'center',
+    minHeight: motion.touchTarget.minimum,
   },
-  statItem: {
-    width: 60,
-    height: 16,
-    borderRadius: 8,
+  voteColumn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voteQuestion: {
+    marginBottom: 8,
+  },
+  statDivider: {
+    width: 1,
+    height: 44,
+    opacity: 0.45,
   },
 });
