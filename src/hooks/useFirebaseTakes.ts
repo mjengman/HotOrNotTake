@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Take, TakeSubmission } from '../types/Take';
 import {
   submitTake,
+  requestGeneratedTakes,
   getUserVotedAndSkippedTakeIds,
   skipTake,
   fetchMoreTakesFilled,
@@ -26,7 +27,7 @@ interface UseFirebaseTakesResult {
   submitNewTake: (takeData: TakeSubmission) => Promise<void>;
   getUserVoteForTake: (takeId: string) => Promise<'hot' | 'not' | null>;
   refreshTakes: () => Promise<void>;
-  loadMore: (count?: number) => Promise<void>;
+  loadMore: (count?: number, force?: boolean, background?: boolean) => Promise<void>;
   hasMore: boolean;
   prependTake: (take: Take) => void;
 }
@@ -52,6 +53,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
 
   // Atomic guard against concurrent duplicate submits
   const inFlightVotesRef = useRef<Set<string>>(new Set());
+  const generationInFlightRef = useRef(false);
+  const generationTriggeredForRef = useRef<string | null>(null);
 
   // Stable category variety algorithm - freezes prefix to prevent reshuffling
   const ensureCategoryVariety = useCallback((takesArray: Take[], freezePrefixCount: number = 0): Take[] => {
@@ -186,11 +189,17 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   }, [category, user, ensureCategoryVariety]);
 
   // Load more takes function
-  const loadMore = useCallback(async (count: number = 20) => {
-    if (!hasMore || loading) return;
+  const loadMore = useCallback(async (
+    count: number = 20,
+    force: boolean = false,
+    background: boolean = false
+  ) => {
+    if ((!force && !hasMore) || loading) return;
 
     try {
-      setLoading(true);
+      if (!background) {
+        setLoading(true);
+      }
       const interacted = new Set(interactedTakeIds);
       
       // Also exclude what's already in feed to avoid duplicates
@@ -223,15 +232,59 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setHasMore(gotAny && doubleFiltered.length > 0);
       console.log(`📝 Loaded ${doubleFiltered.length} more takes (filtered from ${items.length}), hasMore: ${gotAny}, total feed: ${feed.length + doubleFiltered.length}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load more takes');
+      if (!background) {
+        setError(err instanceof Error ? err.message : 'Failed to load more takes');
+      }
       console.error('Error in loadMore:', err);
     } finally {
-      setLoading(false);
+      if (!background) {
+        setLoading(false);
+      }
     }
   }, [category, feed, hasMore, loading, interactedTakeIds, ensureCategoryVariety]);
 
   // Return feed directly - variety is applied once during load, not on every render
   const takes = feed;
+
+  useEffect(() => {
+    if (!user || loading) {
+      return;
+    }
+
+    const generationKey = `${user.uid}:${category}`;
+    if (takes.length > 3) {
+      if (generationTriggeredForRef.current === generationKey) {
+        generationTriggeredForRef.current = null;
+      }
+      return;
+    }
+
+    if (
+      generationInFlightRef.current ||
+      generationTriggeredForRef.current === generationKey
+    ) {
+      return;
+    }
+
+    generationInFlightRef.current = true;
+    generationTriggeredForRef.current = generationKey;
+
+    requestGeneratedTakes(category)
+      .then((result) => {
+        if (result.addedCount > 0) {
+          resetFeedCursor(category);
+          loadMore(20, true, true).catch((err) => {
+            console.log('Background feed refill failed:', err);
+          });
+        }
+      })
+      .catch((err) => {
+        console.log('AI take generation skipped:', err instanceof Error ? err.message : err);
+      })
+      .finally(() => {
+        generationInFlightRef.current = false;
+      });
+  }, [category, loadMore, loading, takes.length, user]);
 
   // Submit a vote
   const handleSubmitVote = useCallback(async (
