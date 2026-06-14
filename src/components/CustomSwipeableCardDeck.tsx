@@ -103,8 +103,16 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Freeze system to prevent promotion flicker
   const frozenCurrent = React.useRef<Take | null>(null);
   const frozenNext = React.useRef<Take | null>(null);
+  const frozenThird = React.useRef<Take | null>(null);
   const [useFrozen, setUseFrozen] = useState(false);
   const [landingTake, setLandingTake] = useState<Take | null>(null);
+  const finishFrozenReset = React.useCallback(() => {
+    frozenCurrent.current = null;
+    frozenNext.current = null;
+    frozenThird.current = null;
+    setLandingTake(null);
+    setUseFrozen(false);
+  }, []);
   
   // Drives the local promotion animation of the next card
   const promoteSV = useSharedValue(0);
@@ -180,6 +188,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         : frozenNext.current
     )
     : nextTake;
+  const renderThird = useFrozen ? frozenThird.current : thirdTake;
   
   // Update safety gate for gestures based on current card availability
   useEffect(() => { hasCurrentSV.value = !!renderCurrent ? 1 : 0; }, [renderCurrent]);
@@ -192,6 +201,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       setUseFrozen(false);
       frozenCurrent.current = null;
       frozenNext.current = null;
+      frozenThird.current = null;
       setLandingTake(null);
       promoteSV.value = 0;
     }
@@ -215,6 +225,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       setUseFrozen(false);
       frozenCurrent.current = null;
       frozenNext.current = null;
+      frozenThird.current = null;
       setLandingTake(null);
       promoteSV.value = 0;
     }
@@ -258,6 +269,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     // 🧊 FREEZE: Capture current state immediately when vote is cast
     // Capture the current card BEFORE it gets removed
     frozenCurrent.current = renderCurrent;
+    frozenThird.current = renderThird ?? null;
     // Only capture next if it exists
     if (renderNext) {
       frozenNext.current = renderNext;
@@ -330,6 +342,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       setLastVote(null);
       setCurrentVote(null);
       setLandingTake(null);
+      frozenThird.current = null;
       
       // Clear timeout
       if (autoDismissTimeout) {
@@ -361,8 +374,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       runOnJS(setIsCardFlipped)(false);
       runOnJS(setLastVote)(null);
       runOnJS(setCurrentVote)(null);
-      runOnJS(setUseFrozen)(false);
-      runOnJS(setLandingTake)(null);
+      runOnJS(finishFrozenReset)();
       isAnimating.value = false;
     };
 
@@ -427,6 +439,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     // 🧊 FREEZE: Capture current state immediately when skip is triggered
     if (renderCurrent) {
       frozenCurrent.current = renderCurrent;
+      frozenThird.current = renderThird ?? null;
       // Only capture next if it exists
       if (renderNext) {
         frozenNext.current = renderNext;
@@ -736,13 +749,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const thirdCardStyle = useAnimatedStyle(() => {
     const thirdScale = 0.96;
     const thirdTranslateY = 16;
+    const thirdOpacity = frozenSV.value ? 0 : 0.12;
 
     return {
       transform: [
         { scale: thirdScale },
         { translateY: thirdTranslateY },
       ],
-      opacity: 0.12,
+      opacity: thirdOpacity,
       zIndex: 25,
       position: 'absolute' as const,
       top: 0,
@@ -843,9 +857,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         pointerEvents="none"
         collapsable={false}
       >
-        {thirdTake ? (
+        {renderThird ? (
           <TakeCard 
-            take={thirdTake} 
+            take={renderThird}
             isDarkMode={isDarkMode} 
             showStats={false}
           />
