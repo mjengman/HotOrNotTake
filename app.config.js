@@ -2,9 +2,13 @@
 // - Android is live on Google Play as com.anonymous.HotOrNotTakes.
 // - iOS is live on the App Store as com.hotornottakes.app.
 // Do not rename either package without creating a new store app/listing.
+const isDevelopmentBuild =
+  process.env.APP_VARIANT === "development" ||
+  process.env.EAS_BUILD_PROFILE === "development";
+
 export default () => ({
   expo: {
-    name: "Hot or Not Takes",
+    name: isDevelopmentBuild ? "Hot or Not Takes Dev" : "Hot or Not Takes",
     slug: "HotOrNotTakes",
     version: "1.0.6",
     orientation: "portrait",
@@ -26,7 +30,11 @@ export default () => ({
         backgroundColor: "#1f1f1f"
       },
       edgeToEdgeEnabled: true,
-      package: "com.anonymous.HotOrNotTakes"
+      // Development builds use a separate package so they can live next to
+      // the Play Store app on real devices.
+      package: isDevelopmentBuild
+        ? "com.anonymous.HotOrNotTakes.dev"
+        : "com.anonymous.HotOrNotTakes"
     },
     web: {
       favicon: "./assets/favicon.png"
