@@ -408,7 +408,7 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
             </TouchableOpacity>
             
             <Text style={[styles.submitNote, { color: theme.textSecondary }]}>
-              Your take will appear immediately in the voting queue
+              Takes are moderated before they appear in the voting queue
             </Text>
           </View>
             </ScrollComponent>

@@ -44,8 +44,6 @@ export default () => ({
       ]
     ],
     extra: {
-      // EAS injects this at build time. Existing client-side AI code is legacy.
-      openaiApiKey: process.env.OPENAI_API_KEY,
       eas: {
         projectId: "7d390f1c-4d9b-4414-a359-2d8fd3f3ed43"
       }
