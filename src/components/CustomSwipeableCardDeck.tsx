@@ -104,6 +104,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const frozenCurrent = React.useRef<Take | null>(null);
   const frozenNext = React.useRef<Take | null>(null);
   const [useFrozen, setUseFrozen] = useState(false);
+  const [landingTake, setLandingTake] = useState<Take | null>(null);
   
   // Drives the local promotion animation of the next card
   const promoteSV = useSharedValue(0);
@@ -131,6 +132,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Handle external stats card
   useEffect(() => {
     if (externalStatsCard) {
+      setLandingTake(null);
       // Clear any existing timeout since this is manual
       if (autoDismissTimeout) {
         clearTimeout(autoDismissTimeout);
@@ -151,6 +153,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       setIsCardFlipped(false);
       setLastVote(null);
       setCurrentVote(null);
+      setLandingTake(null);
       
       // Reset animation values
       flipSV.value = 0;
@@ -169,8 +172,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   
   // Derive what to render - external stats card takes priority, then frozen data during promotion, then live props
   const renderCurrent = externalStatsCard ? externalStatsCard.take : 
-    (useFrozen && frozenCurrent.current ? frozenCurrent.current : currentTake);
-  const renderNext = useFrozen && frozenNext.current ? frozenNext.current : nextTake;
+    (useFrozen ? (landingTake ?? frozenCurrent.current ?? currentTake) : currentTake);
+  const renderNext = useFrozen
+    ? (
+      landingTake
+        ? (currentTake?.id === landingTake.id ? nextTake : thirdTake)
+        : frozenNext.current
+    )
+    : nextTake;
   
   // Update safety gate for gestures based on current card availability
   useEffect(() => { hasCurrentSV.value = !!renderCurrent ? 1 : 0; }, [renderCurrent]);
@@ -183,6 +192,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       setUseFrozen(false);
       frozenCurrent.current = null;
       frozenNext.current = null;
+      setLandingTake(null);
       promoteSV.value = 0;
     }
   }, [currentTake, nextTake, useFrozen, isCardFlipped]);
@@ -205,6 +215,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       setUseFrozen(false);
       frozenCurrent.current = null;
       frozenNext.current = null;
+      setLandingTake(null);
       promoteSV.value = 0;
     }
   }, [renderCurrent, useFrozen, promoteSV]);
@@ -242,6 +253,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     if (!renderCurrent) return; // Safety check
     
     setLastVote(vote);
+    setLandingTake(null);
     
     // 🧊 FREEZE: Capture current state immediately when vote is cast
     // Capture the current card BEFORE it gets removed
@@ -317,6 +329,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       setIsCardFlipped(false);
       setLastVote(null);
       setCurrentVote(null);
+      setLandingTake(null);
       
       // Clear timeout
       if (autoDismissTimeout) {
@@ -329,6 +342,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }
     
     isAnimating.value = true;
+
+    const promotedTake = useFrozen && frozenNext.current && !endAfterDismissRef.current
+      ? frozenNext.current
+      : null;
+    if (promotedTake) {
+      frozenCurrent.current = promotedTake;
+      setLandingTake(promotedTake);
+    }
     
     const resetAll = () => {
       'worklet';
@@ -341,13 +362,22 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       runOnJS(setLastVote)(null);
       runOnJS(setCurrentVote)(null);
       runOnJS(setUseFrozen)(false);
+      runOnJS(setLandingTake)(null);
       isAnimating.value = false;
     };
-    
-    if (skipAnimation) {
-      resetAll();
+
+    const runReset = () => {
+      if (skipAnimation) {
+        resetAll();
+      } else {
+        translateX.value = withTiming(0, { duration: motion.duration.overlayOut }, resetAll);
+      }
+    };
+
+    if (promotedTake) {
+      requestAnimationFrame(runReset);
     } else {
-      translateX.value = withTiming(0, { duration: motion.duration.overlayOut }, resetAll);
+      runReset();
     }
     
     // If we knew there was no next at the time we froze, we're done.
