@@ -40,6 +40,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const [hottestTakes, setHottestTakes] = useState<Record<string, Take[]>>({});
   const [nottestTakes, setNottestTakes] = useState<Record<string, Take[]>>({});
   const [skippedTakes, setSkippedTakes] = useState<Record<string, { take: Take; skipCount: number }[]>>({});
+  const [skippedLoadFailed, setSkippedLoadFailed] = useState(false);
   
   // Hidden dev feature - tap counter for database stats
   const [hottestTapCount, setHottestTapCount] = useState(0);
@@ -58,15 +59,32 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const loadLeaderboards = async () => {
     try {
       setLoading(true);
-      const [hottest, nottest, skipped] = await Promise.all([
+      const [hottestResult, nottestResult, skippedResult] = await Promise.allSettled([
         getHottestTakesByCategory(),
         getNottestTakesByCategory(),
         getMostSkippedTakesByCategory(),
       ]);
-      
-      setHottestTakes(hottest);
-      setNottestTakes(nottest);
-      setSkippedTakes(skipped);
+
+      if (hottestResult.status === 'fulfilled') {
+        setHottestTakes(hottestResult.value);
+      } else {
+        console.error('Error loading hottest leaderboard:', hottestResult.reason);
+      }
+
+      if (nottestResult.status === 'fulfilled') {
+        setNottestTakes(nottestResult.value);
+      } else {
+        console.error('Error loading nottest leaderboard:', nottestResult.reason);
+      }
+
+      if (skippedResult.status === 'fulfilled') {
+        setSkippedTakes(skippedResult.value);
+        setSkippedLoadFailed(false);
+      } else {
+        console.warn('Skipped leaderboard unavailable:', skippedResult.reason);
+        setSkippedTakes({});
+        setSkippedLoadFailed(true);
+      }
     } catch (error) {
       console.error('Error loading leaderboards:', error);
     } finally {
@@ -358,7 +376,11 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 <Text style={[styles.emptyDescription, { color: theme.textSecondary }]}>
                   {activeTab === 'hottest' && 'No takes have received hot votes yet.'}
                   {activeTab === 'nottest' && 'No takes have received not votes yet.'}
-                  {activeTab === 'skipped' && 'No takes have been skipped yet.'}
+                  {activeTab === 'skipped' && (
+                    skippedLoadFailed
+                      ? 'Skipped rankings are unavailable right now.'
+                      : 'No takes have been skipped yet.'
+                  )}
                 </Text>
               </View>
             ) : (

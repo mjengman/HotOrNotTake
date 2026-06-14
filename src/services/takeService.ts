@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   addDoc,
   updateDoc,
@@ -128,6 +129,12 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   reportCount: data.reportCount || 0,
   isAIGenerated: data.isAIGenerated || false, // AI flag
 });
+
+const isPermissionDeniedError = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  (error as { code?: unknown }).code === 'permission-denied';
 
 // Get database statistics (only approved takes due to security rules)
 export const getDatabaseStats = async (): Promise<{
@@ -513,7 +520,6 @@ export const getNottestTakesByCategory = async (): Promise<Record<string, Take[]
 // Leaderboard: Get most skipped takes by category
 export const getMostSkippedTakesByCategory = async (): Promise<Record<string, { take: Take; skipCount: number }[]>> => {
   try {
-    // Get all skips (this should work now with updated permissions)
     const skipsSnapshot = await getDocs(collection(db, 'skips'));
     
     if (skipsSnapshot.empty) {
@@ -538,36 +544,33 @@ export const getMostSkippedTakesByCategory = async (): Promise<Record<string, { 
       return {};
     }
     
-    // Get approved takes in batches (Firestore 'in' queries limited to 10)
-    const batchSize = 10;
-    const batches = [];
-    for (let i = 0; i < sortedTakeIds.length; i += batchSize) {
-      const batch = sortedTakeIds.slice(i, i + batchSize);
-      batches.push(batch);
-    }
-    
-    const allTakesWithSkips: { take: Take; skipCount: number }[] = [];
-    
-    for (const batch of batches) {
-      try {
-        const takesQuery = query(
-          collection(db, TAKES_COLLECTION),
-          where('__name__', 'in', batch),
-          where('isApproved', '==', true)
-        );
-        
-        const snapshot = await getDocs(takesQuery);
-        const batchTakes = snapshot.docs.map(doc => ({
-          take: convertFirestoreTake(doc.id, doc.data()),
-          skipCount: skipCounts[doc.id]
-        }));
-        
-        allTakesWithSkips.push(...batchTakes);
-      } catch (error) {
-        console.error('Error fetching batch of takes:', error);
-        // Continue with other batches
-      }
-    }
+    const skippedTakeResults = await Promise.all(
+      sortedTakeIds.map(async (takeId) => {
+        try {
+          const takeSnapshot = await getDoc(doc(db, TAKES_COLLECTION, takeId));
+
+          if (!takeSnapshot.exists()) {
+            return null;
+          }
+
+          const data = takeSnapshot.data();
+          if (data.isApproved !== true && data.status !== 'approved') {
+            return null;
+          }
+
+          return {
+            take: convertFirestoreTake(takeSnapshot.id, data),
+            skipCount: skipCounts[takeSnapshot.id],
+          };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const allTakesWithSkips = skippedTakeResults.filter(
+      (item): item is { take: Take; skipCount: number } => item !== null
+    );
     
     // Sort by skip count again (since batches might be out of order)
     allTakesWithSkips.sort((a, b) => b.skipCount - a.skipCount);
@@ -586,8 +589,10 @@ export const getMostSkippedTakesByCategory = async (): Promise<Record<string, { 
     
     return byCategory;
   } catch (error) {
-    console.error('Error fetching most skipped takes:', error);
-    throw new Error('Failed to load most skipped takes');
+    if (!isPermissionDeniedError(error)) {
+      console.warn('Skipped leaderboard unavailable:', error);
+    }
+    return {};
   }
 };
 

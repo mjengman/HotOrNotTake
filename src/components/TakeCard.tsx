@@ -83,6 +83,9 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   
   const adaptiveTextSize = getAdaptiveTextSize();
   const adaptiveSpacing = getAdaptiveSpacing();
+  const resultTextSize = Math.min(adaptiveTextSize * 0.84, responsive.fontSize.medium + 1);
+  const resultTextLineHeight = resultTextSize * 1.28;
+  const resultTextLines = responsive.card.height < 440 ? 3 : 4;
   
   // Calculate percentages for the reveal
   // Some takes may not have totalVotes, so calculate from individual votes
@@ -192,11 +195,12 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         borderRadius: responsive.card.borderRadius,
         padding: adaptiveSpacing.cardPadding,
         flex: 1, // Fill available height in cardContainer
+        justifyContent: isFlipped ? 'flex-start' : 'space-between',
       }
     ]}>
       <View style={[
         styles.header,
-        { marginBottom: adaptiveSpacing.headerMargin }
+        { marginBottom: isFlipped ? responsive.spacing.sm : adaptiveSpacing.headerMargin }
       ]}>
         <View style={[styles.categoryBadge, { backgroundColor: theme.accent + '20' }]}>
           <Text style={[
@@ -213,6 +217,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       
       <View style={[
         styles.content,
+        isFlipped && styles.resultContent,
         { paddingHorizontal: adaptiveSpacing.contentPadding }
       ]}>
         <Text 
@@ -220,12 +225,12 @@ export const TakeCard: React.FC<TakeCardProps> = ({
             styles.takeText, 
             { 
               color: theme.text,
-              fontSize: adaptiveTextSize,
-              // Adjust line height proportionally to font size
-              lineHeight: adaptiveTextSize * 1.4,
+              fontSize: isFlipped ? resultTextSize : adaptiveTextSize,
+              lineHeight: isFlipped ? resultTextLineHeight : adaptiveTextSize * 1.4,
             }
           ]}
-          numberOfLines={15}
+          numberOfLines={isFlipped ? resultTextLines : 15}
+          ellipsizeMode="tail"
         >
           {take.text}
         </Text>
@@ -233,7 +238,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       
       <View style={[
         styles.footer,
-        { marginTop: adaptiveSpacing.footerMargin }
+        { marginTop: isFlipped ? responsive.spacing.sm : adaptiveSpacing.footerMargin }
       ]}>
         {!isFlipped ? (
           // Front of card - voting buttons
@@ -308,9 +313,10 @@ export const TakeCard: React.FC<TakeCardProps> = ({
             styles.revealContainer, 
             {
               backgroundColor: theme.card,
+              paddingVertical: responsive.spacing.xs,
             }
           ]}>
-            <View style={[styles.voteSection, { minHeight: 40, justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[styles.voteSection, { marginBottom: responsive.spacing.xs, justifyContent: 'center', alignItems: 'center' }]}>
               {userVote ? (
                 <>
                   <Text style={[
@@ -377,7 +383,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 </>
               )}
             </View>
-            <View style={[styles.percentageContainer, { minHeight: 50, justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[styles.percentageContainer, { minHeight: 50, marginBottom: responsive.spacing.xs, justifyContent: 'center', alignItems: 'center' }]}>
               <View style={[styles.percentageItem, { minHeight: 40, justifyContent: 'center', alignItems: 'center' }]}>
                 <View style={{ justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={[
@@ -538,6 +544,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     // backgroundColor: 'blue'
     // paddingHorizontal now set dynamically with adaptive spacing
+  },
+  resultContent: {
+    flex: 0,
+    flexGrow: 0,
+    flexShrink: 1,
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
   takeText: {
     // fontSize and lineHeight now set dynamically based on card height
