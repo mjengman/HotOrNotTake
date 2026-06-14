@@ -5,7 +5,6 @@ import {
   SafeAreaView,
   StatusBar,
   Text,
-  TouchableOpacity,
   Image,
   BackHandler,
   Animated,
@@ -19,6 +18,7 @@ import { AdBanner } from '../components/AdBanner';
 import { AdConsentModal } from '../components/AdConsentModal';
 import { LoadingSkeleton } from '../components/loading/LoadingSkeleton';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
+import { FullScreenOverlay } from '../components/overlays/FullScreenOverlay';
 import { InstructionsModal } from '../components/InstructionsModal';
 import { BurgerMenu } from '../components/BurgerMenu';
 import { SubmitTakeScreen } from './SubmitTakeScreen';
@@ -30,9 +30,8 @@ import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
 import { useResponsive } from '../hooks/useResponsive';
 import { deleteVote, getUserVoteForTake } from '../services/voteService';
 import { getCommunityStats } from '../services/userService';
-// AI seeding disabled for MVP launch
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
-import { colors } from '../constants';
+import { colors, motion } from '../constants';
 import RNShare from 'react-native-share';
 
 export const HomeScreen: React.FC = () => {
@@ -56,8 +55,6 @@ export const HomeScreen: React.FC = () => {
     category: selectedCategory
   });
   const { stats, refreshStats } = useUserStats();
-  
-  // AI seeding is now manual-only via pull-to-refresh
   
   // Use the hook-based interstitial ads
   const { onCardComplete, onSessionEnd } = useInterstitialAds();
@@ -170,13 +167,13 @@ export const HomeScreen: React.FC = () => {
     return () => backHandler.remove();
   }, [showSubmitModal, showRecentVotesModal, showFavoritesModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, selectedTakeForStats]);
 
-  // Rotate instruction text every 4 seconds with fade animation
+  // Rotate instruction text with a quiet fade so the footer feels alive without flicker.
   useEffect(() => {
     const interval = setInterval(() => {
       // Fade out
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 300,
+        duration: motion.duration.instructionFadeOut,
         useNativeDriver: true,
       }).start(() => {
         // Change text while faded out
@@ -185,11 +182,11 @@ export const HomeScreen: React.FC = () => {
         // Fade back in
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 500,
+          duration: motion.duration.instructionFadeIn,
           useNativeDriver: true,
         }).start();
       });
-    }, 10000); // Change every 4 seconds
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [instructionTexts.length, fadeAnim]);
@@ -264,21 +261,15 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleRetry = async () => {
-    // Force refresh the takes data
     try {
-      window.location?.reload?.(); // Web only
-    } catch {
-      // For native platforms, we'll trigger a data refresh
-      // The useFirebaseTakes hook should handle this automatically
-      // but we can force a re-authentication if needed
       if (!user) {
         await signIn();
       }
+      await refreshTakes();
+    } catch (error) {
+      console.error('Error retrying feed load:', error);
     }
   };
-
-  // AI generation removed - pure user-content MVP
-  // Users must submit their own takes
 
   // Removed pull-to-refresh due to fixed layout structure
   // Can be re-implemented with a different trigger if needed
@@ -441,13 +432,17 @@ export const HomeScreen: React.FC = () => {
             style={[
               styles.bottomButton,
               styles.recentVotesButton,
+              !lastVotedTake && styles.disabledControl,
               isDarkMode 
                 ? { backgroundColor: theme.surface, borderWidth: 0 } 
                 : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
             ]} 
             onPress={handleShowLastVote}
+            disabled={!lastVotedTake}
             scaleValue={0.9}
-            hapticIntensity={8}
+            hapticIntensity={motion.haptic.light}
+            accessibilityRole="button"
+            accessibilityLabel="Show your last vote"
           >
             <Text style={[styles.buttonIcon, isDarkMode && { color: theme.text }]}>↩️</Text>
           </AnimatedPressable>
@@ -456,13 +451,21 @@ export const HomeScreen: React.FC = () => {
           <AnimatedPressable 
             style={[
               styles.bottomButton,
+              !takes[0] && styles.disabledControl,
               isDarkMode 
                 ? { backgroundColor: theme.surface, borderWidth: 0 } 
                 : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }
             ]} 
-            onPress={() => skipTake(takes[0]?.id)}
+            onPress={() => {
+              if (takes[0]) {
+                handleSkip(takes[0].id);
+              }
+            }}
+            disabled={!takes[0]}
             scaleValue={0.9}
-            hapticIntensity={12}
+            hapticIntensity={motion.haptic.selection}
+            accessibilityRole="button"
+            accessibilityLabel="Skip this take"
           >
             <Text style={[styles.buttonIcon, isDarkMode ? { color: theme.text } : { color: '#333' }]}>⏭️</Text>
           </AnimatedPressable>
@@ -507,16 +510,7 @@ export const HomeScreen: React.FC = () => {
 
       {/* Submit Take Modal - Conditional Rendering */}
       {showSubmitModal && (
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          zIndex: 2000, // Higher than MyTakes modal
-          paddingTop: StatusBar.currentHeight || 44, // Safe area for status bar
-        }}>
+        <FullScreenOverlay zIndex={2000}>
           <SubmitTakeScreen
             onClose={() => setShowSubmitModal(false)}
             onSuccess={() => {
@@ -525,21 +519,12 @@ export const HomeScreen: React.FC = () => {
             }}
             isDarkMode={isDarkMode}
           />
-        </View>
+        </FullScreenOverlay>
       )}
 
       {/* My Takes Modal - Conditional Rendering */}
       {showMyTakesModal && (
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          zIndex: 1000,
-          paddingTop: StatusBar.currentHeight || 44, // Safe area for status bar
-        }}>
+        <FullScreenOverlay zIndex={1000}>
           <MyTakesScreen
             onClose={() => setShowMyTakesModal(false)}
             onOpenSubmit={() => setShowSubmitModal(true)}
@@ -565,21 +550,12 @@ export const HomeScreen: React.FC = () => {
             isDarkMode={isDarkMode}
             refreshTrigger={myTakesRefreshTrigger}
           />
-        </View>
+        </FullScreenOverlay>
       )}
 
       {/* Leaderboard Modal - Conditional Rendering */}
       {showLeaderboardModal && (
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          zIndex: 1500, // Higher than other modals
-          paddingTop: StatusBar.currentHeight || 44, // Safe area for status bar
-        }}>
+        <FullScreenOverlay zIndex={1500}>
           <LeaderboardScreen
             onClose={() => setShowLeaderboardModal(false)}
             onShowTakeStats={async (take, vote) => {
@@ -603,21 +579,12 @@ export const HomeScreen: React.FC = () => {
             }}
             isDarkMode={isDarkMode}
           />
-        </View>
+        </FullScreenOverlay>
       )}
 
       {/* Recent Votes Modal - Conditional Rendering */}
       {showRecentVotesModal && (
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          zIndex: 1600, // Higher than other modals
-          paddingTop: StatusBar.currentHeight || 44, // Safe area for status bar
-        }}>
+        <FullScreenOverlay zIndex={1600}>
           <RecentVotesScreen
             onClose={() => setShowRecentVotesModal(false)}
             onShowTakeStats={(take, vote) => {
@@ -625,21 +592,12 @@ export const HomeScreen: React.FC = () => {
             }}
             isDarkMode={isDarkMode}
           />
-        </View>
+        </FullScreenOverlay>
       )}
 
       {/* My Favorites Modal - Conditional Rendering */}
       {showFavoritesModal && (
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          zIndex: 1700, // Higher than other modals
-          paddingTop: StatusBar.currentHeight || 44, // Safe area for status bar
-        }}>
+        <FullScreenOverlay zIndex={1700}>
           <MyFavoritesScreen
             onClose={() => setShowFavoritesModal(false)}
             onShowTakeStats={async (take, vote) => {
@@ -664,26 +622,32 @@ export const HomeScreen: React.FC = () => {
             }}
             isDarkMode={isDarkMode}
           />
-        </View>
+        </FullScreenOverlay>
       )}
 
       {/* Invite Friends FAB */}
-      <TouchableOpacity
+      <AnimatedPressable
         style={[styles.inviteFabButton, { backgroundColor: theme.accent }]}
         onPress={handleInviteFriends}
-        activeOpacity={0.8}
+        scaleValue={0.9}
+        hapticIntensity={motion.haptic.selection}
+        accessibilityRole="button"
+        accessibilityLabel="Invite friends"
       >
         <Text style={styles.buttonIcon}>💌</Text>
-      </TouchableOpacity>
+      </AnimatedPressable>
 
       {/* Floating Action Button for Submit */}
-      <TouchableOpacity
+      <AnimatedPressable
         style={[styles.fabButton, { backgroundColor: theme.primary }]}
         onPress={() => setShowSubmitModal(true)}
-        activeOpacity={0.8}
+        scaleValue={0.9}
+        hapticIntensity={motion.haptic.selection}
+        accessibilityRole="button"
+        accessibilityLabel="Submit a hot take"
       >
         <Text style={styles.buttonIcon}>✏️</Text>
-      </TouchableOpacity>
+      </AnimatedPressable>
 
       {/* Instructions Modal */}
       <InstructionsModal
@@ -701,7 +665,11 @@ export const HomeScreen: React.FC = () => {
 };
 
 // Create responsive styles function
-const createStyles = (responsive: any, insets: any) => StyleSheet.create({
+const createStyles = (responsive: any, insets: any) => {
+  const roundControlSize = Math.max(motion.touchTarget.comfortable, responsive.iconSize.xlarge);
+  const footerFabBottom = Math.max(144, responsive.spacing.xxl * 3 + insets.bottom);
+
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -841,9 +809,9 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     marginBottom: responsive.spacing.sm,
   },
   bottomButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 40,
+    width: roundControlSize,
+    height: roundControlSize,
+    borderRadius: roundControlSize / 2,
     justifyContent: 'center',
     alignItems: 'center',
     // Add shadow/elevation
@@ -855,6 +823,9 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     },
     shadowOpacity: 0.15,
     shadowRadius: 3.84,
+  },
+  disabledControl: {
+    opacity: 0.45,
   },
   recentVotesButton: {
     marginRight: 10,
@@ -908,14 +879,14 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   },
   fabButton: {
     position: 'absolute',
-    bottom: 160, // Moved up by 10px from 130
+    bottom: footerFabBottom,
     right: responsive.spacing.lg,
-    width: 45, // Match invite button size
-    height: 45, // Match invite button size
-    borderRadius: 40, // Match invite button border radius
+    width: roundControlSize,
+    height: roundControlSize,
+    borderRadius: roundControlSize / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4, // Match invite button elevation
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -927,14 +898,14 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   },
   inviteFabButton: {
     position: 'absolute',
-    bottom: 160, // Same level as submit FAB
-    left: responsive.spacing.lg, // Left side of screen
-    width: 45, // Match bottom button size
-    height: 45, // Match bottom button size  
-    borderRadius: 40, // Match bottom button border radius
+    bottom: footerFabBottom,
+    left: responsive.spacing.lg,
+    width: roundControlSize,
+    height: roundControlSize,
+    borderRadius: roundControlSize / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4, // Match bottom button elevation
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -947,4 +918,5 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   fabText: {
     fontSize: responsive.fontSize.xlarge,
   },
-});
+  });
+};

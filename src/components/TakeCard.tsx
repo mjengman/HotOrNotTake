@@ -3,15 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   TouchableOpacity,
   Share,
-  InteractionManager,
 } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import RNShare from 'react-native-share';
 import { Take } from '../types';
-import { colors, dimensions } from '../constants';
+import { colors, dimensions, motion } from '../constants';
 import { useResponsive } from '../hooks/useResponsive';
 import { useAuth } from '../hooks/useAuth';
 import { addToFavorites, removeFromFavorites, isInFavorites } from '../services/favoritesService';
@@ -28,8 +26,6 @@ interface TakeCardProps {
   onChangeVote?: (take: Take) => void;
   onVoteNow?: (take: Take) => void;
 }
-
-// const { width, height } = Dimensions.get('window');
 
 export const TakeCard: React.FC<TakeCardProps> = ({ 
   take, 
@@ -559,8 +555,10 @@ const styles = StyleSheet.create({
   statItem: {
     alignItems: 'center',
     flex: 1,
+    minHeight: motion.touchTarget.minimum,
     paddingVertical: 8,
     paddingHorizontal: 4,
+    justifyContent: 'center',
   },
   statNumber: {
     // fontSize now set dynamically with responsive sizing
@@ -594,6 +592,8 @@ const styles = StyleSheet.create({
   },
   changeVoteButton: {
     marginTop: dimensions.spacing.xs,
+    minHeight: motion.touchTarget.minimum,
+    justifyContent: 'center',
   },
   changeVoteText: {
     // fontSize now set dynamically with responsive sizing
@@ -645,6 +645,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
+    minHeight: motion.touchTarget.minimum,
     borderRadius: 20,
     gap: 4,
   },

@@ -2,14 +2,13 @@ import React from 'react';
 import {
   View,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
   withTiming,
-  withSequence,
   Easing,
 } from 'react-native-reanimated';
 import { colors, dimensions } from '../../constants';
@@ -18,15 +17,15 @@ interface LoadingSkeletonProps {
   isDarkMode?: boolean;
 }
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.85;
 const CARD_HEIGHT = 520;
 
 export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({
   isDarkMode = false,
 }) => {
+  const { width } = useWindowDimensions();
   const theme = isDarkMode ? colors.dark : colors.light;
   const shimmerValue = useSharedValue(0);
+  const cardWidth = Math.min(width * 0.85, 420);
 
   React.useEffect(() => {
     shimmerValue.value = withRepeat(
@@ -46,14 +45,13 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({
   });
 
   const baseSkeletonColor = isDarkMode ? '#3A3A3A' : '#E0E0E0';
-  const shimmerColor = isDarkMode ? '#4A4A4A' : '#F0F0F0';
 
   return (
     <View style={styles.container}>
       {/* Card skeleton */}
       <View style={[
         styles.cardSkeleton, 
-        { backgroundColor: theme.surface, width: CARD_WIDTH, height: CARD_HEIGHT }
+        { backgroundColor: theme.surface, width: cardWidth, height: CARD_HEIGHT }
       ]}>
         {/* Category badge skeleton */}
         <Animated.View style={[
@@ -106,7 +104,7 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({
       <View style={[
         styles.cardSkeleton,
         styles.nextCardSkeleton,
-        { backgroundColor: theme.surface, width: CARD_WIDTH * 0.95, height: CARD_HEIGHT * 0.95 }
+        { backgroundColor: theme.surface, width: cardWidth * 0.95, height: CARD_HEIGHT * 0.95 }
       ]}>
         <Animated.View style={[
           styles.categoryBadge,

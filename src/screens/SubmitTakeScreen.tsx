@@ -13,9 +13,10 @@ import {
 } from 'react-native';
 import { ScrollView as GHScrollView, NativeViewGestureHandler } from 'react-native-gesture-handler';
 import { useAuth, useFirebaseTakes } from '../hooks';
-import { colors, dimensions } from '../constants';
+import { colors, dimensions, motion } from '../constants';
 import { TakeCard } from '../components/TakeCard';
 import { SubmissionSuccessModal } from '../components/SubmissionSuccessModal';
+import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { Take } from '../types';
 
 const CATEGORIES = [
@@ -155,23 +156,32 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
             >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <AnimatedPressable
               style={[styles.closeButton, { backgroundColor: theme.surface }]}
               onPress={onClose}
+              scaleValue={0.9}
+              hapticIntensity={motion.haptic.light}
               accessibilityRole="button"
               accessibilityLabel="Close submit take screen"
             >
               <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
             
-            <Text style={[styles.title, { color: theme.text }]}>
+            <Text
+              style={[styles.title, { color: theme.text }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
               Submit a Hot Take
             </Text>
             
-            <TouchableOpacity
+            <AnimatedPressable
               style={[styles.previewButton, { backgroundColor: theme.surface }]}
               onPress={() => setShowPreview(!showPreview)}
               disabled={!isValidText || !isValidCategory}
+              scaleValue={0.96}
+              hapticIntensity={motion.haptic.light}
               accessibilityRole="button"
               accessibilityLabel={showPreview ? 'Switch to edit mode' : 'Preview your take'}
             >
@@ -181,7 +191,7 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
               ]}>
                 {showPreview ? 'Edit' : 'Preview'}
               </Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
 
           {showPreview && isValidText && isValidCategory ? (
@@ -385,7 +395,7 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
 
           {/* Submit Button */}
           <View style={styles.submitSection}>
-            <TouchableOpacity
+            <AnimatedPressable
               style={[
                 styles.submitButton,
                 {
@@ -395,6 +405,8 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
               ]}
               onPress={handleSubmit}
               disabled={!canSubmit}
+              scaleValue={0.98}
+              hapticIntensity={motion.haptic.selection}
               accessibilityRole="button"
               accessibilityLabel={isSubmitting ? 'Submitting your take' : 'Submit your hot take'}
               accessibilityState={{ disabled: !canSubmit }}
@@ -405,10 +417,10 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
               ]}>
                 {isSubmitting ? 'Submitting...' : 'Submit Hot Take'}
               </Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
             
             <Text style={[styles.submitNote, { color: theme.textSecondary }]}>
-              Takes are moderated before they appear in the voting queue
+              Takes are moderated before they join the voting queue
             </Text>
           </View>
             </ScrollComponent>
@@ -448,9 +460,9 @@ const styles = StyleSheet.create({
     paddingVertical: dimensions.spacing.md,
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: motion.touchTarget.minimum,
+    height: motion.touchTarget.minimum,
+    borderRadius: motion.touchTarget.minimum / 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -461,11 +473,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: dimensions.fontSize.xlarge,
     fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: dimensions.spacing.sm,
   },
   previewButton: {
     paddingHorizontal: dimensions.spacing.md,
     paddingVertical: dimensions.spacing.sm,
+    minHeight: motion.touchTarget.minimum,
     borderRadius: 8,
+    justifyContent: 'center',
   },
   previewButtonText: {
     fontSize: dimensions.fontSize.medium,
@@ -550,8 +567,10 @@ const styles = StyleSheet.create({
   categoryButton: {
     paddingHorizontal: dimensions.spacing.md,
     paddingVertical: dimensions.spacing.sm,
+    minHeight: motion.touchTarget.minimum,
     borderRadius: 20,
     borderWidth: 1,
+    justifyContent: 'center',
   },
   categoryButtonText: {
     fontSize: dimensions.fontSize.small,
@@ -563,6 +582,7 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     paddingVertical: dimensions.spacing.lg,
+    minHeight: motion.touchTarget.comfortable,
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: dimensions.spacing.md,

@@ -9,14 +9,13 @@ import {
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
-import { TakeCard } from '../components/TakeCard';
 import { useAuth } from '../hooks/useAuth';
 import { getUserFavorites, FavoriteItem } from '../services/favoritesService';
 import { getUserVoteForTake } from '../services/voteService';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Take } from '../types/Take';
-import { colors, dimensions } from '../constants';
+import { colors, dimensions, motion } from '../constants';
 
 interface MyFavoritesScreenProps {
   onClose: () => void;
@@ -138,7 +137,9 @@ export const MyFavoritesScreen: React.FC<MyFavoritesScreenProps> = ({
           style={[styles.closeButton, { backgroundColor: theme.surface }]}
           onPress={onClose}
           scaleValue={0.9}
-          hapticIntensity={8}
+          hapticIntensity={motion.haptic.light}
+          accessibilityRole="button"
+          accessibilityLabel="Close favorites"
         >
           <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
         </AnimatedPressable>
@@ -240,16 +241,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E0E0E0',
   },
   spacer: {
-    width: 36, // Same width as close button to center the title
+    width: motion.touchTarget.minimum,
   },
   title: {
     fontSize: dimensions.fontSize.xlarge,
     fontWeight: 'bold',
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: motion.touchTarget.minimum,
+    height: motion.touchTarget.minimum,
+    borderRadius: motion.touchTarget.minimum / 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -304,6 +305,7 @@ const styles = StyleSheet.create({
     padding: dimensions.spacing.md,
     borderRadius: 12,
     borderWidth: 1,
+    minHeight: 104,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,

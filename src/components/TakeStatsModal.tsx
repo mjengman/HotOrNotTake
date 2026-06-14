@@ -5,12 +5,12 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { TakeCard } from './TakeCard';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
 import { Take } from '../types/Take';
-import { colors, dimensions } from '../constants';
+import { colors, dimensions, motion } from '../constants';
 
 interface TakeStatsModalProps {
   visible: boolean;
@@ -21,8 +21,6 @@ interface TakeStatsModalProps {
   isDarkMode?: boolean;
 }
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
 export const TakeStatsModal: React.FC<TakeStatsModalProps> = ({
   visible,
   take,
@@ -31,6 +29,7 @@ export const TakeStatsModal: React.FC<TakeStatsModalProps> = ({
   onChangeVote,
   isDarkMode = false,
 }) => {
+  const { width, height } = useWindowDimensions();
   const theme = isDarkMode ? colors.dark : colors.light;
   
   const hotPercentage = take.totalVotes > 0 ? Math.round((take.hotVotes / take.totalVotes) * 100) : 0;
@@ -48,7 +47,13 @@ export const TakeStatsModal: React.FC<TakeStatsModalProps> = ({
         activeOpacity={1}
         onPress={onClose}
       >
-        <View style={styles.modalContainer}>
+        <View style={[
+          styles.modalContainer,
+          {
+            width: Math.min(width * 0.9, 420),
+            maxHeight: height * 0.8,
+          },
+        ]}>
           <TouchableOpacity
             activeOpacity={1}
             style={[styles.modalContent, { backgroundColor: theme.background }]}
@@ -62,7 +67,9 @@ export const TakeStatsModal: React.FC<TakeStatsModalProps> = ({
                 style={[styles.closeButton, { backgroundColor: theme.surface }]}
                 onPress={onClose}
                 scaleValue={0.9}
-                hapticIntensity={8}
+                hapticIntensity={motion.haptic.light}
+                accessibilityRole="button"
+                accessibilityLabel="Close take stats"
               >
                 <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
               </AnimatedPressable>
@@ -172,7 +179,7 @@ export const TakeStatsModal: React.FC<TakeStatsModalProps> = ({
               style={[styles.closeActionButton, { backgroundColor: theme.primary }]}
               onPress={onClose}
               scaleValue={0.95}
-              hapticIntensity={10}
+              hapticIntensity={motion.haptic.selection}
             >
               <Text style={styles.closeActionText}>Close</Text>
             </AnimatedPressable>
@@ -191,8 +198,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContainer: {
-    width: screenWidth * 0.9,
-    maxHeight: screenHeight * 0.8,
+    width: '90%',
   },
   modalContent: {
     borderRadius: 16,
@@ -217,9 +223,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: motion.touchTarget.minimum,
+    height: motion.touchTarget.minimum,
+    borderRadius: motion.touchTarget.minimum / 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -288,6 +294,7 @@ const styles = StyleSheet.create({
   },
   closeActionButton: {
     paddingVertical: dimensions.spacing.md,
+    minHeight: motion.touchTarget.minimum,
     borderRadius: 12,
     alignItems: 'center',
   },

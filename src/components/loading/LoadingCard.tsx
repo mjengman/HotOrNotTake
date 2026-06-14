@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,16 +15,16 @@ interface LoadingCardProps {
   index?: number;
 }
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = width - 40;
 const CARD_HEIGHT = 400;
 
 export const LoadingCard: React.FC<LoadingCardProps> = ({ 
   isDarkMode = false,
   index = 0,
 }) => {
+  const { width } = useWindowDimensions();
   const theme = isDarkMode ? colors.dark : colors.light;
   const scaleValue = useSharedValue(1);
+  const cardWidth = Math.min(width - 40, 420);
 
   React.useEffect(() => {
     scaleValue.value = withRepeat(
@@ -57,7 +57,7 @@ export const LoadingCard: React.FC<LoadingCardProps> = ({
     <Animated.View 
       style={[
         styles.container,
-        { backgroundColor: theme.surface },
+        { backgroundColor: theme.surface, width: cardWidth },
         animatedStyle,
         index > 0 && {
           position: 'absolute',
@@ -116,7 +116,6 @@ export const LoadingCard: React.FC<LoadingCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    width: CARD_WIDTH,
     height: CARD_HEIGHT,
     borderRadius: appDimensions.borderRadius.lg,
     padding: appDimensions.spacing.lg,

@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
-  Dimensions,
-  Alert,
   Text,
   Vibration,
   Platform,
@@ -29,7 +27,7 @@ import { Take } from '../types';
 import { TakeCard } from './TakeCard';
 import { VoteIndicator } from './VoteIndicator';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
-import { dimensions, colors } from '../constants';
+import { dimensions, colors, motion } from '../constants';
 import { useResponsive } from '../hooks/useResponsive';
 
 interface CustomSwipeableCardDeckProps {
@@ -50,11 +48,6 @@ interface CustomSwipeableCardDeckProps {
   onVoteNow?: (take: Take) => void;
   totalVotes?: number;
 }
-
-const { width, height } = Dimensions.get('window');
-const SWIPE_THRESHOLD = width * 0.2;
-const SWIPE_DOWN_THRESHOLD = height * 0.2; // 20% of screen height
-const SWIPE_UP_THRESHOLD = height * 0.2; // 20% of screen height for upward swipe
 
 // Safe flip for Android - no 3D to avoid compositor crashes
 const ANDROID_SAFE_FLIP = Platform.OS === 'android';
@@ -81,6 +74,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   totalVotes = 0,
 }) => {
   const responsive = useResponsive();
+  const screenWidth = responsive.screen.width;
+  const screenHeight = responsive.screen.height;
+  const swipeThreshold = screenWidth * 0.2;
+  const swipeDownThreshold = screenHeight * 0.2;
+  const swipeUpThreshold = screenHeight * 0.2;
   const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
   const [lastVote, setLastVote] = useState<'hot' | 'not' | null>(null);
@@ -232,7 +230,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // JS-thread helpers for runOnJS
   const jsSetVote = (val: 'hot' | 'not' | null) => setCurrentVote(val);
-  const jsOnSkip = (id: string) => onSkip(id);
   const jsSetAutoDismiss = () => {
     const timeout = setTimeout(() => {
       continueToNext();
@@ -267,7 +264,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     animatingSV.value = 1;
     scale.value = withSpring(0.96, {}, () => {
       'worklet';
-      flipSV.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }, (finished) => {
+      flipSV.value = withTiming(1, { duration: motion.duration.cardFlip, easing: Easing.out(Easing.cubic) }, (finished) => {
         if (finished) {
           runOnJS(setIsCardFlipped)(true); // set after flip completes
           // NOW submit the vote after the flip is complete and stats are showing
@@ -275,7 +272,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           // Auto-dismiss stats card after 2.5 seconds
           runOnJS(jsSetAutoDismiss)();
           // Start promoting next card behind the stats card
-          promoteSV.value = withTiming(1, { duration: 300 }, () => {
+          promoteSV.value = withTiming(1, { duration: motion.duration.cardPromote }, () => {
             'worklet';
             animatingSV.value = 0; // Clear animation flag
           });
@@ -350,7 +347,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     if (skipAnimation) {
       resetAll();
     } else {
-      translateX.value = withTiming(0, { duration: 200 }, resetAll);
+      translateX.value = withTiming(0, { duration: motion.duration.overlayOut }, resetAll);
     }
     
     // If we knew there was no next at the time we froze, we're done.
@@ -372,26 +369,25 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     // Show vote indicator just like swipe gestures do
     setCurrentVote(vote);
     
-    // Simulate dramatic swipe animation - more pronounced than gesture
-    const direction = vote === 'hot' ? 1 : -1; // right for hot, left for not
-    const swipeDistance = SWIPE_THRESHOLD * 0.8; // Much bigger swipe for impact
+    const direction = vote === 'hot' ? 1 : -1;
+    const swipeDistance = swipeThreshold * 0.8;
     
     // Quick leap to edge with timing (no lingering)
     translateX.value = withTiming(swipeDistance * direction, { 
-      duration: 150, // Quick leap
+      duration: motion.duration.cardNudge,
       easing: Easing.out(Easing.quad)
     }, () => {
       'worklet';
       // Immediate bouncy return
-      translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
+      translateX.value = withSpring(0, motion.spring.cardReturn);
       translateY.value = withSpring(0);
-      scale.value = withSpring(1, { damping: 15, stiffness: 300 });
-      runOnJS(Vibration.vibrate)(30);
+      scale.value = withSpring(1, motion.spring.cardReturn);
+      runOnJS(Vibration.vibrate)(motion.haptic.vote);
       runOnJS(flipCard)(vote);
     });
     
     // Quick scale down
-    scale.value = withTiming(0.92, { duration: 150, easing: Easing.out(Easing.quad) });
+    scale.value = withTiming(0.92, { duration: motion.duration.cardNudge, easing: Easing.out(Easing.quad) });
   };
 
   // Handle skip with animation (for both button press and swipe up/down)
@@ -421,18 +417,18 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     
     isAnimating.value = true;
     animatingSV.value = 1;
-    Vibration.vibrate(15);
+    Vibration.vibrate(motion.haptic.medium);
     
     // Animate up or down based on direction
-    const targetY = direction === 'up' ? -height * 0.8 : height * 0.8;
+    const targetY = direction === 'up' ? -screenHeight * 0.8 : screenHeight * 0.8;
     
     translateY.value = withSpring(
       targetY,
-      { damping: 15, stiffness: 120, mass: 0.8 },
+      motion.spring.cardSkip,
       () => {
         'worklet';
         // Start promoting next card during return animation
-        promoteSV.value = withTiming(1, { duration: 200 }, () => {
+        promoteSV.value = withTiming(1, { duration: motion.duration.cardPromote }, () => {
           'worklet';
           // Reset everything for next card
           translateX.value = 0;
@@ -450,7 +446,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     onStart: () => {
       if (isAnimating.value || !hasCurrentSV.value) return; // ignore new gestures mid-flight or no card
       scale.value = withSpring(0.95);
-      runOnJS(Vibration.vibrate)(10);
+      runOnJS(Vibration.vibrate)(motion.haptic.selection);
     },
     onActive: (event) => {
       if (isAnimating.value || !hasCurrentSV.value) return;
@@ -462,10 +458,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       // Only show vote indicators when NOT flipped (front card only) and not showing external stats
       if (!flippedSV.value && !externalStatsCard) {
         // Vote indicator based on swipe direction
-        const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
-        const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
-        const shouldSwipeDown = event.translationY > SWIPE_DOWN_THRESHOLD;
-        const shouldSwipeUp = event.translationY < -SWIPE_UP_THRESHOLD;
+        const shouldSwipeRight = event.translationX > swipeThreshold;
+        const shouldSwipeLeft = event.translationX < -swipeThreshold;
+        const shouldSwipeDown = event.translationY > swipeDownThreshold;
+        const shouldSwipeUp = event.translationY < -swipeUpThreshold;
         
         // Update vote indicator
         if (shouldSwipeRight) {
@@ -479,18 +475,18 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         }
         
         // Horizontal swipe feedback
-        if ((shouldSwipeRight || shouldSwipeLeft) && Math.abs(event.translationX) > SWIPE_THRESHOLD && Math.abs(event.translationX) < SWIPE_THRESHOLD + 20) {
-          runOnJS(Vibration.vibrate)(15);
+        if ((shouldSwipeRight || shouldSwipeLeft) && Math.abs(event.translationX) > swipeThreshold && Math.abs(event.translationX) < swipeThreshold + 20) {
+          runOnJS(Vibration.vibrate)(motion.haptic.medium);
         }
         
         // Down swipe feedback
-        if (shouldSwipeDown && Math.abs(event.translationY) > SWIPE_DOWN_THRESHOLD && Math.abs(event.translationY) < SWIPE_DOWN_THRESHOLD + 30) {
-          runOnJS(Vibration.vibrate)(12);
+        if (shouldSwipeDown && Math.abs(event.translationY) > swipeDownThreshold && Math.abs(event.translationY) < swipeDownThreshold + 30) {
+          runOnJS(Vibration.vibrate)(motion.haptic.selection);
         }
         
         // Up swipe feedback
-        if (shouldSwipeUp && Math.abs(event.translationY) > SWIPE_UP_THRESHOLD && Math.abs(event.translationY) < SWIPE_UP_THRESHOLD + 30) {
-          runOnJS(Vibration.vibrate)(12);
+        if (shouldSwipeUp && Math.abs(event.translationY) > swipeUpThreshold && Math.abs(event.translationY) < swipeUpThreshold + 30) {
+          runOnJS(Vibration.vibrate)(motion.haptic.selection);
         }
       }
     },
@@ -515,10 +511,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         return;
       }
       
-      const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
-      const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
-      const shouldSwipeDown = event.translationY > SWIPE_DOWN_THRESHOLD;
-      const shouldSwipeUp = event.translationY < -SWIPE_UP_THRESHOLD;
+      const shouldSwipeRight = event.translationX > swipeThreshold;
+      const shouldSwipeLeft = event.translationX < -swipeThreshold;
+      const shouldSwipeDown = event.translationY > swipeDownThreshold;
+      const shouldSwipeUp = event.translationY < -swipeUpThreshold;
 
       const id = currentTake?.id; // snapshot (may be undefined)
       const reset = () => {
@@ -538,7 +534,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
       if (shouldSwipeRight && id && !flippedSV.value) {
         // Front side: Bounce back and flip to reveal
-        runOnJS(Vibration.vibrate)(25);
+        runOnJS(Vibration.vibrate)(motion.haptic.vote);
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
         scale.value = withSpring(1);
@@ -548,7 +544,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
       if (shouldSwipeLeft && id && !flippedSV.value) {
         // Front side: Bounce back and flip to reveal
-        runOnJS(Vibration.vibrate)(25);
+        runOnJS(Vibration.vibrate)(motion.haptic.vote);
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
         scale.value = withSpring(1);
@@ -557,7 +553,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       }
 
       // bounce back - clear vote indicator
-      runOnJS(Vibration.vibrate)(8);
+      runOnJS(Vibration.vibrate)(motion.haptic.light);
       runOnJS(jsSetVote)(null); // Clear vote indicator
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);
@@ -569,15 +565,15 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const card3DStyle = useAnimatedStyle(() => {
     const rotate = interpolate(
       translateX.value,
-      [-width, 0, width],
+      [-screenWidth, 0, screenWidth],
       [-15, 0, 15],
       Extrapolate.CLAMP
     );
 
     const opacity = interpolate(
       Math.abs(translateX.value),
-      [0, SWIPE_THRESHOLD],
-      [1, 0.7],
+      [0, swipeThreshold * 0.7, swipeThreshold],
+      [1, 1, 0.7],
       Extrapolate.CLAMP
     );
 
@@ -597,16 +593,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   const nextCardStyle = useAnimatedStyle(() => {
     // When frozen, animate by promoteSV only (0 -> 1), otherwise use drag progress
-    const p = frozenSV.value ? promoteSV.value : Math.min(Math.abs(translateX.value) / SWIPE_THRESHOLD, 1);
+    const p = frozenSV.value ? promoteSV.value : Math.min(Math.abs(translateX.value) / swipeThreshold, 1);
     const nextScale = 0.98 + 0.02 * p;
     const nextTranslateY = 8 * (1 - p);
+    const nextOpacity = frozenSV.value ? 1 : 0.18 + 0.82 * p;
 
     return {
       transform: [
         { scale: nextScale },
         { translateY: nextTranslateY },
       ],
-      opacity: 1,
+      opacity: nextOpacity,
       zIndex: frozenSV.value ? 80 : 50, // Higher during promotion, but lower than current card
       elevation: frozenSV.value ? 3 : 2, // Android layering fix
       position: 'absolute' as const,
@@ -672,7 +669,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const hotOverlayStyle = useAnimatedStyle(() => {
     const opacity = interpolate(
       translateX.value,
-      [0, SWIPE_THRESHOLD],
+      [0, swipeThreshold],
       [0, 1],
       Extrapolate.CLAMP
     );
@@ -682,7 +679,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const notOverlayStyle = useAnimatedStyle(() => {
     const opacity = interpolate(
       translateX.value,
-      [-SWIPE_THRESHOLD, 0],
+      [-swipeThreshold, 0],
       [1, 0],
       Extrapolate.CLAMP
     );
@@ -692,13 +689,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const skipOverlayStyle = useAnimatedStyle(() => {
     const downOpacity = interpolate(
       translateY.value,
-      [0, SWIPE_DOWN_THRESHOLD],
+      [0, swipeDownThreshold],
       [0, 1],
       Extrapolate.CLAMP
     );
     const upOpacity = interpolate(
       translateY.value,
-      [-SWIPE_UP_THRESHOLD, 0],
+      [-swipeUpThreshold, 0],
       [1, 0],
       Extrapolate.CLAMP
     );
@@ -715,7 +712,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         { scale: thirdScale },
         { translateY: thirdTranslateY },
       ],
-      opacity: 1,
+      opacity: 0.12,
       zIndex: 25,
       position: 'absolute' as const,
       top: 0,

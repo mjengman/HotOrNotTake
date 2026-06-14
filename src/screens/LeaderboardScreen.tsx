@@ -8,7 +8,8 @@ import {
   RefreshControl,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import { colors, dimensions } from '../constants';
+import { colors, dimensions, motion } from '../constants';
+import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { Take } from '../types';
 import {
   getHottestTakesByCategory,
@@ -74,15 +75,11 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   };
 
   const onRefresh = async () => {
-    console.log(`🔄 Pull-to-refresh triggered! isAtTop: ${isAtTop}`);
-    
     // Only refresh if we're at the top
     if (!isAtTop) {
-      console.log(`❌ Refresh blocked - not at top`);
       return;
     }
     
-    console.log(`✅ Refresh allowed - loading leaderboards...`);
     setRefreshing(true);
     await loadLeaderboards();
     setRefreshing(false);
@@ -95,7 +92,6 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     
     // Only update if the state actually changed to avoid unnecessary re-renders
     if (newIsAtTop !== isAtTop) {
-      console.log(`📜 Scroll position: ${contentOffset.y.toFixed(1)}px, isAtTop: ${newIsAtTop}, RefreshControl: ${newIsAtTop ? 'ENABLED' : 'DISABLED'}`);
       setIsAtTop(newIsAtTop);
     }
   };
@@ -240,12 +236,16 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.closeButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
           onPress={onClose}
+          scaleValue={0.9}
+          hapticIntensity={motion.haptic.light}
+          accessibilityRole="button"
+          accessibilityLabel="Close leaderboards"
         >
           <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
         
         <Text style={[styles.title, { color: theme.text }]}>
           🏆 Leaderboards
@@ -257,7 +257,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       {/* Tabs */}
       <View style={styles.tabsContainer}>
         {tabs.map((tab) => (
-          <TouchableOpacity
+          <AnimatedPressable
             key={tab.key}
             style={[
               styles.tab,
@@ -270,6 +270,10 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
               tab.key === 'skipped' ? handleSkippedTabPress :
               () => setActiveTab(tab.key)
             }
+            scaleValue={0.97}
+            hapticIntensity={motion.haptic.light}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === tab.key }}
           >
             <Text style={styles.tabIcon}>{tab.icon}</Text>
             <Text
@@ -285,7 +289,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             >
               {tab.label}
             </Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         ))}
       </View>
 
@@ -381,9 +385,9 @@ const styles = StyleSheet.create({
     paddingVertical: dimensions.spacing.md,
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: motion.touchTarget.minimum,
+    height: motion.touchTarget.minimum,
+    borderRadius: motion.touchTarget.minimum / 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -396,7 +400,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   placeholder: {
-    width: 36,
+    width: motion.touchTarget.minimum,
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -410,6 +414,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: dimensions.spacing.md,
+    minHeight: motion.touchTarget.minimum,
     borderRadius: 12,
     gap: dimensions.spacing.xs,
   },

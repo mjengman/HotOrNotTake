@@ -9,7 +9,7 @@ import {
   BackHandler,
 } from 'react-native';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
-import { colors } from '../constants';
+import { colors, motion } from '../constants';
 import { useResponsive } from '../hooks/useResponsive';
 
 interface BurgerMenuProps {
@@ -34,6 +34,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const theme = isDarkMode ? colors.dark : colors.light;
   const responsive = useResponsive();
+  const burgerSize = Math.max(motion.touchTarget.comfortable, responsive.iconSize.xlarge + 2);
 
   const handleMenuItemPress = (action: () => void) => {
     setIsOpen(false);
@@ -65,15 +66,17 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
           styles.burgerButton,
           { 
             backgroundColor: isDarkMode ? theme.surface : '#F0F0F1',
-            width: responsive.iconSize.xlarge + 2, // Scale from 45 to responsive
-            height: responsive.iconSize.xlarge + 2,
-            borderRadius: (responsive.iconSize.xlarge + 2) / 2,
-            marginTop: responsive.spacing.sm + 2, // Scale from 10 to responsive
+            width: burgerSize,
+            height: burgerSize,
+            borderRadius: burgerSize / 2,
+            marginTop: responsive.spacing.sm + 2,
           }
         ]}
         onPress={() => setIsOpen(true)}
         scaleValue={0.9}
-        hapticIntensity={8}
+        hapticIntensity={motion.haptic.light}
+        accessibilityRole="button"
+        accessibilityLabel="Open menu"
       >
         <View style={styles.burgerLines}>
           <View style={[styles.line, { backgroundColor: theme.text }]} />
@@ -231,12 +234,12 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
 
 const styles = StyleSheet.create({
   burgerButton: {
-    width: 45, // Will be overridden inline
-    height: 45, // Will be overridden inline  
-    borderRadius: 40, // Will be overridden inline
+    width: motion.touchTarget.comfortable,
+    height: motion.touchTarget.comfortable,
+    borderRadius: motion.touchTarget.comfortable / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10, // Will be overridden inline
+    marginTop: 10,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: {
@@ -283,6 +286,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24, // Placeholder, will use responsive
     paddingVertical: 16, // Placeholder, will use responsive
+    minHeight: motion.touchTarget.comfortable,
   },
   menuIcon: {
     fontSize: 24, // Placeholder, will use responsive
