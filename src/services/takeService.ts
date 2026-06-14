@@ -341,7 +341,12 @@ export const deleteTake = async (takeId: string, userId: string): Promise<void> 
     
   } catch (error) {
     console.error('Error deleting take:', error);
-    if (error.code === 'permission-denied') {
+    const errorCode =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+
+    if (errorCode === 'permission-denied') {
       throw new Error('You do not have permission to delete this take');
     }
     throw new Error('Failed to delete take');

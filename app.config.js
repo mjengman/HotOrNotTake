@@ -1,4 +1,7 @@
-// ChatGPT's suggested fix: Use app.config.js to embed API key in manifest
+// App identity is store-sensitive:
+// - Android is live on Google Play as com.anonymous.HotOrNotTakes.
+// - iOS is live on the App Store as com.hotornottakes.app.
+// Do not rename either package without creating a new store app/listing.
 export default () => ({
   expo: {
     name: "Hot or Not Takes",
@@ -23,7 +26,7 @@ export default () => ({
         backgroundColor: "#1f1f1f"
       },
       edgeToEdgeEnabled: true,
-      package: "com.hotornottakes.app"
+      package: "com.anonymous.HotOrNotTakes"
     },
     web: {
       favicon: "./assets/favicon.png"
@@ -41,8 +44,8 @@ export default () => ({
       ]
     ],
     extra: {
-      // ChatGPT's fix: Put OpenAI key in extra so it works with OTA updates
-      openaiApiKey: process.env.OPENAI_API_KEY, // EAS injects this at build time
+      // EAS injects this at build time. Existing client-side AI code is legacy.
+      openaiApiKey: process.env.OPENAI_API_KEY,
       eas: {
         projectId: "7d390f1c-4d9b-4414-a359-2d8fd3f3ed43"
       }

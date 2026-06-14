@@ -73,7 +73,6 @@ export const TakeStatsModal: React.FC<TakeStatsModalProps> = ({
               <TakeCard
                 take={take}
                 isDarkMode={isDarkMode}
-                isInteractive={false}
               />
             </View>
 

@@ -4,7 +4,9 @@
 
 A React Native app for swiping judgment on controversial, funny, or outrageous hot takes — from food opinions to life philosophy. Players swipe **HOT** if they agree with the take, or **NOT** if they think it's nonsense. Users can also submit their own takes to be judged by the world.
 
-**Available on Google Play Store via Internal Testing** | Built with React Native, Expo, Firebase & AI Moderation
+**Live on Google Play and the App Store** | Built with React Native, Expo, Firebase & AdMob
+
+Current maintainer notes live in [`CLAUDE.md`](./CLAUDE.md). Historical launch/build notes are archived in [`docs/archive`](./docs/archive).
 
 ---
 
