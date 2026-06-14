@@ -116,6 +116,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   
   // Drives the local promotion animation of the next card
   const promoteSV = useSharedValue(0);
+  const resultExitSV = useSharedValue(0);
   
   // Reactive shared values for worklets (prevents stale boolean capture)
   const frozenSV = useSharedValue(0);
@@ -141,6 +142,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   useEffect(() => {
     if (externalStatsCard) {
       setLandingTake(null);
+      resultExitSV.value = 0;
       // Clear any existing timeout since this is manual
       if (autoDismissTimeout) {
         clearTimeout(autoDismissTimeout);
@@ -166,6 +168,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       // Reset animation values
       flipSV.value = 0;
       promoteSV.value = 0;
+      resultExitSV.value = 0;
       animatingSV.value = 0;
     }
   }, [externalStatsCard]);
@@ -258,6 +261,28 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }, 1200);
     setAutoDismissTimeout(timeout);
   };
+  const finishCardDismiss = React.useCallback(() => {
+    const shouldEnd = endAfterDismissRef.current;
+    endAfterDismissRef.current = false;
+
+    setIsCardFlipped(false);
+    setLastVote(null);
+    setCurrentVote(null);
+
+    const promotedTake = !shouldEnd ? frozenNext.current : null;
+    if (promotedTake) {
+      frozenCurrent.current = promotedTake;
+      setLandingTake(promotedTake);
+      requestAnimationFrame(() => {
+        finishFrozenReset();
+        resultExitSV.value = 0;
+      });
+      return;
+    }
+
+    finishFrozenReset();
+    resultExitSV.value = 0;
+  }, [finishFrozenReset, resultExitSV]);
   
   // Flip the card to reveal stats
   const flipCard = (vote: 'hot' | 'not') => {
@@ -265,6 +290,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     
     setLastVote(vote);
     setLandingTake(null);
+    resultExitSV.value = 0;
     
     // 🧊 FREEZE: Capture current state immediately when vote is cast
     // Capture the current card BEFORE it gets removed
@@ -335,6 +361,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       scale.value = 1;
       flipSV.value = 0;
       promoteSV.value = 0;
+      resultExitSV.value = 0;
       animatingSV.value = 0;
       
       // Reset state
@@ -356,13 +383,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     
     isAnimating.value = true;
 
-    const promotedTake = useFrozen && frozenNext.current && !endAfterDismissRef.current
-      ? frozenNext.current
-      : null;
-    if (promotedTake) {
-      frozenCurrent.current = promotedTake;
-      setLandingTake(promotedTake);
-    }
+    const hasPromotedTake = Boolean(useFrozen && frozenNext.current && !endAfterDismissRef.current);
     
     const resetAll = () => {
       'worklet';
@@ -371,10 +392,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       scale.value = 1;
       flipSV.value = 0;
       promoteSV.value = 0;
-      runOnJS(setIsCardFlipped)(false);
-      runOnJS(setLastVote)(null);
-      runOnJS(setCurrentVote)(null);
-      runOnJS(finishFrozenReset)();
+      runOnJS(finishCardDismiss)();
       isAnimating.value = false;
     };
 
@@ -382,11 +400,15 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       if (skipAnimation) {
         resetAll();
       } else {
-        translateX.value = withTiming(0, { duration: motion.duration.overlayOut }, resetAll);
+        resultExitSV.value = withTiming(
+          1,
+          { duration: motion.duration.cardResultExit, easing: Easing.in(Easing.cubic) },
+          resetAll
+        );
       }
     };
 
-    if (promotedTake) {
+    if (hasPromotedTake) {
       requestAnimationFrame(runReset);
     } else {
       runReset();
@@ -606,6 +628,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // Outer card gets perspective so the 3D reads nicely
   const card3DStyle = useAnimatedStyle(() => {
+    const exitProgress = resultExitSV.value;
+    const exitOpacity = interpolate(exitProgress, [0, 1], [1, 0], Extrapolate.CLAMP);
+    const exitScale = interpolate(exitProgress, [0, 1], [1, 0.965], Extrapolate.CLAMP);
+    const exitTranslateY = interpolate(exitProgress, [0, 1], [0, -18], Extrapolate.CLAMP);
     const rotate = interpolate(
       translateX.value,
       [-screenWidth, 0, screenWidth],
@@ -624,11 +650,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       transform: [
         { perspective: 1000 }, // 3D space
         { translateX: translateX.value },
-        { translateY: translateY.value },
+        { translateY: translateY.value + exitTranslateY },
         { rotate: `${rotate}deg` },
-        { scale: scale.value },
+        { scale: scale.value * exitScale },
       ],
-      opacity,
+      opacity: opacity * exitOpacity,
       zIndex: flippedSV.value || animatingSV.value ? 150 : 100, // Higher during animation but below UI elements (footer: 200)
       elevation: flippedSV.value || animatingSV.value ? 6 : 4, // Android layering fix
     };
