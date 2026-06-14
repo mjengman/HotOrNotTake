@@ -32,8 +32,6 @@ import { deleteVote, getUserVoteForTake } from '../services/voteService';
 import { getCommunityStats } from '../services/userService';
 // AI seeding disabled for MVP launch
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
-// Removed class-based ad service (API issue)
-// import adService from '../services/adService';
 import { colors } from '../constants';
 import RNShare from 'react-native-share';
 

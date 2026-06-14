@@ -17,6 +17,8 @@ import { db } from '../services/firebase';
 import { Take, TakeVote } from '../types/Take';
 import { colors, dimensions } from '../constants';
 
+type RecentVoteWithTake = TakeVote & { take?: Take };
+
 interface RecentVotesScreenProps {
   onClose: () => void;
   onShowTakeStats: (take: Take, vote: 'hot' | 'not') => void;
@@ -29,7 +31,7 @@ export const RecentVotesScreen: React.FC<RecentVotesScreenProps> = ({
   isDarkMode = false,
 }) => {
   const { user } = useAuth();
-  const [recentVotes, setRecentVotes] = useState<(TakeVote & { take?: Take })[]>([]);
+  const [recentVotes, setRecentVotes] = useState<RecentVoteWithTake[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -99,7 +101,7 @@ export const RecentVotesScreen: React.FC<RecentVotesScreenProps> = ({
     loadRecentVotes();
   }, [user]);
 
-  const handleTakePress = (vote: TakeVote) => {
+  const handleTakePress = (vote: RecentVoteWithTake) => {
     if (vote.take) {
       onShowTakeStats(vote.take, vote.vote);
       onClose(); // Close the modal after selecting a take
