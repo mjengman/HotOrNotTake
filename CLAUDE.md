@@ -8,7 +8,7 @@ Hot or Not Takes is live in production on both mobile stores.
 
 - Google Play package: `com.anonymous.HotOrNotTakes`
 - Apple bundle identifier: `com.hotornottakes.app`
-- Current app version in Expo config: `1.0.5`
+- Current app version in Expo config: `1.0.6`
 - Firebase project: `hot-or-not-takes`
 - EAS project ID: `7d390f1c-4d9b-4414-a359-2d8fd3f3ed43`
 
