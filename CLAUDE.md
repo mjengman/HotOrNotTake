@@ -83,6 +83,8 @@ Before merging release-affecting changes:
 6. Confirm the iOS bundle identifier remains `com.hotornottakes.app`.
 7. Human smoke-test both iOS and Android simulators before any OTA update or store submission.
 
+iOS production EAS builds pin `build.production.ios.image` to `macos-sequoia-15.6-xcode-26.0` so App Store submissions are built with the iOS 26 SDK while the app remains on Expo SDK 53.
+
 Smoke-test checklist owner: human/PM. Codex can prepare the build and call out expected checks, but a human should verify both emulators look normal after cleanup or release PRs merge.
 
 ### Current Expo Doctor Notes
