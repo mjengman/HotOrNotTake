@@ -1,8 +1,9 @@
 import { initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { HttpsError, onRequest } from 'firebase-functions/v2/https';
 
 initializeApp();
 
@@ -204,59 +205,128 @@ const createTake = async ({
   return docRef.id;
 };
 
-export const submitTake = onCall(
+const httpStatusForError = (code: string): number => {
+  switch (code) {
+    case 'invalid-argument':
+      return 400;
+    case 'unauthenticated':
+      return 401;
+    case 'failed-precondition':
+      return 412;
+    default:
+      return 500;
+  }
+};
+
+const extractRequestData = (body: unknown): SubmitTakeRequest => {
+  if (!body || typeof body !== 'object') {
+    throw new HttpsError('invalid-argument', 'Request body is required.');
+  }
+
+  const maybeCallableBody = body as { data?: unknown };
+  const data = maybeCallableBody.data ?? body;
+  if (!data || typeof data !== 'object') {
+    throw new HttpsError('invalid-argument', 'Submission data is required.');
+  }
+
+  return data as SubmitTakeRequest;
+};
+
+const verifyFirebaseAuth = async (authHeader: string | undefined): Promise<string> => {
+  const match = authHeader?.match(/^Bearer (.+)$/i);
+  if (!match) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to submit takes.');
+  }
+
+  try {
+    const decodedToken = await getAuth().verifyIdToken(match[1]);
+    return decodedToken.uid;
+  } catch (error) {
+    logger.warn('Invalid Firebase auth token on submitTake request.', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new HttpsError('unauthenticated', 'You must be signed in to submit takes.');
+  }
+};
+
+export const submitTake = onRequest(
   {
     region: 'us-central1',
     invoker: 'public',
     secrets: [OPENAI_API_KEY],
     timeoutSeconds: 30,
   },
-  async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-      throw new HttpsError('unauthenticated', 'You must be signed in to submit takes.');
-    }
+  async (request, response) => {
+    response.set('Access-Control-Allow-Origin', '*');
+    response.set('Access-Control-Allow-Headers', 'Content-Type, X-Firebase-Auth');
+    response.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
 
-    const data = request.data as SubmitTakeRequest;
-    const text = sanitizeText(data?.text);
-    const category = sanitizeCategory(data?.category);
-
-    const localPolicy = checkLocalPolicy(text);
-    if (!localPolicy.approved) {
-      throw new HttpsError(
-        'failed-precondition',
-        localPolicy.reason ?? 'This take violates the community guidelines.'
-      );
+    if (request.method === 'OPTIONS') {
+      response.status(204).send('');
+      return;
     }
 
     try {
-      const moderation = await moderateWithOpenAI(text);
-      if (!moderation.approved) {
+      if (request.method !== 'POST') {
+        throw new HttpsError('invalid-argument', 'submitTake accepts POST requests only.');
+      }
+
+      const userId = await verifyFirebaseAuth(request.header('X-Firebase-Auth'));
+      const data = extractRequestData(request.body);
+      const text = sanitizeText(data?.text);
+      const category = sanitizeCategory(data?.category);
+
+      const localPolicy = checkLocalPolicy(text);
+      if (!localPolicy.approved) {
         throw new HttpsError(
           'failed-precondition',
-          moderation.reason ?? 'This take violates the community guidelines.'
+          localPolicy.reason ?? 'This take violates the community guidelines.'
         );
       }
 
-      const takeId = await createTake({ text, category, userId, status: 'approved' });
-      return { takeId, status: 'approved' };
-    } catch (error) {
-      if (error instanceof HttpsError) {
-        throw error;
+      try {
+        const moderation = await moderateWithOpenAI(text);
+        if (!moderation.approved) {
+          throw new HttpsError(
+            'failed-precondition',
+            moderation.reason ?? 'This take violates the community guidelines.'
+          );
+        }
+
+        const takeId = await createTake({ text, category, userId, status: 'approved' });
+        response.status(200).json({ result: { takeId, status: 'approved' } });
+      } catch (error) {
+        if (error instanceof HttpsError) {
+          throw error;
+        }
+
+        logger.error('OpenAI moderation failed; storing take as pending.', {
+          userId,
+          category,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        const takeId = await createTake({ text, category, userId, status: 'pending' });
+        response.status(200).json({
+          result: {
+            takeId,
+            status: 'pending',
+            reason: 'Moderation is temporarily unavailable, so this take was sent to review.',
+          },
+        });
       }
-
-      logger.error('OpenAI moderation failed; storing take as pending.', {
-        userId,
-        category,
-        error: error instanceof Error ? error.message : String(error),
+    } catch (error) {
+      const code = error instanceof HttpsError ? error.code : 'internal';
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Submission failed.';
+      response.status(httpStatusForError(code)).json({
+        error: {
+          status: code.toUpperCase().replace(/-/g, '_'),
+          message,
+        },
       });
-
-      const takeId = await createTake({ text, category, userId, status: 'pending' });
-      return {
-        takeId,
-        status: 'pending',
-        reason: 'Moderation is temporarily unavailable, so this take was sent to review.',
-      };
     }
   }
 );

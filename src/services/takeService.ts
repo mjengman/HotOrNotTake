@@ -14,12 +14,12 @@ import {
   increment,
   startAfter,
 } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from './firebase';
+import { auth, db } from './firebase';
 import { Take, TakeSubmission, TakeStatus } from '../types/Take';
 
 // Collection references
 const TAKES_COLLECTION = 'takes';
+const SUBMIT_TAKE_URL = 'https://us-central1-hot-or-not-takes.cloudfunctions.net/submitTake';
 
 interface SubmitTakeResponse {
   takeId: string;
@@ -27,10 +27,39 @@ interface SubmitTakeResponse {
   reason?: string;
 }
 
-const submitTakeCallable = httpsCallable<
-  { text: string; category: string },
-  SubmitTakeResponse
->(functions, 'submitTake');
+const callSubmitTakeFunction = async (data: {
+  text: string;
+  category: string;
+}): Promise<SubmitTakeResponse> => {
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) {
+    throw new Error('User must be signed in to submit takes');
+  }
+
+  const response = await fetch(SUBMIT_TAKE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Firebase-Auth': `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ data }),
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.error) {
+    const error = new Error(
+      body.error?.message || 'Failed to submit take'
+    ) as Error & { status?: string };
+    error.status = body.error?.status;
+    throw error;
+  }
+
+  if (!body.result?.takeId || !body.result?.status) {
+    throw new Error('Moderation service returned an invalid response');
+  }
+
+  return body.result as SubmitTakeResponse;
+};
 
 // Convert Firestore timestamp to Date
 const convertTimestampToDate = (timestamp: any): Date => {
@@ -170,22 +199,22 @@ export const submitTake = async (
     // only Firebase Auth context and ignores client-provided identity.
     void userId;
 
-    const result = await submitTakeCallable({
+    const result = await callSubmitTakeFunction({
       text: takeData.text.trim(),
       category: takeData.category,
     });
 
-    if (result.data.status === 'pending') {
-      console.log(`🕒 Take submitted for moderation review: ${result.data.takeId}`);
+    if (result.status === 'pending') {
+      console.log(`🕒 Take submitted for moderation review: ${result.takeId}`);
     } else {
-      console.log(`✅ Take approved by server moderation: ${result.data.takeId}`);
+      console.log(`✅ Take approved by server moderation: ${result.takeId}`);
     }
 
-    return result.data.takeId;
+    return result.takeId;
   } catch (error) {
-    const code =
-      typeof error === 'object' && error !== null && 'code' in error
-        ? String((error as { code?: unknown }).code)
+    const status =
+      typeof error === 'object' && error !== null && 'status' in error
+        ? String((error as { status?: unknown }).status)
         : '';
     const message =
       error instanceof Error
@@ -194,7 +223,7 @@ export const submitTake = async (
 
     console.error('Failed to submit take:', error);
 
-    if (code === 'functions/failed-precondition') {
+    if (status === 'FAILED_PRECONDITION') {
       throw new Error(`Take rejected: ${message}`);
     }
 

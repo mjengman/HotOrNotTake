@@ -51,10 +51,11 @@ The feed filters out voted takes. Skipped takes can reappear by design.
 
 ## AI and Moderation
 
-User submissions are moderated by the `submitTake` Firebase callable function before any take can become visible in the public feed.
+User submissions are moderated by the `submitTake` Firebase HTTPS function before any take can become visible in the public feed.
 
 - The OpenAI key must live only in Firebase Secret Manager as `OPENAI_API_KEY`.
 - Do not add client-side OpenAI calls, `EXPO_PUBLIC_OPENAI_API_KEY`, EAS OpenAI env vars, or Expo config extras for OpenAI keys.
+- The client sends the user's Firebase ID token in `X-Firebase-Auth`; do not use the `Authorization` header for this endpoint because Cloud Run consumes it before the function handler can verify Firebase Auth.
 - Firestore rules block clients from creating approved takes directly; trusted server code writes approved takes with Admin privileges.
 - Clean submissions are auto-approved by AI and appear in the feed quickly.
 - Rejected submissions return a user-facing reason and are not written as approved content.
