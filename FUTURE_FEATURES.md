@@ -11,13 +11,50 @@ Hot or Not Takes is now a production app with server-side moderation, AI-generat
 - **Strengthen the core loop first**: Swipe, reveal, react, repeat.
 - **Prefer OTA improvements**: Ship JavaScript-only polish and retention features quickly when possible.
 - **Make every vote feel alive**: Results should feel like a social reveal, not just a stat panel.
+- **Make launch feel instant**: Returning users should see a take quickly, not a skeleton every time.
+- **Build identity before comparison**: Personal stats and taste profiles should come before heavier global ranking mechanics.
 - **Keep onboarding obvious**: New users should understand HOT, NOT, and skip without hunting through menus.
 - **Protect store trust**: Safety, moderation, child-safety standards, and store metadata are product features, not chores.
 - **Stay anonymous-friendly**: Do not force real names or full accounts unless the value is obvious.
 
+## North Star Metric
+
+**Weekly Active Voters (WAV)** is the primary product metric.
+
+The app wins when people come back and vote again. Total downloads, total takes, and total votes are useful, but Weekly Active Voters best captures whether Hot or Not Takes is becoming a repeat habit.
+
+Supporting metrics:
+- Votes per active user.
+- Votes per session.
+- D1 and D7 retention.
+- Daily challenge completion rate.
+- Streak continuation rate.
+- Share taps and completed shares.
+- Report volume and moderation pending volume.
+
+## Churn Risks
+
+Known or likely reasons users may leave:
+
+- Cold starts feel slow because users see skeleton loading before cards appear.
+- New users may not immediately understand swipe direction, skip gestures, or the results reveal.
+- Low perceived community size can make the app feel less alive than it is.
+- Results can become predictable if too many takes are obvious consensus opinions.
+- AI-generated phrasing can feel repetitive, especially semicolon-heavy writing.
+- Weak personal investment if the app does not reflect the user's taste, identity, or voting history back to them.
+- Empty states can feel broken rather than intentional.
+
 ## Recommended Next OTA Sprint
 
-### 1. Daily Challenge
+### 1. Warm-Start Feed Cache
+- Cache a small batch of approved, unvoted takes locally after a successful feed load.
+- On app launch, render cached takes immediately while Firestore refreshes in the background.
+- Cache should be scoped by user and category.
+- Filter cached takes against known voted IDs before display when possible.
+- Use a simple TTL so stale content does not live forever.
+- Fall back to skeleton only when no usable cache exists.
+
+### 2. Daily Challenge
 - Add a daily challenge such as "Vote on 20 takes today."
 - Show progress near the existing streak/vote stats area.
 - Support simple variants over time:
@@ -26,7 +63,8 @@ Hot or Not Takes is now a production app with server-side moderation, AI-generat
   - Vote on 5 divisive takes.
 - Completion should trigger a satisfying toast or lightweight celebration.
 
-### 2. Post-Vote Personality
+### 3. Reveal Moment / Controversy Engine
+- Treat the results card as the emotional core of the app.
 - Add contextual copy to the results card after a vote.
 - Example lines:
   - "You're in the minority."
@@ -35,19 +73,36 @@ Hot or Not Takes is now a production app with server-side moderation, AI-generat
   - "Certified heater."
   - "Ice cold take."
   - "The room is divided."
+- Highlight surprising vote moments:
+  - "Only 8% agreed with you."
+  - "You went against the crowd."
+  - "Almost nobody took your side."
 - Keep lines short, varied, and tied to vote percentages.
 
-### 3. Leaderboard Polish
-- Make leaderboard feel like the app's "what's happening" screen.
-- Candidate sections:
-  - Hottest takes
-  - Coldest takes
-  - Most divisive
-  - Most skipped
-  - Fresh debates
-- Improve empty/error states so Firestore permission gaps never feel broken to users.
+### 4. Personal Taste Profile
+- Generate a lightweight identity from existing vote history.
+- No login required; anonymous user data is enough.
+- Possible labels:
+  - Contrarian
+  - Crowd Follower
+  - Chaos Agent
+  - Category Loyalist
+  - Optimist
+  - Skeptic
+  - Sports Purist
+  - Food Critic
+- Start as a teaser or compact stats card before building a full profile surface.
 
-### 4. Empty State and Loading Polish
+### 5. Personal Stats Before Global Leaderboards
+- Reflect the user's behavior back to them.
+- Example stats:
+  - "You agree with the crowd 72% of the time."
+  - "Food is your hottest category."
+  - "You vote NOT more often than most users."
+  - "You love close-call takes."
+- Personal identity should take priority over global ranking polish.
+
+### 6. Empty State and Loading Polish
 - Better no-feed card: "You've seen everything in this category. More takes are on the way."
 - Show community vote count or streak encouragement instead of blank space.
 - Keep skeleton/loading states calm and consistent.
@@ -55,6 +110,16 @@ Hot or Not Takes is now a production app with server-side moderation, AI-generat
 ## OTA Eligible Ideas
 
 These should be possible without app store review if implemented with existing dependencies and Firestore/Cloud Functions already in place.
+
+### Launch and Feed Performance
+- Warm-start feed cache so returning users see cards immediately on launch.
+- Persist the latest usable batch of approved takes locally after successful feed loads.
+- Store cache by user ID and selected category.
+- Filter out cached takes the user has already voted on when local interaction history is available.
+- Refresh from Firestore in the background and reconcile the deck without a jarring card swap.
+- Use skeleton loading only for first launch, empty cache, or expired cache.
+- Keep cache TTL simple at first, likely 6-24 hours.
+- Treat this as high-priority perceived-quality work.
 
 ### Retention and Reward
 - Daily challenges.
@@ -72,12 +137,38 @@ These should be possible without app store review if implemented with existing d
   - Voted in every category
   - Took the unpopular side
 
-### Results and Gameplay Feel
+### Reveal Moment and Gameplay Feel
 - Post-vote personality lines based on percentage split.
 - Better result reveal copy for landslides, close calls, and unpopular votes.
+- Controversy engine moments:
+  - "91% HOT, you voted NOT."
+  - "Only 8% agreed with you."
+  - "You took the unpopular side."
+  - "This one split the room."
+- Most surprising votes list based on the user's vote differing sharply from the crowd.
+- Encourage screenshots/shares when a result is unusually surprising.
 - More natural results-card transitions as needed.
 - More consistent button states and disabled states.
 - Fine-tune skip/recent-vote affordances based on observed testing.
+
+### Personal Stats and Taste Profile
+- Build personal stats from existing vote history before investing heavily in global leaderboards.
+- Possible stats:
+  - Crowd agreement percentage.
+  - HOT vs NOT tendency.
+  - Hottest/coldest personal category.
+  - Most contrarian category.
+  - Number of close-call votes.
+- Possible taste labels:
+  - Contrarian
+  - Crowd Follower
+  - Chaos Agent
+  - Category Loyalist
+  - Optimist
+  - Skeptic
+  - Sports Purist
+  - Food Critic
+- Start with a compact card or toast, then graduate to a profile surface if users respond.
 
 ### Feed and Category Experience
 - Better empty feed state.
@@ -89,6 +180,7 @@ These should be possible without app store review if implemented with existing d
 - Keep the "all" category balanced by generating under-supplied categories first.
 
 ### Leaderboards and Discovery
+- Treat global leaderboards as secondary to personal stats until the community feels larger.
 - Most divisive takes.
 - Fresh debates.
 - Trending takes based on recent voting velocity.
@@ -207,6 +299,7 @@ These likely need new native permissions, native configuration, new native depen
 - Do not prompt on first launch or immediately after errors/rejections.
 
 ### Metrics to Watch
+- Weekly Active Voters (north star).
 - D1 retention.
 - D7 retention.
 - Votes per session.
