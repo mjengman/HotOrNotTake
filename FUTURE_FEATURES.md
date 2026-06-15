@@ -1,206 +1,290 @@
-# 🚀 Future Features Roadmap - Hot or Not Takes
+# Future Features Backlog - Hot or Not Takes
 
-**Created**: August 2025  
-**Status**: Ideas & Planning Phase
+**Updated**: June 15, 2026
+**Status**: Living product backlog
+**Purpose**: Capture product ideas, deployment constraints, and likely sprint candidates. This is not a promise list; it is the place to keep good ideas warm until they are scoped.
 
----
+Hot or Not Takes is now a production app with server-side moderation, AI-generated endless feed support, daily streak basics, in-app safety reporting, and a more polished swipe loop. Future work should make the existing loop more rewarding before adding heavy new surfaces.
 
-## 🎮 Gamification & Engagement
+## Product Principles
 
-### 🏆 Achievements System
-- **First Vote**: Cast your first vote
-- **Hot Streak**: Vote 10 HOT takes in a row
-- **Cold Snap**: Vote 10 NOT takes in a row
-- **Daily Voter**: Vote every day for 7 days
-- **Category Expert**: Vote 100 takes in a single category
-- **Controversial**: Submit a take that gets 50/50 split
-- **Viral Take**: Submit a take that gets 1000+ votes
-- **Judge Judy**: Vote on 1000 takes total
-- **Early Bird**: Vote within 1 hour of a take being posted
+- **Strengthen the core loop first**: Swipe, reveal, react, repeat.
+- **Prefer OTA improvements**: Ship JavaScript-only polish and retention features quickly when possible.
+- **Make every vote feel alive**: Results should feel like a social reveal, not just a stat panel.
+- **Keep onboarding obvious**: New users should understand HOT, NOT, and skip without hunting through menus.
+- **Protect store trust**: Safety, moderation, child-safety standards, and store metadata are product features, not chores.
+- **Stay anonymous-friendly**: Do not force real names or full accounts unless the value is obvious.
 
-### 🔥 Voting Streaks
-- **Daily streak counter** (consecutive days voting)
-- **Streak freeze** (miss a day without losing streak)
-- **Streak rewards** (unlock features at milestones)
-- **Streak leaderboard** (compete with others)
-- **Weekend warrior** (weekend-specific streaks)
+## Recommended Next OTA Sprint
 
-### 🎖️ Badges & Levels
-- **Bronze/Silver/Gold** voter levels based on activity
-- **Category badges** (Food Critic, Tech Guru, etc.)
-- **Special event badges** (Holiday takes, trending topics)
-- **Rare badges** for unique achievements
-- **Badge showcase** on profile
+### 1. Daily Challenge
+- Add a daily challenge such as "Vote on 20 takes today."
+- Show progress near the existing streak/vote stats area.
+- Support simple variants over time:
+  - Vote on 20 takes today.
+  - Vote on 10 takes in a category.
+  - Vote on 5 divisive takes.
+- Completion should trigger a satisfying toast or lightweight celebration.
 
-### 📊 Daily Challenges
-- "Vote on 20 takes today"
-- "Submit a take in the Food category"
-- "Get 10 HOT votes on your take"
-- "Vote on 5 controversial takes (45-55% split)"
-- Category-specific challenges
-- Time-limited bonus challenges
+### 2. Post-Vote Personality
+- Add contextual copy to the results card after a vote.
+- Example lines:
+  - "You're in the minority."
+  - "Most people agree with you."
+  - "This one split the room."
+  - "Certified heater."
+  - "Ice cold take."
+  - "The room is divided."
+- Keep lines short, varied, and tied to vote percentages.
 
----
+### 3. Leaderboard Polish
+- Make leaderboard feel like the app's "what's happening" screen.
+- Candidate sections:
+  - Hottest takes
+  - Coldest takes
+  - Most divisive
+  - Most skipped
+  - Fresh debates
+- Improve empty/error states so Firestore permission gaps never feel broken to users.
 
-## 👤 Social Features (Phase 2)
+### 4. Empty State and Loading Polish
+- Better no-feed card: "You've seen everything in this category. More takes are on the way."
+- Show community vote count or streak encouragement instead of blank space.
+- Keep skeleton/loading states calm and consistent.
 
-### User Profiles & Accounts
-**Profile Features:**
-- Username & avatar (still anonymous-first)
-- Bio/tagline (optional)
-- Stats display (votes cast, takes submitted, streak)
-- Badge collection showcase
-- Favorite takes collection
-- Take history (optional privacy)
+## OTA Eligible Ideas
 
-**Account Benefits:**
-- Cross-device sync
-- Save progress
-- Backup voting history
-- Premium features access
-- Social connections
+These should be possible without app store review if implemented with existing dependencies and Firestore/Cloud Functions already in place.
 
-### 🌟 Favorites & Collections
-- **Star/bookmark** takes to save for later
-- **Create collections** ("Funny Food Takes", "Controversial Politics")
-- **Share collections** with friends
-- **Public/private** collections toggle
-- **Trending collections** discovery
+### Retention and Reward
+- Daily challenges.
+- Category-specific daily challenges.
+- Streak milestone toasts beyond the current streak counter.
+- "Vote to keep your streak" nudge banner.
+- "You're on fire" session moment after a user votes on several takes in one session.
+- Lightweight achievement notifications with no new native permissions.
+- Achievement-lite milestones:
+  - First 10 votes
+  - 100 votes
+  - 1,000 votes
+  - First streak
+  - 7-day streak
+  - Voted in every category
+  - Took the unpopular side
 
-### 👥 Following & Social Graph
-- **Follow other users** (opt-in)
-- **Friends leaderboard** (compete with friends)
-- **Share takes** directly to followers
-- **Notifications** for friend activity
-- **Private groups** for voting competitions
+### Results and Gameplay Feel
+- Post-vote personality lines based on percentage split.
+- Better result reveal copy for landslides, close calls, and unpopular votes.
+- More natural results-card transitions as needed.
+- More consistent button states and disabled states.
+- Fine-tune skip/recent-vote affordances based on observed testing.
 
-### 🔄 Sharing & Virality
-- **Share individual takes** to social media
-- **Share stats cards** with vote results
-- **Challenge friends** to vote on specific takes
-- **Take battles** (submit competing takes)
-- **Referral rewards** for inviting friends
+### Feed and Category Experience
+- Better empty feed state.
+- Better favorites empty state.
+- Better recent votes empty state.
+- Category stats in the category picker, such as overall HOT percentage or vote count by category.
+- Alphabetized category ordering should remain enforced.
+- Continue auditing category miscategorizations when AI generation creates odd placements.
+- Keep the "all" category balanced by generating under-supplied categories first.
 
----
+### Leaderboards and Discovery
+- Most divisive takes.
+- Fresh debates.
+- Trending takes based on recent voting velocity.
+- Category-specific leaderboard filters.
+- More visual hierarchy and clearer labels in leaderboard rows.
+- Lightweight pull-to-refresh polish.
 
-## 💰 Monetization Opportunities
+### Sharing and Virality
+- Polish the existing share button on the results card.
+- Improve generated share card copy and visual hierarchy.
+- Add stronger calls to action after a surprising result.
+- Consider shareable stats cards:
+  - "I voted with 12% of people."
+  - "This take split the room 51/49."
+- No new native share targets unless required.
 
-### Premium Features (Hot or Not Takes+)
-- **Ad-free experience**
-- **Unlimited skips**
-- **See vote results before voting**
-- **Submit unlimited takes**
-- **Advanced statistics**
-- **Exclusive badge designs**
-- **Priority take moderation**
-- **Custom themes**
+### Onboarding and First Session
+- First-launch swipe tutorial or instruction card.
+- Make HOT, NOT, and skip gestures clear in the first minute.
+- Consider a short guided first vote rather than a separate explanatory screen.
+- Keep instructions screen swipeable, since page dots imply swipe.
 
-### Virtual Currency
-- **Flames** 🔥 - Earn by voting, spend on features
-- **Super votes** (count as 2x)
-- **Boost your take** (priority placement)
-- **Skip credits** (beyond daily limit)
-- **Streak freezes**
+### Copy and UX Tweaks
+- Tone pass on all user-facing strings.
+- Reduce intimidating punctuation in AI-generated takes, especially semicolons.
+- Keep submit copy aligned with moderation reality.
+- Keep safety/reporting copy aligned with the menu-based reporting flow.
 
----
+### AI Content Quality
+- Reduce semicolon frequency in generated takes.
+- Increase sentence rhythm variety.
+- Avoid generic filler.
+- Avoid overuse of the same topics or framing.
+- Improve duplicate and near-duplicate detection.
+- Improve category fit checks.
+- Keep generated takes opinionated, human-feeling, and debatable.
+- Continue using server-side moderation before generated takes are written.
 
-## 🤖 AI & Content Features
+### Growth Without Native Changes
+- Store screenshot refresh planning and copywriting.
+- App Store / Google Play listing copy updates.
+- Review prompt via a simple link if native in-app review support is not already available.
+- A/B wording ideas for screenshots and store descriptions.
 
-### Enhanced AI Integration
-- **AI take suggestions** based on trending topics
-- **Personalized feed** based on voting patterns
-- **Smart category recommendations**
-- **AI-powered take battles** (compete against AI)
-- **Sentiment analysis** on takes
+## Full Release Required Ideas
+
+These likely need new native permissions, native configuration, new native dependencies, or store review.
+
+### Notifications and Native Engagement
+- Push notifications for streak reminders, daily challenges, or trending takes.
+- APNs and FCM setup.
+- iOS Live Activities for streaks or daily challenges.
+- iOS home screen widget showing a daily take.
+- Android widgets or quick tiles.
+
+### Native Sharing and Platform Features
+- New share sheet targets or behavior that requires native configuration.
+- iMessage stickers.
+- SharePlay or group voting sessions.
+- New deep-linking behavior if native config changes are required.
+
+### Ads and Monetization
+- Any new AdMob ad format.
+- Native ad placement changes that require configuration.
+- Subscription or in-app purchase support.
+- Significant ATT/consent flow changes.
+
+### Authentication and Permissions
+- OAuth login with Apple, Google, or other providers if native setup is required.
+- Contacts-based friend discovery.
+- Photo library or camera access for avatars.
+- Any new permission prompt.
+
+## Either Path Depending on Implementation
+
+### User Profiles
+- **OTA path**: Anonymous-first profile with display name, local avatar choice, basic stats, and Firestore-backed history.
+- **Full release path**: OAuth login, photo upload, cross-device identity, or new native permissions.
+
+### Achievements System
+- **OTA path**: Display-only achievements calculated from existing Firestore stats.
+- **Backend path**: Cloud Functions for authoritative achievement awarding or anti-abuse controls.
+- **Full release path**: Native notifications or background processing.
+
+### Friends and Leaderboards
+- **OTA path**: Firestore-based public/friends code leaderboard with no contacts permission.
+- **Full release path**: Contacts import, push notifications, or deep native integrations.
+
+### Review Prompt
+- **OTA path**: Simple "Rate us" link after a positive moment.
+- **Full release path**: Native in-app review prompt if the required module/config is not already present.
+
+### Share Improvements
+- **OTA path**: Improve existing share button copy, share card, and trigger timing.
+- **Full release path**: Add or configure new native share targets.
+
+## Strategic Growth Tasks
+
+### Store Screenshots
+- Current screenshots should be treated as a growth opportunity.
+- Better screenshots can improve install conversion without changing the app.
+- Suggested screenshot story:
+  1. Vote HOT or NOT on spicy takes.
+  2. See how the community voted.
+  3. Keep your daily streak alive.
+  4. Browse the hottest, coldest, and most divisive takes.
+  5. Submit your own take after AI moderation.
+- Include both light and dark mode if the store slots allow it.
+
+### Review Strategy
+- Prompt only after a positive moment:
+  - Daily challenge complete.
+  - Streak milestone.
+  - Several votes in one session.
+  - A fun results reveal.
+- Do not prompt on first launch or immediately after errors/rejections.
+
+### Metrics to Watch
+- D1 retention.
+- D7 retention.
+- Votes per session.
+- Sessions per user per day.
+- Challenge completion rate.
+- Streak continuation rate.
+- Share taps and completed shares.
+- Store page conversion after screenshot refresh.
+- Report volume and moderation failure/pending volume.
+
+## Longer-Term Product Ideas
+
+### User Profiles and Accounts
+- Username and avatar while staying anonymous-first.
+- Optional bio/tagline.
+- Stats display: votes cast, takes submitted, streak, favorite categories.
+- Badge collection showcase.
+- Favorite takes collection.
+- Optional take history.
+- Cross-device sync if accounts become worth the complexity.
+
+### Badges and Levels
+- Bronze/Silver/Gold voter levels.
+- Category badges such as Food Critic, Tech Guru, Sports Analyst.
+- Event badges for holiday or trending-topic takes.
+- Rare badges for surprising achievements.
+- Badge showcase on profiles.
+
+### Favorites and Collections
+- Keep starring/bookmarking takes.
+- Create collections such as "Wild Food Takes" or "Controversial Politics."
+- Public/private collection toggle.
+- Share collections.
+- Trending collections discovery.
+
+### Social Graph
+- Follow other users, opt-in only.
+- Friends leaderboard.
+- Share takes directly to followers.
+- Private groups for voting competitions.
+- Referral rewards for inviting friends.
 
 ### Content Discovery
-- **Trending takes** algorithm
-- **"For You" page** personalized feed
-- **Category deep dives**
-- **Time machine** (see takes from specific dates)
-- **Regional takes** (location-based content)
+- Personalized "For You" feed based on voting patterns.
+- Trending takes algorithm.
+- Category deep dives.
+- Time machine: browse takes from a date or season.
+- Regional takes only if location/privacy tradeoffs are worth it.
 
----
+### AI and Content Features
+- AI take suggestions for users drafting submissions.
+- Smart category recommendations.
+- AI-powered take battles.
+- Sentiment and quality analysis for moderation/admin review.
+- Topic freshness controls so generated content reflects current culture without becoming news-dependent.
 
-## 📱 Platform Features
+### Monetization
+- Ad-free premium tier.
+- Unlimited skips.
+- Advanced statistics.
+- Exclusive themes or badge designs.
+- Priority moderation for submitted takes.
+- Virtual currency only if it does not become pay-to-win.
 
-### iOS Specific
-- **Widget** showing daily take
-- **Live Activities** for voting streaks
-- **SharePlay** for group voting sessions
-- **iMessage stickers** with hot takes
+## Things We Are Not Doing By Default
 
-### Android Specific  
-- **Material You** theming
-- **Quick tiles** for fast access
-- **Nearby Share** for take sharing
+- Requiring real names.
+- Adding direct messaging without a major safety review.
+- Adding contacts permission casually.
+- Pay-to-win voting mechanics.
+- Intrusive data collection.
+- Political bias in algorithms.
+- Client-side OpenAI calls or exposed AI keys.
+- Auto-approving content when moderation fails.
 
----
+## Backlog Hygiene
 
-## 🎯 Implementation Priority
-
-### Phase 1 (Next Release After iOS)
-1. Basic achievements (low hanging fruit)
-2. Voting streaks
-3. Daily challenges
-4. Simple badges
-
-### Phase 2 (User Growth Focus)
-1. User profiles (anonymous-first)
-2. Favorites/bookmarks
-3. Basic sharing features
-4. Friends leaderboard
-
-### Phase 3 (Monetization)
-1. Premium subscription
-2. Advanced features
-3. Virtual currency
-4. Ad optimization
-
-### Phase 4 (Social Platform)
-1. Following system
-2. Collections
-3. Groups/competitions
-4. Full social features
-
----
-
-## 💡 Technical Considerations
-
-### For User Accounts
-- **Anonymous-first approach**: Start without requiring email
-- **Progressive disclosure**: Add account features gradually
-- **OAuth options**: Google, Apple, Facebook sign-in
-- **Data migration**: Convert anonymous to full accounts
-- **Privacy controls**: Granular sharing settings
-
-### Infrastructure Needs
-- **User service**: Profile management
-- **Notification service**: Push notifications
-- **Analytics enhancement**: Track new engagement metrics
-- **Caching layer**: For social graph queries
-- **CDN**: For profile images/avatars
-
----
-
-## 📊 Success Metrics
-
-- **Retention**: D1, D7, D30 retention rates
-- **Engagement**: Sessions per day, votes per session
-- **Social**: Shares, follows, friend invites
-- **Monetization**: Conversion rate, ARPU, LTV
-- **Content**: Take submission rate, quality score
-
----
-
-## 🚫 What We're NOT Doing
-
-- **Real names requirement** (stay anonymous-friendly)
-- **Complex social features** at launch
-- **Pay-to-win** mechanics
-- **Intrusive data collection**
-- **Political bias** in algorithms
-
----
-
-*This is a living document. Features will be prioritized based on user feedback, technical feasibility, and business goals.*
+- Move completed ideas into `CLAUDE.md` only when they change current operating behavior.
+- Keep historical launch notes in `docs/archive/`.
+- Keep deploy-path labels current before each sprint.
+- Before implementing any "full release required" feature, confirm the store review and permission implications first.
