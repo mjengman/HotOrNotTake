@@ -90,7 +90,10 @@ android {
 
     namespace 'com.anonymous.HotOrNotTakes'
     defaultConfig {
-        applicationId isDevelopmentBuild ? 'com.anonymous.HotOrNotTakes.dev' : 'com.anonymous.HotOrNotTakes'
+        applicationId 'com.anonymous.HotOrNotTakes'
+        if (isDevelopmentBuild) {
+            applicationId 'com.anonymous.HotOrNotTakes.dev'
+        }
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 34
