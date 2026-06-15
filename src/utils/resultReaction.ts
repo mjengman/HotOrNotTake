@@ -5,6 +5,7 @@ export type ResultReactionTone =
   | 'not'
   | 'split'
   | 'contrarian'
+  | 'rare-contrarian'
   | 'consensus'
   | 'low-signal';
 
@@ -172,7 +173,7 @@ export const getResultReaction = ({
       return {
         headline: pickVariant(tinyMinorityHeadlines, seed, 'tiny-minority'),
         subtext: `Only ${losingPercentage}% agreed with you`,
-        tone: 'contrarian',
+        tone: 'rare-contrarian',
       };
     }
 

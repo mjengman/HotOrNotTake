@@ -38,6 +38,8 @@ const getReactionToneColor = (tone: ResultReactionTone, theme: Colors) => {
       return theme.accent;
     case 'contrarian':
       return theme.secondary;
+    case 'rare-contrarian':
+      return theme.hot;
     case 'consensus':
       return theme.success;
     case 'low-signal':
@@ -126,6 +128,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
     ? `${resultReaction.headline}\n${resultReaction.subtext}`
     : resultReaction.headline;
   const reactionColor = getReactionToneColor(resultReaction.tone, theme);
+  const isRareContrarian = resultReaction.tone === 'rare-contrarian';
   const splitIsClose = resultReaction.tone === 'split';
   const notIsWinningSide = notPercentage >= hotPercentage;
   const hotIsWinningSide = hotPercentage >= notPercentage;
@@ -380,7 +383,16 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               paddingBottom: isCompactResultCard ? 0 : responsive.spacing.xs,
             }
           ]}>
-            <View style={styles.reactionSection}>
+            <View style={[
+              styles.reactionSection,
+              isRareContrarian && {
+                backgroundColor: isDarkMode ? 'rgba(255, 71, 87, 0.12)' : 'rgba(255, 71, 87, 0.08)',
+                borderColor: isDarkMode ? 'rgba(255, 165, 2, 0.45)' : 'rgba(255, 165, 2, 0.38)',
+                borderWidth: StyleSheet.hairlineWidth,
+                borderRadius: 18,
+                paddingVertical: responsive.spacing.xs,
+              },
+            ]}>
               <Text style={[
                 styles.reactionHeadline,
                 {
@@ -395,9 +407,10 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 <Text style={[
                   styles.reactionSubtext,
                   {
-                    color: theme.text,
+                    color: isRareContrarian ? theme.accent : theme.text,
                     fontSize: responsive.fontSize.small,
                     lineHeight: responsive.fontSize.small * 1.28,
+                    fontWeight: isRareContrarian ? '800' : '700',
                   },
                 ]}>
                   {resultReaction.subtext}
