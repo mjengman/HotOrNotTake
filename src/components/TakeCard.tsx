@@ -27,8 +27,8 @@ interface TakeCardProps {
   onVoteNow?: (take: Take) => void;
 }
 
-export const TakeCard: React.FC<TakeCardProps> = ({ 
-  take, 
+export const TakeCard: React.FC<TakeCardProps> = ({
+  take,
   isDarkMode = false,
   onNotPress,
   onHotPress,
@@ -44,7 +44,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const visualShareRef = useRef<ViewShot>(null);
-  
+
   // Dynamic text sizing based on card height
   // For smaller cards (< 400px), reduce text size for better readability
   const getAdaptiveTextSize = () => {
@@ -60,7 +60,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       return responsive.fontSize.large;
     }
   };
-  
+
   // Adaptive spacing for small cards to give text more room
   const getAdaptiveSpacing = () => {
     const cardHeight = responsive.card.height;
@@ -80,7 +80,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       };
     }
   };
-  
+
   const adaptiveTextSize = getAdaptiveTextSize();
   const adaptiveSpacing = getAdaptiveSpacing();
   const resultTextSize = Math.min(adaptiveTextSize * 0.84, responsive.fontSize.medium + 1);
@@ -89,11 +89,11 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const cardSurface = isDarkMode ? '#2B2B2B' : '#FEFCF8';
   const cardBorder = isDarkMode ? 'rgba(255, 255, 255, 0.07)' : '#EFE7DA';
   const cardHighlight = isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.82)';
-  
+
   // Calculate percentages for the reveal
   // Some takes may not have totalVotes, so calculate from individual votes
   const totalVotes = take.totalVotes || (take.hotVotes + take.notVotes) || 0;
-  
+
   // Check if this take is favorited
   useEffect(() => {
     const checkFavoriteStatus = async () => {
@@ -106,50 +106,50 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         }
       }
     };
-    
+
     checkFavoriteStatus();
   }, [user, take.id]);
-  
+
   const handleShare = async () => {
     try {
       const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
-      
+
       // Try visual sharing first
       if (visualShareRef.current?.capture) {
         try {
           console.log('🖼️ Generating visual share card...');
-          
+
           // Capture the visual share card as image
           const imageUri = await visualShareRef.current.capture();
 
           if (!imageUri) throw new Error('Capture failed / imageUri missing');
           console.log('✅ Visual share card generated:', imageUri);
-          
+
           // Share ONLY the image - no text, no links
           await RNShare.open({
             url: imageUri,
             failOnCancel: false,
           });
-          
+
           return; // Success - exit early
-          
+
         } catch (visualError) {
           console.log('⚠️ Visual sharing failed, falling back to text:', visualError);
         }
       }
-      
+
       // Fallback to enhanced text sharing
       const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
       const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
-      
+
       const shareMessage = `🔥 CHECK OUT THIS HOT TAKE! 🔥\n\n"${take.text}"\n\n📊 COMMUNITY VERDICT:\n🔥 ${hotPercentage}% HOT\n❄️ ${notPercentage}% NOT\n\n👥 ${totalVotes.toLocaleString()} total votes\n\n${userVote ? `I voted ${userVote.toUpperCase()}! ` : ''}What's your take?\n\nJoin the debate: ${SMART_LINK}`;
-      
+
       await RNShare.open({
         title: 'Hot or Not Takes',
         message: shareMessage,
         failOnCancel: false,
       });
-      
+
     } catch (error) {
       console.log('All sharing failed:', error);
       // Final fallback to built-in Share
@@ -161,10 +161,10 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       }
     }
   };
-  
+
   const handleFavoriteToggle = async () => {
     if (!user || favoriteLoading) return;
-    
+
     setFavoriteLoading(true);
     try {
       if (isFavorited) {
@@ -184,13 +184,13 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   // Calculate percentages for the reveal (already calculated totalVotes above for debug)
   const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
   const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
-  
-  
+
+
 
   return (
     <View style={[
-      styles.card, 
-      { 
+      styles.card,
+      {
         backgroundColor: cardSurface,
         width: responsive.card.width, // Container already provides margins
         // Remove fixed height - let card fill available container space
@@ -198,7 +198,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         borderColor: cardBorder,
         padding: adaptiveSpacing.cardPadding,
         flex: 1, // Fill available height in cardContainer
-        justifyContent: isFlipped ? 'flex-start' : 'space-between',
+        justifyContent: 'space-between',
         elevation: isDarkMode ? 10 : 9,
         shadowOpacity: isDarkMode ? 0.34 : 0.18,
         shadowRadius: isDarkMode ? 14 : 18,
@@ -221,8 +221,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       ]}>
         <View style={[styles.categoryBadge, { backgroundColor: theme.accent + '20' }]}>
           <Text style={[
-            styles.category, 
-            { 
+            styles.category,
+            {
               color: theme.accent,
               fontSize: responsive.fontSize.small
             }
@@ -231,16 +231,16 @@ export const TakeCard: React.FC<TakeCardProps> = ({
           </Text>
         </View>
       </View>
-      
+
       <View style={[
         styles.content,
         isFlipped && styles.resultContent,
         { paddingHorizontal: adaptiveSpacing.contentPadding }
       ]}>
-        <Text 
+        <Text
           style={[
-            styles.takeText, 
-            { 
+            styles.takeText,
+            {
               color: theme.text,
               fontSize: isFlipped ? resultTextSize : adaptiveTextSize,
               lineHeight: isFlipped ? resultTextLineHeight : adaptiveTextSize * 1.4,
@@ -252,33 +252,34 @@ export const TakeCard: React.FC<TakeCardProps> = ({
           {take.text}
         </Text>
       </View>
-      
+
       <View style={[
         styles.footer,
+        isFlipped && styles.resultFooter,
         { marginTop: isFlipped ? responsive.spacing.sm : adaptiveSpacing.footerMargin }
       ]}>
         {!isFlipped ? (
           // Front of card - voting buttons
           <View style={styles.voteStats}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.statItem}
               onPress={onNotPress}
               disabled={!onNotPress}
               activeOpacity={0.7}
             >
               <Text style={[
-                styles.statNumber, 
-                { 
+                styles.statNumber,
+                {
                   color: theme.not,
                   fontSize: responsive.fontSize.large
                 }
               ]}>
                 {showStats ? take.notVotes.toLocaleString() : '?'}
               </Text>
-              <Text 
+              <Text
                 style={[
-                  styles.statLabel, 
-                  { 
+                  styles.statLabel,
+                  {
                     color: theme.textSecondary,
                     fontSize: responsive.fontSize.small
                   }
@@ -290,28 +291,28 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 ❄️ NOT
               </Text>
             </TouchableOpacity>
-            
+
             <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.statItem}
               onPress={onHotPress}
               disabled={!onHotPress}
               activeOpacity={0.7}
             >
               <Text style={[
-                styles.statNumber, 
-                { 
+                styles.statNumber,
+                {
                   color: theme.hot,
                   fontSize: responsive.fontSize.large
                 }
               ]}>
                 {showStats ? take.hotVotes.toLocaleString() : '?'}
               </Text>
-              <Text 
+              <Text
                 style={[
-                  styles.statLabel, 
-                  { 
+                  styles.statLabel,
+                  {
                     color: theme.textSecondary,
                     fontSize: responsive.fontSize.small
                   }
@@ -327,18 +328,18 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         ) : (
           // Back of card - stats reveal
           <View style={[
-            styles.revealContainer, 
+            styles.revealContainer,
             {
               backgroundColor: cardSurface,
-              paddingVertical: responsive.spacing.xs,
+              paddingVertical: responsive.spacing.sm,
             }
           ]}>
-            <View style={[styles.voteSection, { marginBottom: responsive.spacing.xs, justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[styles.voteSection, { justifyContent: 'center', alignItems: 'center' }]}>
               {userVote ? (
                 <>
                   <Text style={[
-                    styles.yourVote, 
-                    { 
+                    styles.yourVote,
+                    {
                       color: theme.text,
                       fontSize: responsive.fontSize.medium,
                       textAlign: 'center'
@@ -353,8 +354,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                       activeOpacity={0.7}
                     >
                       <Text style={[
-                        styles.changeVoteText, 
-                        { 
+                        styles.changeVoteText,
+                        {
                           color: theme.primary,
                           fontSize: responsive.fontSize.small,
                           textAlign: 'center'
@@ -368,8 +369,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               ) : (
                 <>
                   <Text style={[
-                    styles.yourVote, 
-                    { 
+                    styles.yourVote,
+                    {
                       color: theme.textSecondary,
                       fontSize: responsive.fontSize.medium,
                       textAlign: 'center',
@@ -385,8 +386,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                       activeOpacity={0.7}
                     >
                       <Text style={[
-                        styles.changeVoteText, 
-                        { 
+                        styles.changeVoteText,
+                        {
                           color: theme.primary,
                           fontSize: responsive.fontSize.small,
                           textAlign: 'center',
@@ -400,82 +401,86 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 </>
               )}
             </View>
-            <View style={[styles.percentageContainer, { minHeight: 50, marginBottom: responsive.spacing.xs, justifyContent: 'center', alignItems: 'center' }]}>
-              <View style={[styles.percentageItem, { minHeight: 40, justifyContent: 'center', alignItems: 'center' }]}>
-                <View style={{ justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={[
-                    styles.bigPercentage, 
-                    { 
-                      color: theme.not,
-                      fontSize: responsive.fontSize.xlarge + 2,
-                      textAlign: 'center'
-                    }
-                  ]}>
-                    {notPercentage}%
-                  </Text>
+
+            <View style={styles.resultStatsGroup}>
+              <View style={[styles.percentageContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+                <View style={[styles.percentageItem, { justifyContent: 'center', alignItems: 'center' }]}>
+                  <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={[
+                      styles.bigPercentage,
+                      {
+                        color: theme.not,
+                        fontSize: responsive.fontSize.xlarge + 6,
+                        textAlign: 'center'
+                      }
+                    ]}>
+                      {notPercentage}%
+                    </Text>
+                  </View>
+                  <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={[
+                      styles.percentageLabel,
+                      {
+                        color: theme.textSecondary,
+                        fontSize: responsive.fontSize.small,
+                        textAlign: 'center'
+                      }
+                    ]}>
+                      NOT
+                    </Text>
+                  </View>
                 </View>
-                <View style={{ justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={[
-                    styles.percentageLabel, 
-                    { 
-                      color: theme.textSecondary,
-                      fontSize: responsive.fontSize.small,
-                      textAlign: 'center'
-                    }
-                  ]}>
-                    NOT
-                  </Text>
+                <View style={[
+                  styles.percentageDivider,
+                  {
+                    backgroundColor: theme.border,
+                    height: responsive.spacing.xl + 8
+                  }
+                ]} />
+                <View style={[styles.percentageItem, { justifyContent: 'center', alignItems: 'center' }]}>
+                  <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={[
+                      styles.bigPercentage,
+                      {
+                        color: theme.hot,
+                        fontSize: responsive.fontSize.xlarge + 6,
+                        textAlign: 'center'
+                      }
+                    ]}>
+                      {hotPercentage}%
+                    </Text>
+                  </View>
+                  <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={[
+                      styles.percentageLabel,
+                      {
+                        color: theme.textSecondary,
+                        fontSize: responsive.fontSize.small,
+                        textAlign: 'center'
+                      }
+                    ]}>
+                      HOT
+                    </Text>
+                  </View>
                 </View>
               </View>
-              <View style={[
-                styles.percentageDivider,
-                { 
-                  backgroundColor: theme.border,
-                  height: responsive.spacing.xl
-                }
-              ]} />
-              <View style={[styles.percentageItem, { minHeight: 40, justifyContent: 'center', alignItems: 'center' }]}>
-                <View style={{ justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={[
-                    styles.bigPercentage, 
-                    { 
-                      color: theme.hot,
-                      fontSize: responsive.fontSize.xlarge + 2,
-                      textAlign: 'center'
-                    }
-                  ]}>
-                    {hotPercentage}%
-                  </Text>
-                </View>
-                <View style={{ justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={[
-                    styles.percentageLabel, 
-                    { 
-                      color: theme.textSecondary,
-                      fontSize: responsive.fontSize.small,
-                      textAlign: 'center'
-                    }
-                  ]}>
-                    HOT
-                  </Text>
-                </View>
+
+              <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={[
+                  styles.totalVotes,
+                  {
+                    color: theme.textSecondary,
+                    fontSize: responsive.fontSize.small,
+                    textAlign: 'center'
+                  }
+                ]}>
+                  {totalVotes.toLocaleString()} total votes
+                </Text>
               </View>
             </View>
-            <View style={{ justifyContent: 'center', alignItems: 'center', marginTop: 4 }}>
-              <Text style={[
-                styles.totalVotes, 
-                { 
-                  color: theme.textSecondary,
-                  fontSize: responsive.fontSize.small,
-                  textAlign: 'center'
-                }
-              ]}>
-                {totalVotes.toLocaleString()} total votes
-              </Text>
-            </View>
-            
+
             {/* Action Buttons */}
-            <View style={{ justifyContent: 'center', alignItems: 'center', marginTop: 6 }}>
+            <View style={styles.resultActionsGroup}>
               <View style={styles.actionButtonsRow}>
                 <TouchableOpacity
                   style={[styles.actionButton, { backgroundColor: theme.accent + '20' }]}
@@ -490,7 +495,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                     {isFavorited ? 'Saved' : 'Save'}
                   </Text>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={[styles.actionButton, { backgroundColor: theme.primary + '20' }]}
                   onPress={handleShare}
@@ -506,16 +511,16 @@ export const TakeCard: React.FC<TakeCardProps> = ({
           </View>
         )}
       </View>
-      
+
       {/* Off-screen VisualShareCard for image generation */}
       <View style={styles.offScreenContainer}>
-        <ViewShot 
+        <ViewShot
           ref={visualShareRef}
           options={{ format: "png", quality: 0.9 }}
         >
-          <VisualShareCard 
-            take={take} 
-            userVote={userVote} 
+          <VisualShareCard
+            take={take}
+            userVote={userVote}
             isDarkMode={isDarkMode}
           />
         </ViewShot>
@@ -585,6 +590,10 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: dimensions.spacing.lg,
   },
+  resultFooter: {
+    flex: 1,
+    width: '100%',
+  },
   voteStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -614,14 +623,15 @@ const styles = StyleSheet.create({
   },
   // Reveal styles
   revealContainer: {
+    flex: 1,
+    width: '100%',
     alignItems: 'center',
     paddingVertical: dimensions.spacing.md,
-    // flex: 1, // Fill available space to match front card layout
-    justifyContent: 'flex-start', // Align content to top instead of center
+    justifyContent: 'space-between',
   },
   voteSection: {
     alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
+    width: '100%',
   },
   yourVote: {
     // fontSize now set dynamically with responsive sizing
@@ -643,11 +653,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     width: '100%',
-    marginBottom: dimensions.spacing.sm,
+  },
+  resultStatsGroup: {
+    width: '100%',
+    alignItems: 'center',
+    gap: dimensions.spacing.sm,
   },
   percentageItem: {
     alignItems: 'center',
     flex: 1,
+    minHeight: 74,
+    justifyContent: 'center',
   },
   bigPercentage: {
     fontSize: 36, // Will be overridden by responsive calculation
@@ -667,7 +683,6 @@ const styles = StyleSheet.create({
   totalVotes: {
     // fontSize now set dynamically with responsive sizing
     fontStyle: 'italic',
-    marginTop: dimensions.spacing.xs,
   },
   continueHint: {
     // fontSize now set dynamically with responsive sizing
@@ -677,6 +692,10 @@ const styles = StyleSheet.create({
   actionButtonsRow: {
     flexDirection: 'row',
     gap: 12,
+  },
+  resultActionsGroup: {
+    width: '100%',
+    alignItems: 'center',
   },
   actionButton: {
     flexDirection: 'row',
