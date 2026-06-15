@@ -9,6 +9,7 @@ Hot or Not Takes is now a production app with server-side moderation, AI-generat
 ## Product Principles
 
 - **Strengthen the core loop first**: Swipe, reveal, react, repeat.
+- **Make the app feel purpose-built**: Motion, copy, spacing, feedback, and surfaces should cohere as deliberate product choices, not leftover vibe-code.
 - **Prefer OTA improvements**: Ship JavaScript-only polish and retention features quickly when possible.
 - **Make every vote feel alive**: Results should feel like a social reveal, not just a stat panel.
 - **Make launch feel instant**: Returning users should see a take quickly, not a skeleton every time.
@@ -43,6 +44,7 @@ Known or likely reasons users may leave:
 - AI-generated phrasing can feel repetitive, especially semicolon-heavy writing.
 - Weak personal investment if the app does not reflect the user's taste, identity, or voting history back to them.
 - Empty states can feel broken rather than intentional.
+- Disconnected polish can make the app feel assembled rather than intentionally designed.
 
 ## Recommended Next OTA Sprint
 
@@ -102,7 +104,26 @@ Known or likely reasons users may leave:
   - "You love close-call takes."
 - Personal identity should take priority over global ranking polish.
 
-### 6. Empty State and Loading Polish
+### 6. Vote History
+- Rename "My Recent Votes" to "Vote History."
+- Make previous votes revisitable instead of limiting the user to the last 10.
+- Use pagination or "Load more" rather than loading every vote at once.
+- Let users revisit takes, see current community split, share later, and change votes when supported.
+- Treat history as a foundation for personal stats and taste profile.
+
+### 7. Core Loop Enrichment Pass
+- Audit the main gameplay loop as a single intentional experience:
+  - App launch
+  - First visible card
+  - Swipe gesture
+  - Vote feedback
+  - Results reveal
+  - Save/share/change-vote actions
+  - Return to the next card
+- Tune motion, haptics cadence, copy, spacing, card texture, and transition timing so the loop feels rich and coherent.
+- This is not a redesign; it is an intentionality pass over the product's most important seconds.
+
+### 8. Empty State and Loading Polish
 - Better no-feed card: "You've seen everything in this category. More takes are on the way."
 - Show community vote count or streak encouragement instead of blank space.
 - Keep skeleton/loading states calm and consistent.
@@ -150,6 +171,7 @@ These should be possible without app store review if implemented with existing d
 - More natural results-card transitions as needed.
 - More consistent button states and disabled states.
 - Fine-tune skip/recent-vote affordances based on observed testing.
+- Dedicated core loop enrichment pass so swipe, reveal, result, and next-card transitions feel like one purpose-built experience.
 
 ### Personal Stats and Taste Profile
 - Build personal stats from existing vote history before investing heavily in global leaderboards.
@@ -169,6 +191,14 @@ These should be possible without app store review if implemented with existing d
   - Sports Purist
   - Food Critic
 - Start with a compact card or toast, then graduate to a profile surface if users respond.
+
+### Vote History
+- Rename "My Recent Votes" to "Vote History."
+- Replace the fixed last-10 limit with paginated history, newest first.
+- Show vote choice, category, current community split, and take text.
+- Let users revisit a take/results view from history.
+- Preserve "change your vote" behavior where the existing vote system supports it.
+- Use history as a bridge to personal stats, taste profile, and later sharing moments.
 
 ### Feed and Category Experience
 - Better empty feed state.
