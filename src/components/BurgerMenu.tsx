@@ -19,6 +19,7 @@ interface BurgerMenuProps {
   onRecentVotes: () => void;
   onFavorites: () => void;
   onInstructions: () => void;
+  onSafety: () => void;
   onToggleTheme: () => void;
 }
 
@@ -29,6 +30,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   onRecentVotes,
   onFavorites,
   onInstructions,
+  onSafety,
   onToggleTheme,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -113,13 +115,13 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 onPress={() => handleMenuItemPress(onMyTakes)}
                 activeOpacity={0.7}
               >
-                <Text 
+                <Text
                   style={styles.menuIcon}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
                 >📝</Text>
-                <Text 
+                <Text
                   style={[styles.menuText, { color: theme.text }]}
                   numberOfLines={1}
                   adjustsFontSizeToFit
@@ -132,13 +134,13 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 onPress={() => handleMenuItemPress(onLeaderboard)}
                 activeOpacity={0.7}
               >
-                <Text 
+                <Text
                   style={styles.menuIcon}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
                 >🏆</Text>
-                <Text 
+                <Text
                   style={[styles.menuText, { color: theme.text }]}
                   numberOfLines={1}
                   adjustsFontSizeToFit
@@ -201,6 +203,25 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
                 >Instructions</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { borderBottomColor: theme.border }]}
+                onPress={() => handleMenuItemPress(onSafety)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={styles.menuIcon}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >🛡️</Text>
+                <Text
+                  style={[styles.menuText, { color: theme.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >Safety & Reporting</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

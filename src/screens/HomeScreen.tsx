@@ -26,6 +26,7 @@ import { MyTakesScreen } from './MyTakesScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecentVotesScreen } from './RecentVotesScreen';
 import { MyFavoritesScreen } from './MyFavoritesScreen';
+import { SafetyStandardsScreen } from './SafetyStandardsScreen';
 import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
 import { useResponsive } from '../hooks/useResponsive';
 import { deleteVote, getUserVoteForTake } from '../services/voteService';
@@ -41,6 +42,7 @@ export const HomeScreen: React.FC = () => {
   const [showMyTakesModal, setShowMyTakesModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+  const [showSafetyModal, setShowSafetyModal] = useState(false);
   const [showRecentVotesModal, setShowRecentVotesModal] = useState(false);
   const [showFavoritesModal, setShowFavoritesModal] = useState(false);
   const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: any, vote: 'hot' | 'not' | null} | null>(null);
@@ -171,6 +173,10 @@ export const HomeScreen: React.FC = () => {
         setShowInstructionsModal(false);
         return true;
       }
+      if (showSafetyModal) {
+        setShowSafetyModal(false);
+        return true;
+      }
       if (selectedTakeForStats) {
         setSelectedTakeForStats(null);
         return true;
@@ -181,7 +187,7 @@ export const HomeScreen: React.FC = () => {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [showSubmitModal, showRecentVotesModal, showFavoritesModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, selectedTakeForStats]);
+  }, [showSubmitModal, showRecentVotesModal, showFavoritesModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, showSafetyModal, selectedTakeForStats]);
 
   // Rotate instruction text with a quiet fade so the footer feels alive without flicker.
   useEffect(() => {
@@ -412,6 +418,7 @@ export const HomeScreen: React.FC = () => {
             onRecentVotes={() => setShowRecentVotesModal(true)}
             onFavorites={() => setShowFavoritesModal(true)}
             onInstructions={() => setShowInstructionsModal(true)}
+            onSafety={() => setShowSafetyModal(true)}
             onToggleTheme={toggleTheme}
           />
         </View>
@@ -711,6 +718,16 @@ export const HomeScreen: React.FC = () => {
                 }
               }
             }}
+            isDarkMode={isDarkMode}
+          />
+        </FullScreenOverlay>
+      )}
+
+      {/* Safety Standards Modal - Conditional Rendering */}
+      {showSafetyModal && (
+        <FullScreenOverlay zIndex={1800}>
+          <SafetyStandardsScreen
+            onClose={() => setShowSafetyModal(false)}
             isDarkMode={isDarkMode}
           />
         </FullScreenOverlay>

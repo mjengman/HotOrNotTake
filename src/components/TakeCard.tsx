@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -13,6 +14,7 @@ import { colors, dimensions, motion } from '../constants';
 import { useResponsive } from '../hooks/useResponsive';
 import { useAuth } from '../hooks/useAuth';
 import { addToFavorites, removeFromFavorites, isInFavorites } from '../services/favoritesService';
+import { reportTake } from '../services/takeService';
 import { VisualShareCard } from './VisualShareCard';
 
 interface TakeCardProps {
@@ -43,6 +45,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const { user } = useAuth();
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const visualShareRef = useRef<ViewShot>(null);
   
   // Dynamic text sizing based on card height
@@ -89,6 +92,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const cardSurface = isDarkMode ? '#2B2B2B' : '#FEFCF8';
   const cardBorder = isDarkMode ? 'rgba(255, 255, 255, 0.07)' : '#EFE7DA';
   const cardHighlight = isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.82)';
+  const canReport = take.id !== 'preview';
   
   // Calculate percentages for the reveal
   // Some takes may not have totalVotes, so calculate from individual votes
@@ -180,6 +184,29 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       setFavoriteLoading(false);
     }
   };
+
+  const handleReport = async () => {
+    if (reportLoading) return;
+
+    setReportLoading(true);
+    try {
+      await reportTake(take.id);
+      Alert.alert(
+        'Report submitted',
+        'Thanks for helping keep Hot or Not Takes safe. For CSAE, CSAM, or child safety concerns, email engmanlabs@gmail.com.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error reporting take:', error);
+      Alert.alert(
+        'Report failed',
+        'Please try again, or email engmanlabs@gmail.com for child safety concerns.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setReportLoading(false);
+    }
+  };
   
   
   // Calculate percentages for the reveal (already calculated totalVotes above for debug)
@@ -220,6 +247,27 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         styles.header,
         { marginBottom: isFlipped ? responsive.spacing.sm : adaptiveSpacing.headerMargin }
       ]}>
+        {canReport && (
+          <TouchableOpacity
+            style={[
+              styles.reportButton,
+              {
+                backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.06)' : '#FFF8EF',
+                borderColor: cardBorder,
+              },
+            ]}
+            onPress={handleReport}
+            disabled={reportLoading}
+            activeOpacity={0.72}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Report this take"
+          >
+            <Text style={[styles.reportText, { color: theme.textSecondary }]}>
+              Report
+            </Text>
+          </TouchableOpacity>
+        )}
         <View style={[styles.categoryBadge, { backgroundColor: theme.accent + '20' }]}>
           <Text style={[
             styles.category, 
@@ -551,7 +599,23 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
+    position: 'relative',
     // marginBottom now set dynamically with adaptive spacing
+  },
+  reportButton: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  reportText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   categoryBadge: {
     paddingHorizontal: dimensions.spacing.md,

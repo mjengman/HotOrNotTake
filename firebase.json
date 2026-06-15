@@ -30,6 +30,7 @@
       }
     ],
     "rewrites": [
+      { "source": "/child-safety", "destination": "/child-safety/index.html" },
       { "source": "/download", "destination": "/download/index.html" },
       { "source": "/t/**", "destination": "/download/index.html" },
       { "source": "/take/**", "destination": "/download/index.html" }

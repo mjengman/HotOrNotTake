@@ -1,10 +1,10 @@
-# Child Safety Standards - Hot or Not Takes
+# Child Safety Standards - Hot or Not Takes by FireThink Studios
 
-**Effective Date: August 2025**
+**Effective Date: June 15, 2026**
 
 ## Our Commitment to Child Safety
 
-Hot or Not Takes is committed to providing a safe environment for all users, especially minors. We have zero tolerance for child sexual abuse and exploitation (CSAE) and child sexual abuse material (CSAM).
+Hot or Not Takes, published by FireThink Studios, is committed to providing a safe environment for all users. We have zero tolerance for child sexual abuse and exploitation (CSAE), child sexual abuse material (CSAM), grooming, sextortion, or any content or behavior that sexualizes, exploits, or endangers minors.
 
 ## Target Audience
 
@@ -13,14 +13,14 @@ Our app is designed for users aged 13 and older. We do not knowingly collect per
 ## Safety Measures
 
 ### Content Moderation
-- **AI-Powered Filtering**: All user-submitted content is automatically screened using advanced AI moderation
-- **Proactive Detection**: Suspicious content is flagged before it reaches other users
+- **AI-Powered Filtering**: User-submitted content is automatically screened using server-side moderation
+- **Proactive Detection**: Suspicious content is blocked or flagged before it reaches other users
 - **Human Review**: Flagged content undergoes human review when necessary
 
 ### User Safety Features
 - **Anonymous Platform**: No usernames, profiles, or personal information sharing
 - **No Direct Communication**: Users cannot message each other directly
-- **Content Reporting**: Easy in-app reporting for inappropriate content
+- **Content Reporting**: In-app reporting is available for inappropriate content or child safety concerns
 - **Immediate Removal**: Violating content is removed instantly upon detection
 
 ### Technical Safeguards
@@ -32,15 +32,17 @@ Our app is designed for users aged 13 and older. We do not knowingly collect per
 
 We strictly prohibit:
 - Any form of child sexual abuse material (CSAM)
-- Content that sexualizes, grooms, or endangers minors
+- Child sexual abuse and exploitation (CSAE)
+- Content that sexualizes, grooms, exploits, sextorts, or endangers minors
+- Solicitation, promotion, sharing, or attempted exchange of CSAM or CSAE-related content
 - Harassment or bullying of any users
 - Sharing of personal information
 
 ## Reporting and Response
 
 ### For Users
-- **In-App Reporting**: Tap and hold any inappropriate content to report
-- **Email Contact**: engmanlabs@gmail.com for safety concerns
+- **In-App Reporting**: Use the Report button on any take or open Safety & Reporting from the menu
+- **Child Safety Contact**: engmanlabs@gmail.com for CSAE, CSAM, or child safety concerns
 - **Immediate Action**: All reports are reviewed within 24 hours
 
 ### For Authorities
@@ -75,6 +77,8 @@ These standards are reviewed and updated regularly to ensure:
 
 ## Contact Information
 
+**Developer**: FireThink Studios
+**App**: Hot or Not Takes
 **Child Safety Contact**: engmanlabs@gmail.com
 
 For immediate safety concerns or to report suspected child abuse material, contact us immediately. We are committed to responding promptly and taking appropriate action.
@@ -91,5 +95,5 @@ We regularly review our practices to ensure ongoing compliance and the highest s
 
 ---
 
-*Last Updated: August 2025*
-*Document Version: 1.0*
+*Last Updated: June 15, 2026*
+*Document Version: 1.1*
