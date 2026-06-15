@@ -3,11 +3,11 @@ import {
   Alert,
   Linking,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { colors, dimensions, motion } from '../constants';
 
@@ -79,6 +79,8 @@ export const SafetyStandardsScreen: React.FC<SafetyStandardsScreenProps> = ({
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.notice, { backgroundColor: theme.primaryLight, borderColor: theme.primary + '55' }]}>
           <Text style={[styles.noticeTitle, { color: theme.text }]}>
@@ -91,7 +93,7 @@ export const SafetyStandardsScreen: React.FC<SafetyStandardsScreenProps> = ({
 
         <Section title="How to report" theme={theme}>
           <Text style={[styles.bodyText, { color: theme.textSecondary }]}>
-            Use the Report button on any take to flag inappropriate content. For child safety, CSAE, or CSAM concerns, contact our child safety point of contact directly.
+            Open Safety & Reporting from the menu to contact our child safety point of contact. For CSAE, CSAM, or urgent child safety concerns, use the email button below.
           </Text>
           <AnimatedPressable
             style={[styles.primaryButton, { backgroundColor: theme.primary }]}
@@ -118,7 +120,7 @@ export const SafetyStandardsScreen: React.FC<SafetyStandardsScreenProps> = ({
 
         <Section title="Our response" theme={theme}>
           <Text style={[styles.bodyText, { color: theme.textSecondary }]}>
-            User-submitted takes are moderated before appearing in the voting queue. Reports are reviewed promptly, violating content is removed, and suspected CSAM is reported to the National Center for Missing & Exploited Children (NCMEC) or other appropriate authorities as required by law.
+            User-submitted takes are moderated before appearing in the voting queue. Safety reports are reviewed promptly, violating content is removed, and suspected CSAM is reported to the National Center for Missing & Exploited Children (NCMEC) or other appropriate authorities as required by law.
           </Text>
         </Section>
 

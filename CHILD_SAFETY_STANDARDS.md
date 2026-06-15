@@ -20,7 +20,7 @@ Our app is designed for users aged 13 and older. We do not knowingly collect per
 ### User Safety Features
 - **Anonymous Platform**: No usernames, profiles, or personal information sharing
 - **No Direct Communication**: Users cannot message each other directly
-- **Content Reporting**: In-app reporting is available for inappropriate content or child safety concerns
+- **Content Reporting**: Safety & Reporting in the app menu lets users contact our child safety point of contact for inappropriate content or child safety concerns
 - **Immediate Removal**: Violating content is removed instantly upon detection
 
 ### Technical Safeguards
@@ -41,7 +41,7 @@ We strictly prohibit:
 ## Reporting and Response
 
 ### For Users
-- **In-App Reporting**: Use the Report button on any take or open Safety & Reporting from the menu
+- **In-App Reporting**: Open Safety & Reporting from the app menu to contact our child safety point of contact
 - **Child Safety Contact**: engmanlabs@gmail.com for CSAE, CSAM, or child safety concerns
 - **Immediate Action**: All reports are reviewed within 24 hours
 
