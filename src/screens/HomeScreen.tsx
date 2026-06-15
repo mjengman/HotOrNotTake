@@ -75,6 +75,7 @@ export const HomeScreen: React.FC = () => {
   const toastQueueRef = useRef<EngagementToast[]>([]);
   const toastAnimatingRef = useRef(false);
   const changeVoteTakeIdsRef = useRef<Set<string>>(new Set());
+  const changeVoteDeletePromisesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
     category: selectedCategory
@@ -336,6 +337,14 @@ export const HomeScreen: React.FC = () => {
       // Find the take that was voted on
       const votedTake = takes.find(take => take.id === takeId);
       const isVoteChange = changeVoteTakeIdsRef.current.has(takeId);
+      const pendingVoteDelete = changeVoteDeletePromisesRef.current.get(takeId);
+
+      if (pendingVoteDelete) {
+        const deleteSucceeded = await pendingVoteDelete;
+        if (!deleteSucceeded) {
+          throw new Error('Previous vote is still being updated');
+        }
+      }
       
       const streakUpdate = await submitVote(takeId, vote, {
         countDailyEngagement: !isVoteChange,
@@ -451,38 +460,37 @@ export const HomeScreen: React.FC = () => {
   // Removed pull-to-refresh due to fixed layout structure
   // Can be re-implemented with a different trigger if needed
 
-  const handleChangeVote = async (take: any) => {
+  const handleChangeVote = (take: any, currentVote?: 'hot' | 'not' | null) => {
     if (!user) return;
-    
-    try {
-      // Get the user's current vote first to know what to decrement
-      const userVote = await getUserVoteForTake(take.id, user.uid);
-      if (!userVote) return;
-      
-      // Delete the existing vote
-      await deleteVote(take.id, user.uid);
-      changeVoteTakeIdsRef.current.add(take.id);
-      
-      // Refresh stats to reflect the deleted vote
-      await refreshStats();
-      
-      // Update the take's vote counts to reflect the deletion
-      const updatedTake = {
-        ...take,
-        hotVotes: userVote.vote === 'hot' ? take.hotVotes - 1 : take.hotVotes,
-        notVotes: userVote.vote === 'not' ? take.notVotes - 1 : take.notVotes,
-        totalVotes: take.totalVotes - 1,
-      };
-      
-      // Add the updated take to the front of the deck for re-voting
-      prependTake(updatedTake);
-      
-      // Note: The stats card dismissal is handled by CustomSwipeableCardDeck
-      
-    } catch (error) {
-      console.error('Error changing vote:', error);
-      // Could show a toast notification here
-    }
+    const voteToRemove = currentVote;
+    changeVoteTakeIdsRef.current.add(take.id);
+
+    const updatedTake = voteToRemove
+      ? {
+          ...take,
+          hotVotes: voteToRemove === 'hot' ? Math.max(0, take.hotVotes - 1) : take.hotVotes,
+          notVotes: voteToRemove === 'not' ? Math.max(0, take.notVotes - 1) : take.notVotes,
+          totalVotes: Math.max(0, take.totalVotes - 1),
+        }
+      : take;
+
+    // Restore the card immediately so the interaction feels snappy.
+    prependTake(updatedTake);
+
+    const deletePromise = (async () => {
+      try {
+        await deleteVote(take.id, user.uid);
+        await refreshStats();
+        return true;
+      } catch (error) {
+        console.error('Error changing vote:', error);
+        return false;
+      } finally {
+        changeVoteDeletePromisesRef.current.delete(take.id);
+      }
+    })();
+
+    changeVoteDeletePromisesRef.current.set(take.id, deletePromise);
   };
 
   const handleVoteNow = async (take: any) => {

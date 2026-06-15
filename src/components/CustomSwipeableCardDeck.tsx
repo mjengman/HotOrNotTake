@@ -44,7 +44,7 @@ interface CustomSwipeableCardDeckProps {
   externalStatsCard?: {take: Take, vote: 'hot' | 'not' | null} | null;
   onExternalStatsCardDismiss?: () => void;
   onShowRecentVotes?: () => void;
-  onChangeVote?: (take: Take) => void;
+  onChangeVote?: (take: Take, currentVote?: 'hot' | 'not' | null) => void;
   onVoteNow?: (take: Take) => void;
   communityTotalVotes?: number;
   autoAdvanceResults?: boolean;
@@ -344,10 +344,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   };
   
   // Handle change vote - dismiss stats card and trigger the change vote callback
-  const handleChangeVote = (take: Take) => {
+  const handleChangeVote = (take: Take, currentVote?: 'hot' | 'not' | null) => {
     if (onChangeVote) {
-      // Call the change vote function first
-      onChangeVote(take);
+      // Restore the card immediately; HomeScreen handles Firebase cleanup.
+      onChangeVote(take, currentVote);
       
       // Then dismiss the stats card properly
       continueToNext(true);

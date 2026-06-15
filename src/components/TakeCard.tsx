@@ -24,7 +24,7 @@ interface TakeCardProps {
   showStats?: boolean;
   userVote?: 'hot' | 'not' | null;
   isFlipped?: boolean;
-  onChangeVote?: (take: Take) => void;
+  onChangeVote?: (take: Take, currentVote?: 'hot' | 'not' | null) => void;
   onVoteNow?: (take: Take) => void;
 }
 
@@ -527,7 +527,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                     {onChangeVote && (
                       <TouchableOpacity
                         style={styles.changeVoteUtility}
-                        onPress={() => onChangeVote(take)}
+                        onPress={() => onChangeVote(take, userVote)}
                         activeOpacity={0.7}
                       >
                         <Text style={[
