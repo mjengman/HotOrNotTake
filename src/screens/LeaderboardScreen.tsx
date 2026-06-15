@@ -15,6 +15,7 @@ import { Take } from '../types';
 import {
   getHottestTakesByCategory,
   getNottestTakesByCategory,
+  getMostDivisiveTakesByCategory,
   getMostSkippedTakesByCategory,
   getDatabaseStats,
 } from '../services/takeService';
@@ -25,7 +26,7 @@ interface LeaderboardScreenProps {
   isDarkMode?: boolean;
 }
 
-type LeaderboardTab = 'hottest' | 'nottest' | 'skipped';
+type LeaderboardTab = 'hottest' | 'nottest' | 'divisive' | 'skipped';
 
 export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   onClose,
@@ -40,6 +41,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   
   const [hottestTakes, setHottestTakes] = useState<Record<string, Take[]>>({});
   const [nottestTakes, setNottestTakes] = useState<Record<string, Take[]>>({});
+  const [divisiveTakes, setDivisiveTakes] = useState<Record<string, Take[]>>({});
   const [skippedTakes, setSkippedTakes] = useState<Record<string, { take: Take; skipCount: number }[]>>({});
   const [skippedLoadFailed, setSkippedLoadFailed] = useState(false);
   
@@ -60,9 +62,10 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const loadLeaderboards = async () => {
     try {
       setLoading(true);
-      const [hottestResult, nottestResult, skippedResult] = await Promise.allSettled([
+      const [hottestResult, nottestResult, divisiveResult, skippedResult] = await Promise.allSettled([
         getHottestTakesByCategory(),
         getNottestTakesByCategory(),
+        getMostDivisiveTakesByCategory(),
         getMostSkippedTakesByCategory(),
       ]);
 
@@ -76,6 +79,12 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         setNottestTakes(nottestResult.value);
       } else {
         console.error('Error loading nottest leaderboard:', nottestResult.reason);
+      }
+
+      if (divisiveResult.status === 'fulfilled') {
+        setDivisiveTakes(divisiveResult.value);
+      } else {
+        console.error('Error loading divisive leaderboard:', divisiveResult.reason);
       }
 
       if (skippedResult.status === 'fulfilled') {
@@ -210,6 +219,21 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     renderTakeItem(item.take, rank, `${item.skipCount} skips`)
   );
 
+  const getSplitSubtitle = (take: Take) => {
+    const hotPercentage =
+      typeof take.hotPercentage === 'number'
+        ? take.hotPercentage
+        : take.totalVotes > 0
+          ? Math.round((take.hotVotes / take.totalVotes) * 100)
+          : 50;
+    const notPercentage =
+      typeof take.notPercentage === 'number'
+        ? take.notPercentage
+        : 100 - hotPercentage;
+
+    return `🔥 ${hotPercentage}% • ❄️ ${notPercentage}%`;
+  };
+
   const renderCategorySection = (categoryName: string, takes: Take[] | { take: Take; skipCount: number }[]) => (
     <View key={categoryName} style={styles.categorySection}>
       <Text style={[styles.categoryTitle, { color: theme.text }]}>
@@ -220,13 +244,15 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           if (activeTab === 'skipped') {
             const skippedItem = item as { take: Take; skipCount: number };
             return renderSkippedTakeItem(skippedItem, index + 1);
-          } else {
-            const take = item as Take;
-            const subtitle = activeTab === 'hottest' 
-              ? `${take.hotVotes} 🔥 votes`
-              : `${take.notVotes} ❄️ votes`;
-            return renderTakeItem(take, index + 1, subtitle);
           }
+
+          const take = item as Take;
+          const subtitle = activeTab === 'hottest'
+            ? `${take.hotVotes} 🔥 votes`
+            : activeTab === 'nottest'
+              ? `${take.notVotes} ❄️ votes`
+              : getSplitSubtitle(take);
+          return renderTakeItem(take, index + 1, subtitle);
         })}
       </View>
     </View>
@@ -238,6 +264,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         return hottestTakes;
       case 'nottest':
         return nottestTakes;
+      case 'divisive':
+        return divisiveTakes;
       case 'skipped':
         return skippedTakes;
       default:
@@ -260,6 +288,13 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       };
     }
 
+    if (activeTab === 'divisive') {
+      return {
+        title: 'No divisive takes yet',
+        description: "The room's closest calls will collect here as more people vote.",
+      };
+    }
+
     return {
       title: skippedLoadFailed ? 'Skipped rankings are resting' : 'No skipped takes ranked yet',
       description: skippedLoadFailed
@@ -271,6 +306,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const tabs: { key: LeaderboardTab; label: string; icon: string }[] = [
     { key: 'hottest', label: 'Hottest', icon: '🔥' },
     { key: 'nottest', label: 'Nottest', icon: '❄️' },
+    { key: 'divisive', label: 'Most Divisive', icon: '⚔️' },
     { key: 'skipped', label: 'Most Skipped', icon: '⏭️' },
   ];
 

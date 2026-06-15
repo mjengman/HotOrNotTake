@@ -15,8 +15,7 @@ import {
 } from '../services/voteService';
 import { 
   incrementUserSubmissionCount,
-  incrementUserVoteCount,
-  updateUserVotingStreak,
+  updateUserEngagementAfterVote,
 } from '../services/userService';
 import { useAuth } from './useAuth';
 import { StreakUpdateResult } from '../types/User';
@@ -25,7 +24,11 @@ interface UseFirebaseTakesResult {
   takes: Take[];
   loading: boolean;
   error: string | null;
-  submitVote: (takeId: string, vote: 'hot' | 'not') => Promise<StreakUpdateResult | null>;
+  submitVote: (
+    takeId: string,
+    vote: 'hot' | 'not',
+    options?: { countDailyEngagement?: boolean }
+  ) => Promise<StreakUpdateResult | null>;
   skipTake: (takeId: string) => Promise<void>;
   submitNewTake: (takeData: TakeSubmission) => Promise<void>;
   getUserVoteForTake: (takeId: string) => Promise<'hot' | 'not' | null>;
@@ -499,7 +502,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   // Submit a vote
   const handleSubmitVote = useCallback(async (
     takeId: string,
-    vote: 'hot' | 'not'
+    vote: 'hot' | 'not',
+    options: { countDailyEngagement?: boolean } = {}
   ): Promise<StreakUpdateResult | null> => {
     if (!userId) {
       throw new Error('User must be signed in to vote');
@@ -540,15 +544,16 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Submit the vote to Firebase
       await submitVote(takeId, userId, vote);
       await addLocalVotedId(userId, takeId);
-      
-      // Update user's vote count
-      await incrementUserVoteCount(userId);
 
       let streakUpdate: StreakUpdateResult | null = null;
       try {
-        streakUpdate = await updateUserVotingStreak(userId);
+        const votedTake = feed.find(take => take.id === takeId);
+        streakUpdate = await updateUserEngagementAfterVote(userId, {
+          category: votedTake?.category,
+          countDailyEngagement: options.countDailyEngagement !== false,
+        });
       } catch (streakError) {
-        console.warn('Voting streak update failed:', streakError);
+        console.warn('Vote engagement update failed:', streakError);
       }
       
       // Auto-load more if getting low
@@ -568,7 +573,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Always clear in-flight flag
       inFlightVotesRef.current.delete(takeId);
     }
-  }, [userId, category, feed.length, hasMore, loadMore, interactedTakeIds]);
+  }, [userId, category, feed, hasMore, loadMore, interactedTakeIds]);
 
   // Skip a take
   const handleSkipTake = useCallback(async (takeId: string): Promise<void> => {

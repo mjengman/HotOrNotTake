@@ -9,6 +9,8 @@ export interface Take {
   hotVotes: number;
   notVotes: number;
   totalVotes: number;
+  hotPercentage?: number;
+  notPercentage?: number;
   createdAt: Date;
   userId: string;
   isApproved: boolean; // Keep for backward compatibility
@@ -38,6 +40,8 @@ export interface TakeFirestore {
   hotVotes: number;
   notVotes: number;
   totalVotes: number;
+  hotPercentage?: number;
+  notPercentage?: number;
   createdAt: Date;
   userId: string;
   isApproved: boolean; // Keep for backward compatibility

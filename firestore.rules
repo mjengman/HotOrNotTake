@@ -48,7 +48,7 @@ service cloud.firestore {
       allow update: if isAuthenticated() &&
                    // Only allow updating vote counts
                    (request.resource.data.diff(resource.data).affectedKeys()
-                    .hasOnly(['hotVotes', 'notVotes', 'totalVotes', 'reportCount']));
+                    .hasOnly(['hotVotes', 'notVotes', 'totalVotes', 'hotPercentage', 'notPercentage', 'reportCount']));
       
       // Users can delete their own takes
       allow delete: if isAuthenticated() && isOwner(resource.data.userId);

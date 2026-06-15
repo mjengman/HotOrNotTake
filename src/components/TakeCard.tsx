@@ -124,7 +124,15 @@ export const TakeCard: React.FC<TakeCardProps> = ({
     totalVotes,
     seed: take.id,
   });
-  const shareVerdict = resultReaction.subtext
+  const userAgreementPercentage =
+    userVote === 'hot' ? hotPercentage : userVote === 'not' ? notPercentage : null;
+  const isContrarianShareMoment =
+    userAgreementPercentage !== null &&
+    userAgreementPercentage <= 30 &&
+    (resultReaction.tone === 'contrarian' || resultReaction.tone === 'rare-contrarian');
+  const shareVerdict = isContrarianShareMoment
+    ? `Only ${userAgreementPercentage}% agreed with me on this one 🧭`
+    : resultReaction.subtext
     ? `${resultReaction.headline}\n${resultReaction.subtext}`
     : resultReaction.headline;
   const reactionColor = getReactionToneColor(resultReaction.tone, theme);
@@ -588,7 +596,15 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.shareActionButton, { backgroundColor: reactionColor + '24' }]}
+                  style={[
+                    styles.actionButton,
+                    styles.shareActionButton,
+                    isContrarianShareMoment && styles.contrarianShareActionButton,
+                    {
+                      backgroundColor: reactionColor + (isContrarianShareMoment ? '32' : '24'),
+                      borderColor: isContrarianShareMoment ? reactionColor + '66' : 'transparent',
+                    },
+                  ]}
                   onPress={handleShare}
                   activeOpacity={0.7}
                 >
@@ -599,7 +615,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                     adjustsFontSizeToFit
                     minimumFontScale={0.82}
                   >
-                    Share result
+                    {isContrarianShareMoment ? 'Share this result' : 'Share result'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -840,6 +856,10 @@ const styles = StyleSheet.create({
   },
   shareActionButton: {
     paddingHorizontal: 16,
+  },
+  contrarianShareActionButton: {
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 18,
   },
   changeVoteUtility: {
     minHeight: motion.touchTarget.minimum,

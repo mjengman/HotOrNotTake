@@ -38,6 +38,19 @@ import RNShare from 'react-native-share';
 
 const THEME_PREFERENCE_KEY = 'themePreference';
 const RESULTS_AUTOPLAY_PREFERENCE_KEY = 'resultsAutoplayPreference';
+type EngagementToast = { title: string; subtitle: string };
+
+const formatCompactCount = (count: number) => {
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+  }
+
+  if (count >= 10000) {
+    return `${(count / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  }
+
+  return count.toLocaleString();
+};
 
 export const HomeScreen: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -56,9 +69,12 @@ export const HomeScreen: React.FC = () => {
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
   const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
   const [communityTotalVotes, setCommunityTotalVotes] = useState<number>(0);
-  const [streakToast, setStreakToast] = useState<{ title: string; subtitle: string } | null>(null);
+  const [streakToast, setStreakToast] = useState<EngagementToast | null>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const streakToastAnim = useRef(new Animated.Value(0)).current;
+  const toastQueueRef = useRef<EngagementToast[]>([]);
+  const toastAnimatingRef = useRef(false);
+  const changeVoteTakeIdsRef = useRef<Set<string>>(new Set());
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
     category: selectedCategory
@@ -97,6 +113,15 @@ export const HomeScreen: React.FC = () => {
     "🚀 More swipes = fewer ads!",
     "☰ Tap the menu button for more options",
   ], [streakInstructionText]);
+
+  const statsBarText = useMemo(() => {
+    const dailyChallenge = stats.dailyChallenge;
+    const challengeText = dailyChallenge.completed
+      ? '🎯 Done for today ✓'
+      : `🎯 ${dailyChallenge.progress}/${dailyChallenge.goal}`;
+
+    return `🔥 ${stats.votingStreak}d | ${challengeText} | 👥 ${formatCompactCount(communityTotalVotes)}`;
+  }, [communityTotalVotes, stats.dailyChallenge, stats.votingStreak]);
 
   useEffect(() => {
     const loadThemePreference = async () => {
@@ -247,21 +272,18 @@ export const HomeScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [instructionTexts.length, fadeAnim]);
 
-  const showStreakToast = React.useCallback((streakUpdate: StreakUpdateResult) => {
-    const isMilestone = Boolean(streakUpdate.milestoneReached);
-    const isFirstDay = streakUpdate.currentStreak === 1;
+  const processToastQueue = React.useCallback(() => {
+    if (toastAnimatingRef.current) {
+      return;
+    }
 
-    setStreakToast({
-      title: isMilestone
-        ? `🔥 ${streakUpdate.currentStreak}-day streak!`
-        : isFirstDay
-          ? '🔥 Streak started'
-          : `🔥 ${streakUpdate.currentStreak}-day streak`,
-      subtitle: isMilestone
-        ? 'Milestone hit. Keep it rolling tomorrow.'
-        : 'Come back tomorrow to keep it alive.',
-    });
+    const nextToast = toastQueueRef.current.shift();
+    if (!nextToast) {
+      return;
+    }
 
+    toastAnimatingRef.current = true;
+    setStreakToast(nextToast);
     streakToastAnim.stopAnimation();
     streakToastAnim.setValue(0);
     Animated.sequence([
@@ -280,16 +302,45 @@ export const HomeScreen: React.FC = () => {
     ]).start(({ finished }) => {
       if (finished) {
         setStreakToast(null);
+        setTimeout(() => {
+          toastAnimatingRef.current = false;
+          processToastQueue();
+        }, 180);
       }
     });
   }, [streakToastAnim]);
+
+  const enqueueToast = React.useCallback((toast: EngagementToast) => {
+    toastQueueRef.current.push(toast);
+    processToastQueue();
+  }, [processToastQueue]);
+
+  const showStreakToast = React.useCallback((streakUpdate: StreakUpdateResult) => {
+    const isMilestone = Boolean(streakUpdate.milestoneReached);
+    const isFirstDay = streakUpdate.currentStreak === 1;
+
+    enqueueToast({
+      title: isMilestone
+        ? `🔥 ${streakUpdate.currentStreak}-day streak!`
+        : isFirstDay
+          ? '🔥 Streak started'
+          : `🔥 ${streakUpdate.currentStreak}-day streak`,
+      subtitle: isMilestone
+        ? 'Milestone hit. Keep it rolling tomorrow.'
+        : 'Come back tomorrow to keep it alive.',
+    });
+  }, [enqueueToast]);
 
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
       // Find the take that was voted on
       const votedTake = takes.find(take => take.id === takeId);
+      const isVoteChange = changeVoteTakeIdsRef.current.has(takeId);
       
-      const streakUpdate = await submitVote(takeId, vote);
+      const streakUpdate = await submitVote(takeId, vote, {
+        countDailyEngagement: !isVoteChange,
+      });
+      changeVoteTakeIdsRef.current.delete(takeId);
       // Track completed card for ad service (called after vote is cast)
       onCardComplete();
       // Update vote counter immediately
@@ -297,6 +348,13 @@ export const HomeScreen: React.FC = () => {
       if (streakUpdate?.didUpdateToday) {
         showStreakToast(streakUpdate);
       }
+      if (streakUpdate?.challengeCompleted) {
+        enqueueToast({
+          title: '🎯 Challenge complete!',
+          subtitle: 'Come back tomorrow.',
+        });
+      }
+      streakUpdate?.achievementToasts?.forEach(enqueueToast);
       // Also refresh community stats
       await refreshCommunityStats();
       
@@ -314,6 +372,7 @@ export const HomeScreen: React.FC = () => {
       }
     } catch (error) {
       console.error('Error submitting vote:', error);
+      changeVoteTakeIdsRef.current.delete(takeId);
       // Could show a toast notification here
     }
   };
@@ -402,6 +461,7 @@ export const HomeScreen: React.FC = () => {
       
       // Delete the existing vote
       await deleteVote(take.id, user.uid);
+      changeVoteTakeIdsRef.current.add(take.id);
       
       // Refresh stats to reflect the deleted vote
       await refreshStats();
@@ -602,7 +662,7 @@ export const HomeScreen: React.FC = () => {
               adjustsFontSizeToFit
               minimumFontScale={0.8}
             >
-              🔥 {stats.votingStreak}d | Your votes: {stats.totalVotes} | Community: {communityTotalVotes.toLocaleString()}
+              {statsBarText}
             </Text>
           </View>
         </View>

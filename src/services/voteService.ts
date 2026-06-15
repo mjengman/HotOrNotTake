@@ -12,12 +12,10 @@ import {
   DocumentData,
   Timestamp,
   writeBatch,
-  updateDoc,
-  increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { TakeVote, TakeVoteFirestore } from '../types/Take';
-import { updateTakeVotes } from './takeService';
+import { decrementTakeVotes, updateTakeVotes } from './takeService';
 
 // Collection references
 const VOTES_COLLECTION = 'votes';
@@ -215,16 +213,7 @@ export const deleteVote = async (
     await batch.commit();
 
     // Update the take vote counts (decrement the vote count)
-    const takeRef = doc(db, 'takes', takeId);
-    const updateData = {
-      totalVotes: increment(-1),
-      ...(vote === 'hot' 
-        ? { hotVotes: increment(-1) } 
-        : { notVotes: increment(-1) }
-      ),
-    };
-
-    await updateDoc(takeRef, updateData);
+    await decrementTakeVotes(takeId, vote);
 
     // Also decrement the user's vote count
     const { decrementUserVoteCount } = await import('./userService');

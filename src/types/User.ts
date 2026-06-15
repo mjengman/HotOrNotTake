@@ -1,3 +1,16 @@
+export interface DailyChallenge {
+  date: string;
+  goal: number;
+  progress: number;
+  completed: boolean;
+  completedAt?: Date;
+}
+
+export interface AchievementToast {
+  title: string;
+  subtitle: string;
+}
+
 // Firestore user document interface
 export interface User {
   id: string;
@@ -11,6 +24,9 @@ export interface User {
   totalStreakDays: number;
   lastStreakDate?: string;
   lastActiveAt: Date;
+  dailyChallenge?: DailyChallenge;
+  achievements?: string[];
+  categoriesVoted?: string[];
 }
 
 export interface UserStats {
@@ -23,6 +39,7 @@ export interface UserStats {
   totalStreakDays: number;
   lastStreakDate?: string;
   streakUpdatedToday: boolean;
+  dailyChallenge: DailyChallenge;
   favoriteCategories: string[];
   joinedAt: Date;
 }
@@ -34,6 +51,9 @@ export interface StreakUpdateResult {
   lastStreakDate: string;
   didUpdateToday: boolean;
   milestoneReached?: number;
+  dailyChallenge?: DailyChallenge;
+  challengeCompleted?: boolean;
+  achievementToasts?: AchievementToast[];
 }
 
 // Firestore data transfer object for user
@@ -48,4 +68,7 @@ export interface UserFirestore {
   totalStreakDays: number;
   lastStreakDate?: string;
   lastActiveAt: Date;
+  dailyChallenge?: DailyChallenge;
+  achievements?: string[];
+  categoriesVoted?: string[];
 }

@@ -10,6 +10,21 @@ interface UseUserStatsResult {
   refreshStats: () => Promise<void>;
 }
 
+const getTodayKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDefaultDailyChallenge = () => ({
+  date: getTodayKey(),
+  goal: 20,
+  progress: 0,
+  completed: false,
+});
+
 export const useUserStats = (): UseUserStatsResult => {
   const { user } = useAuth();
   const [stats, setStats] = useState<UserStats>({
@@ -21,6 +36,7 @@ export const useUserStats = (): UseUserStatsResult => {
     longestVotingStreak: 0,
     totalStreakDays: 0,
     streakUpdatedToday: false,
+    dailyChallenge: getDefaultDailyChallenge(),
     favoriteCategories: [],
     joinedAt: new Date(),
   });
@@ -39,6 +55,7 @@ export const useUserStats = (): UseUserStatsResult => {
         longestVotingStreak: 0,
         totalStreakDays: 0,
         streakUpdatedToday: false,
+        dailyChallenge: getDefaultDailyChallenge(),
         favoriteCategories: [],
         joinedAt: new Date(),
       });

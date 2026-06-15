@@ -14,6 +14,7 @@ import {
   Timestamp,
   increment,
   startAfter,
+  runTransaction,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Take, TakeSubmission, TakeStatus } from '../types/Take';
@@ -118,6 +119,8 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   hotVotes: data.hotVotes || 0,
   notVotes: data.notVotes || 0,
   totalVotes: data.totalVotes || 0,
+  hotPercentage: typeof data.hotPercentage === 'number' ? data.hotPercentage : undefined,
+  notPercentage: typeof data.notPercentage === 'number' ? data.notPercentage : undefined,
   createdAt: convertTimestampToDate(data.createdAt),
   userId: data.userId,
   isApproved: data.isApproved || false, // Backward compatibility
@@ -135,6 +138,23 @@ const isPermissionDeniedError = (error: unknown) =>
   error !== null &&
   'code' in error &&
   (error as { code?: unknown }).code === 'permission-denied';
+
+const calculateVotePercentages = (hotVotes: number, notVotes: number) => {
+  const totalVotes = hotVotes + notVotes;
+
+  if (totalVotes <= 0) {
+    return {
+      hotPercentage: 50,
+      notPercentage: 50,
+    };
+  }
+
+  const hotPercentage = Math.round((hotVotes / totalVotes) * 100);
+  return {
+    hotPercentage,
+    notPercentage: 100 - hotPercentage,
+  };
+};
 
 // Get database statistics (only approved takes due to security rules)
 export const getDatabaseStats = async (): Promise<{
@@ -304,18 +324,60 @@ export const updateTakeVotes = async (
 ): Promise<void> => {
   try {
     const takeRef = doc(db, TAKES_COLLECTION, takeId);
-    
-    const updateData = {
-      totalVotes: increment(1),
-      ...(voteType === 'hot' 
-        ? { hotVotes: increment(1) } 
-        : { notVotes: increment(1) }
-      ),
-    };
 
-    await updateDoc(takeRef, updateData);
+    await runTransaction(db, async (transaction) => {
+      const takeSnap = await transaction.get(takeRef);
+      if (!takeSnap.exists()) {
+        throw new Error('Take not found');
+      }
+
+      const data = takeSnap.data();
+      const hotVotes = (data.hotVotes || 0) + (voteType === 'hot' ? 1 : 0);
+      const notVotes = (data.notVotes || 0) + (voteType === 'not' ? 1 : 0);
+      const totalVotes = hotVotes + notVotes;
+      const percentages = calculateVotePercentages(hotVotes, notVotes);
+
+      transaction.update(takeRef, {
+        hotVotes,
+        notVotes,
+        totalVotes,
+        ...percentages,
+      });
+    });
   } catch (error) {
     console.error('Error updating take votes:', error);
+    throw new Error('Failed to update vote');
+  }
+};
+
+export const decrementTakeVotes = async (
+  takeId: string,
+  voteType: 'hot' | 'not'
+): Promise<void> => {
+  try {
+    const takeRef = doc(db, TAKES_COLLECTION, takeId);
+
+    await runTransaction(db, async (transaction) => {
+      const takeSnap = await transaction.get(takeRef);
+      if (!takeSnap.exists()) {
+        return;
+      }
+
+      const data = takeSnap.data();
+      const hotVotes = Math.max(0, (data.hotVotes || 0) - (voteType === 'hot' ? 1 : 0));
+      const notVotes = Math.max(0, (data.notVotes || 0) - (voteType === 'not' ? 1 : 0));
+      const totalVotes = hotVotes + notVotes;
+      const percentages = calculateVotePercentages(hotVotes, notVotes);
+
+      transaction.update(takeRef, {
+        hotVotes,
+        notVotes,
+        totalVotes,
+        ...percentages,
+      });
+    });
+  } catch (error) {
+    console.error('Error decrementing take votes:', error);
     throw new Error('Failed to update vote');
   }
 };
@@ -533,6 +595,77 @@ export const getNottestTakesByCategory = async (): Promise<Record<string, Take[]
   } catch (error) {
     console.error('Error fetching nottest takes:', error);
     throw new Error('Failed to load nottest takes');
+  }
+};
+
+export const getMostDivisiveTakesByCategory = async (): Promise<Record<string, Take[]>> => {
+  const isDivisiveTake = (take: Take) => {
+    if (take.totalVotes <= 0) {
+      return false;
+    }
+
+    const hotPercentage =
+      typeof take.hotPercentage === 'number'
+        ? take.hotPercentage
+        : Math.round((take.hotVotes / take.totalVotes) * 100);
+
+    return hotPercentage >= 40 && hotPercentage <= 60;
+  };
+
+  try {
+    const byId = new Map<string, Take>();
+
+    try {
+      const divisiveQuery = query(
+        collection(db, TAKES_COLLECTION),
+        where('isApproved', '==', true),
+        where('hotPercentage', '>=', 40),
+        where('hotPercentage', '<=', 60),
+        orderBy('hotPercentage', 'asc'),
+        orderBy('totalVotes', 'desc'),
+        limit(50)
+      );
+
+      const snapshot = await getDocs(divisiveQuery);
+      snapshot.docs
+        .map(doc => convertFirestoreTake(doc.id, doc.data()))
+        .filter(isDivisiveTake)
+        .forEach(take => byId.set(take.id, take));
+    } catch (error) {
+      console.warn('Stored divisive leaderboard query unavailable, using computed fallback:', error);
+    }
+
+    if (byId.size < 20) {
+      const fallbackQuery = query(
+        collection(db, TAKES_COLLECTION),
+        where('isApproved', '==', true),
+        orderBy('totalVotes', 'desc'),
+        limit(150)
+      );
+
+      const fallbackSnapshot = await getDocs(fallbackQuery);
+      fallbackSnapshot.docs
+        .map(doc => convertFirestoreTake(doc.id, doc.data()))
+        .filter(isDivisiveTake)
+        .forEach(take => byId.set(take.id, take));
+    }
+
+    const divisiveTakes = Array.from(byId.values())
+      .sort((a, b) => b.totalVotes - a.totalVotes)
+      .slice(0, 20);
+
+    const byCategory: Record<string, Take[]> = {};
+    divisiveTakes.forEach(take => {
+      if (!byCategory[take.category]) {
+        byCategory[take.category] = [];
+      }
+      byCategory[take.category].push(take);
+    });
+
+    return byCategory;
+  } catch (error) {
+    console.error('Error fetching divisive takes:', error);
+    return {};
   }
 };
 
