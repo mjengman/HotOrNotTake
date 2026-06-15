@@ -569,12 +569,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     onEnd: (event) => {
       if (isAnimating.value || !hasCurrentSV.value) return;
       
-      // If card is flipped (showing stats), any swipe continues to next
+      // If card is flipped (showing stats), a deliberate swipe continues to next.
+      // Plain taps should remain available to the stats card controls.
       if (flippedSV.value) {
-        // Check if they actually swiped (not just a tap)
         const didSwipe = Math.abs(event.translationX) > 20 || Math.abs(event.translationY) > 20;
-        // Continue immediately with no animation if they swiped
-        runOnJS(continueToNext)(didSwipe);
+        if (didSwipe) {
+          runOnJS(continueToNext)(true);
+        } else {
+          translateX.value = withSpring(0);
+          translateY.value = withSpring(0);
+          scale.value = withSpring(1);
+        }
         return;
       }
       
@@ -927,7 +932,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       </Animated.View>
       
       {/* Current card (foreground) - Front and Back views */}
-      <PanGestureHandler onGestureEvent={gestureHandler}>
+      <PanGestureHandler
+        onGestureEvent={gestureHandler}
+        minDist={8}
+      >
         <Animated.View 
           key="current-slot" 
           style={[dynamicStyles.cardContainer, card3DStyle]}
