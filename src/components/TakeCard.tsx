@@ -9,11 +9,12 @@ import {
 import ViewShot from 'react-native-view-shot';
 import RNShare from 'react-native-share';
 import { Take } from '../types';
-import { colors, dimensions, motion } from '../constants';
+import { colors, dimensions, motion, type Colors } from '../constants';
 import { useResponsive } from '../hooks/useResponsive';
 import { useAuth } from '../hooks/useAuth';
 import { addToFavorites, removeFromFavorites, isInFavorites } from '../services/favoritesService';
 import { VisualShareCard } from './VisualShareCard';
+import { getResultReaction, type ResultReactionTone } from '../utils/resultReaction';
 
 interface TakeCardProps {
   take: Take;
@@ -26,6 +27,24 @@ interface TakeCardProps {
   onChangeVote?: (take: Take) => void;
   onVoteNow?: (take: Take) => void;
 }
+
+const getReactionToneColor = (tone: ResultReactionTone, theme: Colors) => {
+  switch (tone) {
+    case 'hot':
+      return theme.hot;
+    case 'not':
+      return theme.not;
+    case 'split':
+      return theme.accent;
+    case 'contrarian':
+      return theme.secondary;
+    case 'consensus':
+      return theme.success;
+    case 'low-signal':
+    default:
+      return theme.textSecondary;
+  }
+};
 
 export const TakeCard: React.FC<TakeCardProps> = ({
   take,
@@ -85,7 +104,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const adaptiveSpacing = getAdaptiveSpacing();
   const resultTextSize = Math.min(adaptiveTextSize * 0.84, responsive.fontSize.medium + 1);
   const resultTextLineHeight = resultTextSize * 1.28;
-  const resultTextLines = responsive.card.height < 440 ? 3 : 4;
+  const resultTextLines = responsive.card.height < 440 ? 3 : responsive.card.height < 520 ? 4 : 5;
   const cardSurface = isDarkMode ? '#2B2B2B' : '#FEFCF8';
   const cardBorder = isDarkMode ? 'rgba(255, 255, 255, 0.07)' : '#EFE7DA';
   const cardHighlight = isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.82)';
@@ -93,6 +112,28 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   // Calculate percentages for the reveal
   // Some takes may not have totalVotes, so calculate from individual votes
   const totalVotes = take.totalVotes || (take.hotVotes + take.notVotes) || 0;
+  const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
+  const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
+  const resultReaction = getResultReaction({
+    userVote,
+    hotPercentage,
+    notPercentage,
+    totalVotes,
+  });
+  const reactionColor = getReactionToneColor(resultReaction.tone, theme);
+  const splitIsClose = resultReaction.tone === 'split';
+  const notIsWinningSide = notPercentage >= hotPercentage;
+  const hotIsWinningSide = hotPercentage >= notPercentage;
+  const notPercentageEmphasis = splitIsClose || notIsWinningSide;
+  const hotPercentageEmphasis = splitIsClose || hotIsWinningSide;
+  const winningPercentageBoost = splitIsClose ? 4 : 8;
+  const quietPercentageBoost = 1;
+  const notPercentageSize = responsive.fontSize.xlarge + (
+    notPercentageEmphasis ? winningPercentageBoost : quietPercentageBoost
+  );
+  const hotPercentageSize = responsive.fontSize.xlarge + (
+    hotPercentageEmphasis ? winningPercentageBoost : quietPercentageBoost
+  );
 
   // Check if this take is favorited
   useEffect(() => {
@@ -138,11 +179,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         }
       }
 
-      // Fallback to enhanced text sharing
-      const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
-      const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
-
-      const shareMessage = `🔥 CHECK OUT THIS HOT TAKE! 🔥\n\n"${take.text}"\n\n📊 COMMUNITY VERDICT:\n🔥 ${hotPercentage}% HOT\n❄️ ${notPercentage}% NOT\n\n👥 ${totalVotes.toLocaleString()} total votes\n\n${userVote ? `I voted ${userVote.toUpperCase()}! ` : ''}What's your take?\n\nJoin the debate: ${SMART_LINK}`;
+      const shareMessage = `${resultReaction.headline}\n${resultReaction.subtext}\n\n"${take.text}"\n\nCommunity split:\n🔥 ${hotPercentage}% HOT\n❄️ ${notPercentage}% NOT\n\n👥 ${totalVotes.toLocaleString()} total votes\n\n${userVote ? `I voted ${userVote.toUpperCase()}. ` : ''}What's your take?\n\nJoin the debate: ${SMART_LINK}`;
 
       await RNShare.open({
         title: 'Hot or Not Takes',
@@ -180,12 +217,6 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       setFavoriteLoading(false);
     }
   };
-
-  // Calculate percentages for the reveal (already calculated totalVotes above for debug)
-  const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
-  const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
-
-
 
   return (
     <View style={[
@@ -334,72 +365,55 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               paddingVertical: responsive.spacing.sm,
             }
           ]}>
-            <View style={[styles.voteSection, { justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={styles.reactionSection}>
+              <Text style={[
+                styles.reactionHeadline,
+                {
+                  color: reactionColor,
+                  fontSize: responsive.fontSize.large,
+                  lineHeight: responsive.fontSize.large * 1.16,
+                },
+              ]}>
+                {resultReaction.headline}
+              </Text>
+              <Text style={[
+                styles.reactionSubtext,
+                {
+                  color: theme.text,
+                  fontSize: responsive.fontSize.small,
+                  lineHeight: responsive.fontSize.small * 1.28,
+                },
+              ]}>
+                {resultReaction.subtext}
+              </Text>
+
               {userVote ? (
-                <>
+                <Text style={[
+                  styles.userVoteMeta,
+                  {
+                    color: theme.textSecondary,
+                    fontSize: responsive.fontSize.small,
+                  },
+                ]}>
+                  Your vote: {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
+                </Text>
+              ) : onVoteNow ? (
+                <TouchableOpacity
+                  style={[styles.voteNowButton, { backgroundColor: reactionColor + '18' }]}
+                  onPress={() => onVoteNow(take)}
+                  activeOpacity={0.7}
+                >
                   <Text style={[
-                    styles.yourVote,
+                    styles.voteNowText,
                     {
-                      color: theme.text,
-                      fontSize: responsive.fontSize.medium,
-                      textAlign: 'center'
-                    }
+                      color: reactionColor,
+                      fontSize: responsive.fontSize.small,
+                    },
                   ]}>
-                    You voted {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
+                    Vote now
                   </Text>
-                  {onChangeVote && (
-                    <TouchableOpacity
-                      style={styles.changeVoteButton}
-                      onPress={() => onChangeVote(take)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[
-                        styles.changeVoteText,
-                        {
-                          color: theme.primary,
-                          fontSize: responsive.fontSize.small,
-                          textAlign: 'center'
-                        }
-                      ]}>
-                        Change your vote
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Text style={[
-                    styles.yourVote,
-                    {
-                      color: theme.textSecondary,
-                      fontSize: responsive.fontSize.medium,
-                      textAlign: 'center',
-                      fontStyle: 'italic'
-                    }
-                  ]}>
-                    You haven't voted yet
-                  </Text>
-                  {onVoteNow && (
-                    <TouchableOpacity
-                      style={[styles.changeVoteButton, { backgroundColor: theme.primary + '15' }]}
-                      onPress={() => onVoteNow(take)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[
-                        styles.changeVoteText,
-                        {
-                          color: theme.primary,
-                          fontSize: responsive.fontSize.small,
-                          textAlign: 'center',
-                          fontWeight: 'bold'
-                        }
-                      ]}>
-                        🗳️ Vote now!
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              )}
+                </TouchableOpacity>
+              ) : null}
             </View>
 
             <View style={styles.resultStatsGroup}>
@@ -410,7 +424,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                       styles.bigPercentage,
                       {
                         color: theme.not,
-                        fontSize: responsive.fontSize.xlarge + 6,
+                        fontSize: notPercentageSize,
+                        opacity: notPercentageEmphasis ? 1 : 0.68,
                         textAlign: 'center'
                       }
                     ]}>
@@ -423,6 +438,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                       {
                         color: theme.textSecondary,
                         fontSize: responsive.fontSize.small,
+                        opacity: notPercentageEmphasis ? 1 : 0.72,
                         textAlign: 'center'
                       }
                     ]}>
@@ -443,7 +459,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                       styles.bigPercentage,
                       {
                         color: theme.hot,
-                        fontSize: responsive.fontSize.xlarge + 6,
+                        fontSize: hotPercentageSize,
+                        opacity: hotPercentageEmphasis ? 1 : 0.68,
                         textAlign: 'center'
                       }
                     ]}>
@@ -456,6 +473,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                       {
                         color: theme.textSecondary,
                         fontSize: responsive.fontSize.small,
+                        opacity: hotPercentageEmphasis ? 1 : 0.72,
                         textAlign: 'center'
                       }
                     ]}>
@@ -497,16 +515,40 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: theme.primary + '20' }]}
+                  style={[styles.actionButton, styles.shareActionButton, { backgroundColor: reactionColor + '24' }]}
                   onPress={handleShare}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.actionIcon, { color: theme.primary }]}>↗️</Text>
-                  <Text style={[styles.actionText, { color: theme.primary, fontSize: responsive.fontSize.small }]}>
-                    Share
+                  <Text style={[styles.actionIcon, { color: reactionColor }]}>↗️</Text>
+                  <Text
+                    style={[styles.actionText, { color: reactionColor, fontSize: responsive.fontSize.small }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.82}
+                  >
+                    Share result
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              {userVote && onChangeVote && (
+                <TouchableOpacity
+                  style={styles.changeVoteUtility}
+                  onPress={() => onChangeVote(take)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[
+                    styles.changeVoteText,
+                    {
+                      color: theme.textSecondary,
+                      fontSize: responsive.fontSize.small,
+                      textAlign: 'center'
+                    }
+                  ]}>
+                    Change vote
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
@@ -629,24 +671,41 @@ const styles = StyleSheet.create({
     paddingVertical: dimensions.spacing.md,
     justifyContent: 'space-between',
   },
-  voteSection: {
+  reactionSection: {
     alignItems: 'center',
     width: '100%',
+    paddingHorizontal: dimensions.spacing.xs,
   },
-  yourVote: {
-    // fontSize now set dynamically with responsive sizing
-    fontWeight: '600',
+  reactionHeadline: {
+    fontWeight: '800',
+    textAlign: 'center',
     marginBottom: dimensions.spacing.xs,
   },
-  changeVoteButton: {
-    marginTop: dimensions.spacing.xs,
+  reactionSubtext: {
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  userVoteMeta: {
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  voteNowButton: {
     minHeight: motion.touchTarget.minimum,
     justifyContent: 'center',
+    borderRadius: 18,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.xs,
+    marginTop: dimensions.spacing.xs,
+  },
+  voteNowText: {
+    fontWeight: '800',
+    textAlign: 'center',
   },
   changeVoteText: {
     // fontSize now set dynamically with responsive sizing
     textDecorationLine: 'underline',
-    fontWeight: '500',
+    fontWeight: '700',
   },
   percentageContainer: {
     flexDirection: 'row',
@@ -691,6 +750,7 @@ const styles = StyleSheet.create({
   },
   actionButtonsRow: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: 12,
   },
   resultActionsGroup: {
@@ -705,6 +765,15 @@ const styles = StyleSheet.create({
     minHeight: motion.touchTarget.minimum,
     borderRadius: 20,
     gap: 4,
+  },
+  shareActionButton: {
+    paddingHorizontal: 16,
+  },
+  changeVoteUtility: {
+    minHeight: motion.touchTarget.minimum,
+    justifyContent: 'center',
+    paddingHorizontal: dimensions.spacing.md,
+    marginTop: 2,
   },
   actionIcon: {
     fontSize: 14,
