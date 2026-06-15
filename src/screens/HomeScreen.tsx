@@ -36,6 +36,8 @@ import { colors, motion } from '../constants';
 import { StreakUpdateResult } from '../types';
 import RNShare from 'react-native-share';
 
+const THEME_PREFERENCE_KEY = 'themePreference';
+
 export const HomeScreen: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -93,6 +95,23 @@ export const HomeScreen: React.FC = () => {
     "🚀 More swipes = fewer ads!",
     "☰ Tap the menu button for more options",
   ], [streakInstructionText]);
+
+  useEffect(() => {
+    const loadThemePreference = async () => {
+      try {
+        const storedPreference = await AsyncStorage.getItem(THEME_PREFERENCE_KEY);
+        if (storedPreference === 'dark') {
+          setIsDarkMode(true);
+        } else if (storedPreference === 'light') {
+          setIsDarkMode(false);
+        }
+      } catch (error) {
+        console.warn('Unable to load theme preference:', error);
+      }
+    };
+
+    loadThemePreference();
+  }, []);
 
   // Check if this is the first launch
   useEffect(() => {
@@ -313,7 +332,16 @@ export const HomeScreen: React.FC = () => {
   };
 
   const toggleTheme = () => {
-    setIsDarkMode(prev => !prev);
+    setIsDarkMode(prev => {
+      const nextIsDarkMode = !prev;
+      AsyncStorage.setItem(
+        THEME_PREFERENCE_KEY,
+        nextIsDarkMode ? 'dark' : 'light'
+      ).catch(error => {
+        console.warn('Unable to save theme preference:', error);
+      });
+      return nextIsDarkMode;
+    });
   };
 
   const handleCategoryChange = (newCategory: string) => {
