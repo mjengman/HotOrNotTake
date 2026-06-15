@@ -19,7 +19,7 @@ Current maintainer notes live in [`CLAUDE.md`](./CLAUDE.md). Historical launch/b
 ### 🎯 Latest Achievements (December 2024)
 - **Rock Solid Stability**: Eliminated all crashes and animation bugs
 - **Perfect Vote Integrity**: Dual-guard system prevents duplicate submissions
-- **Recent Votes Feature**: Easy access to your voting history with stats cards
+- **Vote History Feature**: Easy access to your voting history with stats cards
 - **Enhanced UX**: Optimized swipe sensitivity and polished instructions modal
 - **Premium Typography**: Better contrast with darker text colors in light mode
 - **Bulletproof Performance**: Smooth 60fps with zero race conditions
@@ -76,7 +76,7 @@ All core features have been implemented, optimized, and polished for production 
 
 ### ✅ User Experience
 - **Dark/light theme support**
-- **Recent Votes feature** with interactive stats cards
+- **Vote History feature** with interactive stats cards
 - **Auto-dismiss stats cards** for seamless flow
 - **Haptic feedback** for premium feel
 - **Loading states and error handling**

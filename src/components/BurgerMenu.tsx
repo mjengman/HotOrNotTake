@@ -164,7 +164,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
-                >Recent Votes</Text>
+                >Vote History</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

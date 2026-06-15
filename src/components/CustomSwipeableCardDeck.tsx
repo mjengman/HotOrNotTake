@@ -46,7 +46,7 @@ interface CustomSwipeableCardDeckProps {
   onShowRecentVotes?: () => void;
   onChangeVote?: (take: Take) => void;
   onVoteNow?: (take: Take) => void;
-  totalVotes?: number;
+  communityTotalVotes?: number;
 }
 
 // Safe flip for Android - no 3D to avoid compositor crashes
@@ -71,7 +71,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   onShowRecentVotes,
   onChangeVote,
   onVoteNow,
-  totalVotes = 0,
+  communityTotalVotes = 0,
 }) => {
   const responsive = useResponsive();
   const screenWidth = responsive.screen.width;
@@ -826,14 +826,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         <View style={styles.endContainer}>
           <Text style={styles.endEmoji}>🎉</Text>
           <Text style={[styles.endTitle, { color: theme.text }]}>
-            {noCards ? 'No takes available yet!' : 'You\'ve reached the end!'}
+            You've seen everything here
           </Text>
           <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
-            {noCards 
-              ? 'Submit a new hot take to keep the fun going!'
-              : 'Submit more takes to keep the fun going!'
-            }
+            More takes are on the way. Pull down to check again, or add a fresh one yourself.
           </Text>
+
+          <View style={[styles.communityBadge, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
+            <Text style={[styles.communityBadgeText, { color: theme.textSecondary }]}>
+              Community votes: {communityTotalVotes.toLocaleString()}
+            </Text>
+          </View>
           
           {onSubmitTake && (
             <AnimatedPressable
@@ -847,7 +850,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           )}
           
           <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
-            Tap the memo icon 📝 to see all your takes
+            New debates appear automatically as the community grows.
           </Text>
           
           <Text style={[styles.pullHint, { color: theme.textSecondary, opacity: 0.5, marginTop: 20 }]}>
@@ -1048,6 +1051,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: dimensions.spacing.lg,
+  },
+  communityBadge: {
+    borderRadius: 18,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.sm,
+    marginBottom: dimensions.spacing.md,
+  },
+  communityBadgeText: {
+    fontSize: dimensions.fontSize.medium,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   endHint: {
     fontSize: dimensions.fontSize.medium,

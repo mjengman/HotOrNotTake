@@ -105,8 +105,7 @@ Known or likely reasons users may leave:
 - Personal identity should take priority over global ranking polish.
 
 ### 6. Vote History
-- Rename "My Recent Votes" to "Vote History."
-- Make previous votes revisitable instead of limiting the user to the last 10.
+- Make previous votes revisitable instead of limiting the user to a tiny recent slice.
 - Use pagination or "Load more" rather than loading every vote at once.
 - Let users revisit takes, see current community split, share later, and change votes when supported.
 - Treat history as a foundation for personal stats and taste profile.
@@ -193,8 +192,7 @@ These should be possible without app store review if implemented with existing d
 - Start with a compact card or toast, then graduate to a profile surface if users respond.
 
 ### Vote History
-- Rename "My Recent Votes" to "Vote History."
-- Replace the fixed last-10 limit with paginated history, newest first.
+- Keep Vote History paginated, newest first.
 - Show vote choice, category, current community split, and take text.
 - Let users revisit a take/results view from history.
 - Preserve "change your vote" behavior where the existing vote system supports it.
@@ -203,7 +201,7 @@ These should be possible without app store review if implemented with existing d
 ### Feed and Category Experience
 - Better empty feed state.
 - Better favorites empty state.
-- Better recent votes empty state.
+- Better vote history empty state.
 - Category stats in the category picker, such as overall HOT percentage or vote count by category.
 - Alphabetized category ordering should remain enforced.
 - Continue auditing category miscategorizations when AI generation creates odd placements.

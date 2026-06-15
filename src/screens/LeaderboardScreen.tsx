@@ -245,6 +245,29 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     }
   };
 
+  const getEmptyStateCopy = () => {
+    if (activeTab === 'hottest') {
+      return {
+        title: 'No hot takes ranked yet',
+        description: 'Once the community starts heating takes up, the strongest reactions will show here.',
+      };
+    }
+
+    if (activeTab === 'nottest') {
+      return {
+        title: 'No cold takes ranked yet',
+        description: 'The iciest community reactions will appear here after more NOT votes land.',
+      };
+    }
+
+    return {
+      title: skippedLoadFailed ? 'Skipped rankings are resting' : 'No skipped takes ranked yet',
+      description: skippedLoadFailed
+        ? 'Skip data is unavailable right now, but the rest of the leaderboards are still ready.'
+        : 'When people start passing on takes, the most-skipped debates will collect here.',
+    };
+  };
+
   const tabs: { key: LeaderboardTab; label: string; icon: string }[] = [
     { key: 'hottest', label: 'Hottest', icon: '🔥' },
     { key: 'nottest', label: 'Nottest', icon: '❄️' },
@@ -370,16 +393,10 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             {Object.keys(getCurrentData()).length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                  No data yet
+                  {getEmptyStateCopy().title}
                 </Text>
                 <Text style={[styles.emptyDescription, { color: theme.textSecondary }]}>
-                  {activeTab === 'hottest' && 'No takes have received hot votes yet.'}
-                  {activeTab === 'nottest' && 'No takes have received not votes yet.'}
-                  {activeTab === 'skipped' && (
-                    skippedLoadFailed
-                      ? 'Skipped rankings are unavailable right now.'
-                      : 'No takes have been skipped yet.'
-                  )}
+                  {getEmptyStateCopy().description}
                 </Text>
               </View>
             ) : (

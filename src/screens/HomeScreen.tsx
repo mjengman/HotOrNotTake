@@ -481,7 +481,7 @@ export const HomeScreen: React.FC = () => {
             onShowRecentVotes={handleShowLastVote}
             onChangeVote={handleChangeVote}
             onVoteNow={handleVoteNow}
-            totalVotes={stats.totalVotes}
+            communityTotalVotes={communityTotalVotes}
           />
         )}
       </View>
@@ -490,7 +490,7 @@ export const HomeScreen: React.FC = () => {
       <View style={styles.fixedFooter}>
         {/* Bottom Buttons Row - moved closer to instructions */}
         <View style={styles.bottomButtonsRow}>
-          {/* Recent Votes Button */}
+          {/* Last Vote Button */}
           <AnimatedPressable 
             style={[
               styles.bottomButton,
@@ -680,7 +680,7 @@ export const HomeScreen: React.FC = () => {
         </FullScreenOverlay>
       )}
 
-      {/* Recent Votes Modal - Conditional Rendering */}
+      {/* Vote History Modal - Conditional Rendering */}
       {showRecentVotesModal && (
         <FullScreenOverlay zIndex={1600}>
           <RecentVotesScreen

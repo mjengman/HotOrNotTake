@@ -33,7 +33,7 @@ The app is effectively single-root:
 
 - `index.ts` registers `App.tsx`
 - `App.tsx` initializes ad consent and renders `HomeScreen`
-- `HomeScreen` owns the main app state and renders full-screen overlays for submit, my takes, leaderboard, recent votes, and favorites
+- `HomeScreen` owns the main app state and renders full-screen overlays for submit, my takes, leaderboard, vote history, and favorites
 - `CustomSwipeableCardDeck` is the active card deck implementation
 - `useFirebaseTakes` owns the paginated feed, vote submission, skip submission, and re-vote flow
 

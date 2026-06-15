@@ -5,6 +5,11 @@ import {
   query,
   where,
   getDocs,
+  orderBy,
+  limit as firestoreLimit,
+  startAfter,
+  QueryDocumentSnapshot,
+  DocumentData,
   Timestamp,
   writeBatch,
   updateDoc,
@@ -16,6 +21,14 @@ import { updateTakeVotes } from './takeService';
 
 // Collection references
 const VOTES_COLLECTION = 'votes';
+
+export type VoteHistoryCursor = QueryDocumentSnapshot<DocumentData>;
+
+export interface UserVotesPage {
+  votes: TakeVote[];
+  cursor: VoteHistoryCursor | null;
+  hasMore: boolean;
+}
 
 const getLocalDateKey = (date: Date = new Date()): string => {
   const year = date.getFullYear();
@@ -141,6 +154,31 @@ export const getUserVotes = async (userId: string): Promise<TakeVote[]> => {
     console.error('Error getting user votes:', error);
     return [];
   }
+};
+
+// Get a newest-first page of votes for history screens.
+export const getUserVotesPage = async (
+  userId: string,
+  pageSize: number,
+  cursor?: VoteHistoryCursor | null
+): Promise<UserVotesPage> => {
+  const pageQuery = query(
+    collection(db, VOTES_COLLECTION),
+    where('userId', '==', userId),
+    orderBy('votedAt', 'desc'),
+    firestoreLimit(pageSize + 1),
+    ...(cursor ? [startAfter(cursor)] : [])
+  );
+
+  const snapshot = await getDocs(pageQuery);
+  const docs = snapshot.docs;
+  const pageDocs = docs.slice(0, pageSize);
+
+  return {
+    votes: pageDocs.map(doc => convertFirestoreVote(doc.id, doc.data())),
+    cursor: pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null,
+    hasMore: docs.length > pageSize,
+  };
 };
 
 // Delete a user's vote for a specific take

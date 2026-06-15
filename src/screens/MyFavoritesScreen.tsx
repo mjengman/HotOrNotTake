@@ -161,10 +161,10 @@ export const MyFavoritesScreen: React.FC<MyFavoritesScreenProps> = ({
       ) : favorites.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-            No favorites yet
+            Your saved takes will live here
           </Text>
           <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>
-            Star takes to save them here for later!
+            Tap ☆ Save on any results card to build a little shelf of takes worth revisiting.
           </Text>
         </View>
       ) : (

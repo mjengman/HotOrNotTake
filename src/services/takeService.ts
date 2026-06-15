@@ -208,6 +208,25 @@ export const getApprovedTakes = async (): Promise<Take[]> => {
   }
 };
 
+export const getTakeById = async (takeId: string): Promise<Take | null> => {
+  try {
+    const takeSnapshot = await getDoc(doc(db, TAKES_COLLECTION, takeId));
+    if (!takeSnapshot.exists()) {
+      return null;
+    }
+
+    const data = takeSnapshot.data();
+    if (data.isApproved !== true && data.status !== 'approved') {
+      return null;
+    }
+
+    return convertFirestoreTake(takeSnapshot.id, data);
+  } catch (error) {
+    console.error('Error fetching take by ID:', error);
+    return null;
+  }
+};
+
 // Listen to real-time updates for approved takes
 export const subscribeToApprovedTakes = (callback: (takes: Take[]) => void) => {
   const takesQuery = query(
