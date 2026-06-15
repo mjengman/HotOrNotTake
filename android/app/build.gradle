@@ -93,8 +93,8 @@ android {
         applicationId isDevelopmentBuild ? 'com.anonymous.HotOrNotTakes.dev' : 'com.anonymous.HotOrNotTakes'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.5"
+        versionCode 34
+        versionName "1.0.7"
         manifestPlaceholders = [
             appLabel: isDevelopmentBuild ? 'Hot or Not Takes Dev' : 'Hot or Not Takes'
         ]
