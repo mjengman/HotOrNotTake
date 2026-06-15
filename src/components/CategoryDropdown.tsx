@@ -13,19 +13,19 @@ import { AnimatedPressable } from './transitions/AnimatedPressable';
 
 const CATEGORIES = [
   { value: 'all', label: '🎲 All Categories', emoji: '🎲' },
-  { value: 'food', label: '🍕 Food', emoji: '🍕' },
-  { value: 'work', label: '💼 Work', emoji: '💼' },
-  { value: 'pets', label: '🐕 Pets', emoji: '🐕' },
-  { value: 'technology', label: '📱 Technology', emoji: '📱' },
-  { value: 'life', label: '🌟 Life', emoji: '🌟' },
   { value: 'entertainment', label: '🎬 Entertainment', emoji: '🎬' },
   { value: 'environment', label: '🌱 Environment', emoji: '🌱' },
-  { value: 'wellness', label: '💪 Wellness', emoji: '💪' },
-  { value: 'society', label: '🏛️ Society', emoji: '🏛️' },
+  { value: 'food', label: '🍕 Food', emoji: '🍕' },
+  { value: 'life', label: '🌟 Life', emoji: '🌟' },
+  { value: 'pets', label: '🐕 Pets', emoji: '🐕' },
   { value: 'politics', label: '🗳️ Politics', emoji: '🗳️' },
-  { value: 'sports', label: '⚽ Sports', emoji: '⚽' },
-  { value: 'travel', label: '✈️ Travel', emoji: '✈️' },
   { value: 'relationships', label: '💕 Relationships', emoji: '💕' },
+  { value: 'society', label: '🏛️ Society', emoji: '🏛️' },
+  { value: 'sports', label: '⚽ Sports', emoji: '⚽' },
+  { value: 'technology', label: '📱 Technology', emoji: '📱' },
+  { value: 'travel', label: '✈️ Travel', emoji: '✈️' },
+  { value: 'wellness', label: '💪 Wellness', emoji: '💪' },
+  { value: 'work', label: '💼 Work', emoji: '💼' },
 ];
 
 const EMOJI_PREFIX_PATTERN = /^🎲 |^🍕 |^💼 |^🐕 |^📱 |^🌟 |^🎬 |^🌱 |^💪 |^🏛️ |^🗳️ |^⚽ |^✈️ |^💕 /;

@@ -20,8 +20,9 @@ import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { Take } from '../types';
 
 const CATEGORIES = [
-  'food', 'work', 'pets', 'technology', 'life', 'entertainment', 'environment',
-  'wellness', 'society', 'politics', 'sports', 'travel', 'relationships',
+  'entertainment', 'environment', 'food', 'life', 'pets', 'politics',
+  'relationships', 'society', 'sports', 'technology', 'travel', 'wellness',
+  'work',
 ] as const;
 
 const MIN_LENGTH = 10;
