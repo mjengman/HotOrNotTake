@@ -86,6 +86,9 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const resultTextSize = Math.min(adaptiveTextSize * 0.84, responsive.fontSize.medium + 1);
   const resultTextLineHeight = resultTextSize * 1.28;
   const resultTextLines = responsive.card.height < 440 ? 3 : 4;
+  const cardSurface = isDarkMode ? '#2B2B2B' : '#FEFCF8';
+  const cardBorder = isDarkMode ? 'rgba(255, 255, 255, 0.07)' : '#EFE7DA';
+  const cardHighlight = isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.82)';
   
   // Calculate percentages for the reveal
   // Some takes may not have totalVotes, so calculate from individual votes
@@ -189,15 +192,30 @@ export const TakeCard: React.FC<TakeCardProps> = ({
     <View style={[
       styles.card, 
       { 
-        backgroundColor: theme.card,
+        backgroundColor: cardSurface,
         width: responsive.card.width, // Container already provides margins
         // Remove fixed height - let card fill available container space
         borderRadius: responsive.card.borderRadius,
+        borderColor: cardBorder,
         padding: adaptiveSpacing.cardPadding,
         flex: 1, // Fill available height in cardContainer
         justifyContent: isFlipped ? 'flex-start' : 'space-between',
+        elevation: isDarkMode ? 10 : 9,
+        shadowOpacity: isDarkMode ? 0.34 : 0.18,
+        shadowRadius: isDarkMode ? 14 : 18,
       }
     ]}>
+      <View
+        pointerEvents="none"
+        style={[
+          styles.cardHighlight,
+          {
+            backgroundColor: cardHighlight,
+            borderTopLeftRadius: responsive.card.borderRadius,
+            borderTopRightRadius: responsive.card.borderRadius,
+          },
+        ]}
+      />
       <View style={[
         styles.header,
         { marginBottom: isFlipped ? responsive.spacing.sm : adaptiveSpacing.headerMargin }
@@ -312,7 +330,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
           <View style={[
             styles.revealContainer, 
             {
-              backgroundColor: theme.card,
+              backgroundColor: cardSurface,
               paddingVertical: responsive.spacing.xs,
             }
           ]}>
@@ -511,17 +529,25 @@ const styles = StyleSheet.create({
   card: {
     // Dimensions are set dynamically in component
     alignSelf: 'center', // Ensure card centers itself
-    elevation: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    elevation: 9,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 6,
+      height: 8,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
     justifyContent: 'space-between',
     minHeight: '100%', // Ensure card fills full container height
     height: '100%', // Ensure card fills full container height
+  },
+  cardHighlight: {
+    position: 'absolute',
+    top: 1,
+    left: 1,
+    right: 1,
+    height: 2,
   },
   header: {
     alignItems: 'center',
