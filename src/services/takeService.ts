@@ -156,6 +156,32 @@ const calculateVotePercentages = (hotVotes: number, notVotes: number) => {
   };
 };
 
+const updateTakeVotesLegacy = async (
+  takeId: string,
+  voteType: 'hot' | 'not'
+): Promise<void> => {
+  const takeRef = doc(db, TAKES_COLLECTION, takeId);
+  await updateDoc(takeRef, {
+    totalVotes: increment(1),
+    ...(voteType === 'hot'
+      ? { hotVotes: increment(1) }
+      : { notVotes: increment(1) }),
+  });
+};
+
+const decrementTakeVotesLegacy = async (
+  takeId: string,
+  voteType: 'hot' | 'not'
+): Promise<void> => {
+  const takeRef = doc(db, TAKES_COLLECTION, takeId);
+  await updateDoc(takeRef, {
+    totalVotes: increment(-1),
+    ...(voteType === 'hot'
+      ? { hotVotes: increment(-1) }
+      : { notVotes: increment(-1) }),
+  });
+};
+
 // Get database statistics (only approved takes due to security rules)
 export const getDatabaseStats = async (): Promise<{
   total: number;
@@ -345,6 +371,12 @@ export const updateTakeVotes = async (
       });
     });
   } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      console.warn('Vote percentage update blocked by current Firestore rules; using legacy vote count update.');
+      await updateTakeVotesLegacy(takeId, voteType);
+      return;
+    }
+
     console.error('Error updating take votes:', error);
     throw new Error('Failed to update vote');
   }
@@ -377,6 +409,12 @@ export const decrementTakeVotes = async (
       });
     });
   } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      console.warn('Vote percentage decrement blocked by current Firestore rules; using legacy vote count update.');
+      await decrementTakeVotesLegacy(takeId, voteType);
+      return;
+    }
+
     console.error('Error decrementing take votes:', error);
     throw new Error('Failed to update vote');
   }
