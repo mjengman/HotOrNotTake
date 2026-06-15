@@ -37,9 +37,11 @@ import { StreakUpdateResult } from '../types';
 import RNShare from 'react-native-share';
 
 const THEME_PREFERENCE_KEY = 'themePreference';
+const RESULTS_AUTOPLAY_PREFERENCE_KEY = 'resultsAutoplayPreference';
 
 export const HomeScreen: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [resultsAutoplay, setResultsAutoplay] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [showMyTakesModal, setShowMyTakesModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
@@ -111,6 +113,19 @@ export const HomeScreen: React.FC = () => {
     };
 
     loadThemePreference();
+  }, []);
+
+  useEffect(() => {
+    const loadResultsAutoplayPreference = async () => {
+      try {
+        const storedPreference = await AsyncStorage.getItem(RESULTS_AUTOPLAY_PREFERENCE_KEY);
+        setResultsAutoplay(storedPreference === 'true');
+      } catch (error) {
+        console.warn('Unable to load results autoplay preference:', error);
+      }
+    };
+
+    loadResultsAutoplayPreference();
   }, []);
 
   // Check if this is the first launch
@@ -344,6 +359,19 @@ export const HomeScreen: React.FC = () => {
     });
   };
 
+  const toggleResultsAutoplay = () => {
+    setResultsAutoplay(prev => {
+      const nextResultsAutoplay = !prev;
+      AsyncStorage.setItem(
+        RESULTS_AUTOPLAY_PREFERENCE_KEY,
+        nextResultsAutoplay ? 'true' : 'false'
+      ).catch(error => {
+        console.warn('Unable to save results autoplay preference:', error);
+      });
+      return nextResultsAutoplay;
+    });
+  };
+
   const handleCategoryChange = (newCategory: string) => {
     // Trigger ad on category change (session end)
     onSessionEnd();
@@ -448,6 +476,8 @@ export const HomeScreen: React.FC = () => {
             onInstructions={() => setShowInstructionsModal(true)}
             onSafety={() => setShowSafetyModal(true)}
             onToggleTheme={toggleTheme}
+            resultsAutoplay={resultsAutoplay}
+            onToggleResultsAutoplay={toggleResultsAutoplay}
           />
         </View>
         
@@ -510,6 +540,7 @@ export const HomeScreen: React.FC = () => {
             onChangeVote={handleChangeVote}
             onVoteNow={handleVoteNow}
             communityTotalVotes={communityTotalVotes}
+            autoAdvanceResults={resultsAutoplay}
           />
         )}
       </View>

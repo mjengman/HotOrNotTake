@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   BackHandler,
+  Switch,
 } from 'react-native';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
 import { colors, motion } from '../constants';
@@ -21,6 +22,8 @@ interface BurgerMenuProps {
   onInstructions: () => void;
   onSafety: () => void;
   onToggleTheme: () => void;
+  resultsAutoplay: boolean;
+  onToggleResultsAutoplay: () => void;
 }
 
 export const BurgerMenu: React.FC<BurgerMenuProps> = ({
@@ -32,6 +35,8 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   onInstructions,
   onSafety,
   onToggleTheme,
+  resultsAutoplay,
+  onToggleResultsAutoplay,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const theme = isDarkMode ? colors.dark : colors.light;
@@ -225,7 +230,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.menuItem}
+                style={[styles.menuItem, { borderBottomColor: theme.border }]}
                 onPress={() => handleMenuItemPress(onToggleTheme)}
                 activeOpacity={0.7}
               >
@@ -243,6 +248,36 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
                 >
                   {isDarkMode ? 'Light Mode' : 'Dark Mode'}
                 </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={onToggleResultsAutoplay}
+                activeOpacity={0.7}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: resultsAutoplay }}
+                accessibilityLabel="Results autoplay"
+              >
+                <Text
+                  style={styles.menuIcon}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >▶️</Text>
+                <Text
+                  style={[styles.menuText, { color: theme.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                >
+                  Results Autoplay
+                </Text>
+                <Switch
+                  value={resultsAutoplay}
+                  onValueChange={onToggleResultsAutoplay}
+                  trackColor={{ false: theme.border, true: theme.primaryLight }}
+                  thumbColor={resultsAutoplay ? theme.primary : theme.textSecondary}
+                />
               </TouchableOpacity>
             </View>
           </SafeAreaView>

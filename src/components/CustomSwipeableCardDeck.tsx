@@ -47,6 +47,7 @@ interface CustomSwipeableCardDeckProps {
   onChangeVote?: (take: Take) => void;
   onVoteNow?: (take: Take) => void;
   communityTotalVotes?: number;
+  autoAdvanceResults?: boolean;
 }
 
 // Safe flip for Android - no 3D to avoid compositor crashes
@@ -72,6 +73,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   onChangeVote,
   onVoteNow,
   communityTotalVotes = 0,
+  autoAdvanceResults = false,
 }) => {
   const responsive = useResponsive();
   const screenWidth = responsive.screen.width;
@@ -137,6 +139,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       }
     };
   }, [autoDismissTimeout]);
+
+  useEffect(() => {
+    if (autoAdvanceResults || !autoDismissTimeout) return;
+
+    clearTimeout(autoDismissTimeout);
+    setAutoDismissTimeout(null);
+  }, [autoAdvanceResults, autoDismissTimeout]);
 
   // Handle external stats card
   useEffect(() => {
@@ -256,6 +265,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // JS-thread helpers for runOnJS
   const jsSetVote = (val: 'hot' | 'not' | null) => setCurrentVote(val);
   const jsSetAutoDismiss = () => {
+    if (!autoAdvanceResults) return;
+
     const timeout = setTimeout(() => {
       continueToNext();
     }, 1200);
@@ -319,7 +330,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           runOnJS(setIsCardFlipped)(true); // set after flip completes
           // NOW submit the vote after the flip is complete and stats are showing
           runOnJS(onVote)(voteToSubmit.id, voteToSubmit.vote);
-          // Auto-dismiss stats card after 2.5 seconds
+          // Auto-advance stats card only when Results Autoplay is enabled.
           runOnJS(jsSetAutoDismiss)();
           // Start promoting next card behind the stats card
           promoteSV.value = withTiming(1, { duration: motion.duration.cardPromote }, () => {

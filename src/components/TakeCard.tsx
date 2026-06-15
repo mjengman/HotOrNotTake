@@ -102,6 +102,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
 
   const adaptiveTextSize = getAdaptiveTextSize();
   const adaptiveSpacing = getAdaptiveSpacing();
+  const isCompactResultCard = responsive.card.height < 430;
   const resultTextSize = Math.min(adaptiveTextSize * 0.84, responsive.fontSize.medium + 1);
   const resultTextLineHeight = resultTextSize * 1.28;
   const resultTextLines = responsive.card.height < 440 ? 3 : responsive.card.height < 520 ? 4 : 5;
@@ -119,7 +120,11 @@ export const TakeCard: React.FC<TakeCardProps> = ({
     hotPercentage,
     notPercentage,
     totalVotes,
+    seed: take.id,
   });
+  const shareVerdict = resultReaction.subtext
+    ? `${resultReaction.headline}\n${resultReaction.subtext}`
+    : resultReaction.headline;
   const reactionColor = getReactionToneColor(resultReaction.tone, theme);
   const splitIsClose = resultReaction.tone === 'split';
   const notIsWinningSide = notPercentage >= hotPercentage;
@@ -134,6 +139,15 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const hotPercentageSize = responsive.fontSize.xlarge + (
     hotPercentageEmphasis ? winningPercentageBoost : quietPercentageBoost
   );
+  const resultSpacerStyle = {
+    flex: isCompactResultCard ? 0.55 : 1,
+    minHeight: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.sm,
+  };
+  const resultActionSpacerStyle = {
+    flex: isCompactResultCard ? 0.35 : 1.25,
+    minHeight: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.md,
+  };
+  const percentageItemHeight = isCompactResultCard ? 58 : 74;
 
   // Check if this take is favorited
   useEffect(() => {
@@ -179,7 +193,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         }
       }
 
-      const shareMessage = `${resultReaction.headline}\n${resultReaction.subtext}\n\n"${take.text}"\n\nCommunity split:\n🔥 ${hotPercentage}% HOT\n❄️ ${notPercentage}% NOT\n\n👥 ${totalVotes.toLocaleString()} total votes\n\n${userVote ? `I voted ${userVote.toUpperCase()}. ` : ''}What's your take?\n\nJoin the debate: ${SMART_LINK}`;
+      const shareMessage = `${shareVerdict}\n\n"${take.text}"\n\nCommunity split:\n🔥 ${hotPercentage}% HOT\n❄️ ${notPercentage}% NOT\n\n👥 ${totalVotes.toLocaleString()} total votes\n\n${userVote ? `I voted ${userVote.toUpperCase()}. ` : ''}What's your take?\n\nJoin the debate: ${SMART_LINK}`;
 
       await RNShare.open({
         title: 'Hot or Not Takes',
@@ -362,7 +376,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
             styles.revealContainer,
             {
               backgroundColor: cardSurface,
-              paddingVertical: responsive.spacing.sm,
+              paddingTop: responsive.spacing.sm,
+              paddingBottom: isCompactResultCard ? 0 : responsive.spacing.xs,
             }
           ]}>
             <View style={styles.reactionSection}>
@@ -376,49 +391,35 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               ]}>
                 {resultReaction.headline}
               </Text>
-              <Text style={[
-                styles.reactionSubtext,
-                {
-                  color: theme.text,
-                  fontSize: responsive.fontSize.small,
-                  lineHeight: responsive.fontSize.small * 1.28,
-                },
-              ]}>
-                {resultReaction.subtext}
-              </Text>
-
-              {userVote ? (
+              {resultReaction.subtext && (
                 <Text style={[
-                  styles.userVoteMeta,
+                  styles.reactionSubtext,
                   {
-                    color: theme.textSecondary,
+                    color: theme.text,
                     fontSize: responsive.fontSize.small,
+                    lineHeight: responsive.fontSize.small * 1.28,
                   },
                 ]}>
-                  Your vote: {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
+                  {resultReaction.subtext}
                 </Text>
-              ) : onVoteNow ? (
-                <TouchableOpacity
-                  style={[styles.voteNowButton, { backgroundColor: reactionColor + '18' }]}
-                  onPress={() => onVoteNow(take)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    styles.voteNowText,
-                    {
-                      color: reactionColor,
-                      fontSize: responsive.fontSize.small,
-                    },
-                  ]}>
-                    Vote now
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
+              )}
             </View>
 
-            <View style={styles.resultStatsGroup}>
+            <View style={[styles.resultGroupSpacer, resultSpacerStyle]} />
+
+            <View style={[
+              styles.resultStatsGroup,
+              { gap: responsive.spacing.sm }
+            ]}>
               <View style={[styles.percentageContainer, { justifyContent: 'center', alignItems: 'center' }]}>
-                <View style={[styles.percentageItem, { justifyContent: 'center', alignItems: 'center' }]}>
+                <View style={[
+                  styles.percentageItem,
+                  {
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    minHeight: percentageItemHeight,
+                  },
+                ]}>
                   <View style={{ justifyContent: 'center', alignItems: 'center' }}>
                     <Text style={[
                       styles.bigPercentage,
@@ -453,7 +454,14 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                     height: responsive.spacing.xl + 8
                   }
                 ]} />
-                <View style={[styles.percentageItem, { justifyContent: 'center', alignItems: 'center' }]}>
+                <View style={[
+                  styles.percentageItem,
+                  {
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    minHeight: percentageItemHeight,
+                  },
+                ]}>
                   <View style={{ justifyContent: 'center', alignItems: 'center' }}>
                     <Text style={[
                       styles.bigPercentage,
@@ -483,7 +491,57 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 </View>
               </View>
 
-              <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+              <View style={styles.resultVoteMetaGroup}>
+                {userVote ? (
+                  <>
+                    <Text style={[
+                      styles.userVoteMeta,
+                      {
+                        color: theme.textSecondary,
+                        fontSize: responsive.fontSize.small,
+                      },
+                    ]}>
+                      Your vote: {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
+                    </Text>
+                    {onChangeVote && (
+                      <TouchableOpacity
+                        style={styles.changeVoteUtility}
+                        onPress={() => onChangeVote(take)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[
+                          styles.changeVoteText,
+                          {
+                            color: theme.textSecondary,
+                            fontSize: responsive.fontSize.small,
+                            textAlign: 'center'
+                          }
+                        ]}>
+                          Change vote
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                ) : onVoteNow ? (
+                  <TouchableOpacity
+                    style={[styles.voteNowButton, { backgroundColor: reactionColor + '18' }]}
+                    onPress={() => onVoteNow(take)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.voteNowText,
+                      {
+                        color: reactionColor,
+                        fontSize: responsive.fontSize.small,
+                      },
+                    ]}>
+                      Vote now
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              <View style={styles.totalVotesRow}>
                 <Text style={[
                   styles.totalVotes,
                   {
@@ -496,6 +554,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 </Text>
               </View>
             </View>
+
+            <View style={[styles.resultActionSpacer, resultActionSpacerStyle]} />
 
             {/* Action Buttons */}
             <View style={styles.resultActionsGroup}>
@@ -530,25 +590,6 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                   </Text>
                 </TouchableOpacity>
               </View>
-
-              {userVote && onChangeVote && (
-                <TouchableOpacity
-                  style={styles.changeVoteUtility}
-                  onPress={() => onChangeVote(take)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    styles.changeVoteText,
-                    {
-                      color: theme.textSecondary,
-                      fontSize: responsive.fontSize.small,
-                      textAlign: 'center'
-                    }
-                  ]}>
-                    Change vote
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
           </View>
         )}
@@ -669,7 +710,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     paddingVertical: dimensions.spacing.md,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   reactionSection: {
     alignItems: 'center',
@@ -718,6 +759,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: dimensions.spacing.sm,
   },
+  resultVoteMetaGroup: {
+    alignItems: 'center',
+    width: '100%',
+    gap: 2,
+  },
+  totalVotesRow: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resultGroupSpacer: {
+    flex: 1,
+    minHeight: dimensions.spacing.sm,
+  },
+  resultActionSpacer: {
+    flex: 1.25,
+    minHeight: dimensions.spacing.md,
+  },
   percentageItem: {
     alignItems: 'center',
     flex: 1,
@@ -756,6 +814,7 @@ const styles = StyleSheet.create({
   resultActionsGroup: {
     width: '100%',
     alignItems: 'center',
+    paddingBottom: 0,
   },
   actionButton: {
     flexDirection: 'row',
