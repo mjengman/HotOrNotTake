@@ -10,7 +10,6 @@ import {
   Animated,
   Platform,
   TouchableOpacity,
-  Vibration,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,7 +42,7 @@ const THEME_PREFERENCE_KEY = 'themePreference';
 const RESULTS_AUTOPLAY_PREFERENCE_KEY = 'resultsAutoplayPreference';
 const DAILY_CHALLENGE_NUDGE_PREFIX = 'dailyChallengeNudgeShown';
 const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
-type EngagementToast = { title: string; subtitle: string; hapticIntensity?: number };
+type EngagementToast = { title: string; subtitle: string };
 
 const formatCompactCount = (count: number) => {
   if (count >= 1000000) {
@@ -363,9 +362,6 @@ export const HomeScreen: React.FC = () => {
 
     toastAnimatingRef.current = true;
     setStreakToast(nextToast);
-    if (nextToast.hapticIntensity) {
-      Vibration.vibrate(nextToast.hapticIntensity);
-    }
     streakToastAnim.stopAnimation();
     streakToastAnim.setValue(0);
     Animated.sequence([
@@ -410,7 +406,6 @@ export const HomeScreen: React.FC = () => {
       subtitle: isMilestone
         ? 'Milestone hit. Keep it rolling tomorrow.'
         : 'Come back tomorrow to keep it alive.',
-      hapticIntensity: isMilestone ? motion.haptic.medium : undefined,
     });
   }, [enqueueToast]);
 
@@ -514,15 +509,11 @@ export const HomeScreen: React.FC = () => {
         enqueueToast({
           title: '🎯 Challenge complete!',
           subtitle: `${streakUpdate.dailyChallenge?.title || "Today's quest"} is done. Come back tomorrow.`,
-          hapticIntensity: motion.haptic.medium,
         });
       } else if (streakUpdate && !streakUpdate.didUpdateToday) {
         applyEngagementUpdate(streakUpdate);
       }
-      streakUpdate?.achievementToasts?.forEach(toast => enqueueToast({
-        ...toast,
-        hapticIntensity: motion.haptic.medium,
-      }));
+      streakUpdate?.achievementToasts?.forEach(enqueueToast);
       // Reconcile with Firestore after the local footer update lands.
       await refreshStats();
       // Also refresh community stats
@@ -623,7 +614,6 @@ export const HomeScreen: React.FC = () => {
 
   const handleChangeVote = (take: any, currentVote?: 'hot' | 'not' | null) => {
     if (!user) return;
-    Vibration.vibrate(motion.haptic.medium);
     const voteToRemove = currentVote;
     changeVoteTakeIdsRef.current.add(take.id);
 

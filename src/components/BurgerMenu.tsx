@@ -8,7 +8,6 @@ import {
   SafeAreaView,
   BackHandler,
   Switch,
-  Vibration,
 } from 'react-native';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
 import { colors, motion } from '../constants';
@@ -44,10 +43,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   const responsive = useResponsive();
   const burgerSize = Math.max(motion.touchTarget.comfortable, responsive.iconSize.xlarge + 2);
 
-  const closeMenu = (withHaptic = true) => {
-    if (withHaptic) {
-      Vibration.vibrate(motion.haptic.light);
-    }
+  const closeMenu = () => {
     setIsOpen(false);
   };
 

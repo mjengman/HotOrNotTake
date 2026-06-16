@@ -350,7 +350,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const flipCard = (vote: 'hot' | 'not') => {
     if (!renderCurrent) return; // Safety check
     
-    Vibration.vibrate(motion.haptic.heavy);
     setLastVote(vote);
     setIsCardFlipped(true);
     setResultsRevealActive(false);
@@ -385,7 +384,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       flipSV.value = withTiming(1, { duration: motion.duration.cardFlip, easing: Easing.out(Easing.cubic) }, (finished) => {
         if (finished) {
           runOnJS(setResultsRevealActive)(true);
-          runOnJS(Vibration.vibrate)(motion.haptic.light);
           // NOW submit the vote after the flip is complete and stats are showing
           runOnJS(onVote)(voteToSubmit.id, voteToSubmit.vote);
           // Auto-advance stats card only when Results Autoplay is enabled.
@@ -513,6 +511,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       translateX.value = withSpring(0, motion.spring.cardReturn);
       translateY.value = withSpring(0);
       scale.value = withSpring(1, motion.spring.cardReturn);
+      runOnJS(Vibration.vibrate)(motion.haptic.vote);
       runOnJS(flipCard)(vote);
     });
     translateY.value = withTiming(arcY, {
@@ -703,6 +702,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
       if (shouldSwipeRight && id && !flippedSV.value) {
         // Front side: Bounce back and flip to reveal
+        runOnJS(Vibration.vibrate)(motion.haptic.vote);
         translateX.value = withSpring(0);
         translateY.value = withTiming(-VOTE_COMMIT_ARC_Y, {
           duration: motion.duration.cardNudge,
@@ -718,6 +718,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
       if (shouldSwipeLeft && id && !flippedSV.value) {
         // Front side: Bounce back and flip to reveal
+        runOnJS(Vibration.vibrate)(motion.haptic.vote);
         translateX.value = withSpring(0);
         translateY.value = withTiming(VOTE_COMMIT_ARC_Y, {
           duration: motion.duration.cardNudge,

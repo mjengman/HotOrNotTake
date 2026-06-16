@@ -35,8 +35,7 @@ export const motion = {
     light: 6,
     selection: 10,
     medium: 16,
-    heavy: 32,
-    vote: 32,
+    vote: 24,
   },
   touchTarget: {
     minimum: 44,

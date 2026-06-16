@@ -57,12 +57,10 @@ export const VoteIndicator: React.FC<VoteIndicatorProps> = ({
       );
       
       // Enhanced haptic feedback based on vote type
-      const vibrationPattern = vote === 'hot'
-        ? [0, 20, 40, 20]
-        : vote === 'not'
-          ? [0, 15, 30, 15]
-          : [0, 12, 30, 12];
-      Vibration.vibrate(vibrationPattern);
+      if (vote !== 'skip') {
+        const vibrationPattern = vote === 'hot' ? [0, 20, 40, 20] : [0, 15, 30, 15];
+        Vibration.vibrate(vibrationPattern);
+      }
       
       // Auto-hide after a longer delay to let user appreciate the animation
       const hideTimeout = setTimeout(() => {
