@@ -8,27 +8,10 @@ import {
   ScrollView,
   BackHandler,
 } from 'react-native';
-import { colors, dimensions, motion } from '../constants';
+import { CATEGORY_OPTIONS, colors, dimensions, motion } from '../constants';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
 
-const CATEGORIES = [
-  { value: 'all', label: '🎲 All Categories', emoji: '🎲' },
-  { value: 'entertainment', label: '🎬 Entertainment', emoji: '🎬' },
-  { value: 'environment', label: '🌱 Environment', emoji: '🌱' },
-  { value: 'food', label: '🍕 Food', emoji: '🍕' },
-  { value: 'life', label: '🌟 Life', emoji: '🌟' },
-  { value: 'pets', label: '🐕 Pets', emoji: '🐕' },
-  { value: 'politics', label: '🗳️ Politics', emoji: '🗳️' },
-  { value: 'relationships', label: '💕 Relationships', emoji: '💕' },
-  { value: 'society', label: '🏛️ Society', emoji: '🏛️' },
-  { value: 'sports', label: '⚽ Sports', emoji: '⚽' },
-  { value: 'technology', label: '📱 Technology', emoji: '📱' },
-  { value: 'travel', label: '✈️ Travel', emoji: '✈️' },
-  { value: 'wellness', label: '💪 Wellness', emoji: '💪' },
-  { value: 'work', label: '💼 Work', emoji: '💼' },
-];
-
-const EMOJI_PREFIX_PATTERN = /^🎲 |^🍕 |^💼 |^🐕 |^📱 |^🌟 |^🎬 |^🌱 |^💪 |^🏛️ |^🗳️ |^⚽ |^✈️ |^💕 /;
+const EMOJI_PREFIX_PATTERN = /^🎲 |^⏭️ |^🍕 |^💼 |^🐕 |^📱 |^🌟 |^🎬 |^🌱 |^💪 |^🏛️ |^🗳️ |^⚽ |^✈️ |^💕 /;
 const getCategoryName = (label: string) => label.replace(EMOJI_PREFIX_PATTERN, '');
 
 interface CategoryDropdownProps {
@@ -45,7 +28,7 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const theme = isDarkMode ? colors.dark : colors.light;
 
-  const selectedCategoryData = CATEGORIES.find(cat => cat.value === selectedCategory) || CATEGORIES[0];
+  const selectedCategoryData = CATEGORY_OPTIONS.find(cat => cat.value === selectedCategory) || CATEGORY_OPTIONS[0];
 
   const handleCategorySelect = (categoryValue: string) => {
     onCategoryChange(categoryValue);
@@ -117,7 +100,7 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
             </View>
             
             <ScrollView style={styles.categoriesList} showsVerticalScrollIndicator={false}>
-              {CATEGORIES.map((category) => (
+              {CATEGORY_OPTIONS.map((category) => (
                 <TouchableOpacity
                   key={category.value}
                   style={[

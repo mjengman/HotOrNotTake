@@ -48,10 +48,12 @@ interface CustomSwipeableCardDeckProps {
   onVoteNow?: (take: Take) => void;
   communityTotalVotes?: number;
   autoAdvanceResults?: boolean;
+  skipRequestToken?: number;
 }
 
 // Safe flip for Android - no 3D to avoid compositor crashes
 const ANDROID_SAFE_FLIP = Platform.OS === 'android';
+const VOTE_COMMIT_ARC_Y = 18;
 
 // Stable style object to avoid reparenting during 3D flips
 const absoluteFill = StyleSheet.absoluteFillObject;
@@ -74,6 +76,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   onVoteNow,
   communityTotalVotes = 0,
   autoAdvanceResults = false,
+  skipRequestToken = 0,
 }) => {
   const responsive = useResponsive();
   const screenWidth = responsive.screen.width;
@@ -81,14 +84,19 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const swipeThreshold = screenWidth * 0.2;
   const swipeDownThreshold = screenHeight * 0.2;
   const swipeUpThreshold = screenHeight * 0.2;
-  const [currentVote, setCurrentVote] = useState<'hot' | 'not' | null>(null);
+  const resultExitDuration = Platform.OS === 'android'
+    ? motion.duration.cardResultExit + 70
+    : motion.duration.cardResultExit;
+  const [currentVote, setCurrentVote] = useState<'hot' | 'not' | 'skip' | null>(null);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
+  const [resultsRevealActive, setResultsRevealActive] = useState(false);
   const [lastVote, setLastVote] = useState<'hot' | 'not' | null>(null);
   const [autoDismissTimeout, setAutoDismissTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   
   // Track if we should end after dismissing stats (when there's no next card)
   const endAfterDismissRef = React.useRef(false);
+  const landingResetTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Debounce loadMore to prevent hammering
   const lastLoadTsRef = React.useRef(0);
@@ -98,6 +106,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
   const isAnimating = useSharedValue(false);
+  const cardEntranceSV = useSharedValue(1);
   
   // 0 = front, 1 = back (stats)
   const flipSV = useSharedValue(0);
@@ -109,6 +118,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const [useFrozen, setUseFrozen] = useState(false);
   const [landingTake, setLandingTake] = useState<Take | null>(null);
   const finishFrozenReset = React.useCallback(() => {
+    if (landingResetTimeoutRef.current) {
+      clearTimeout(landingResetTimeoutRef.current);
+      landingResetTimeoutRef.current = null;
+    }
     frozenCurrent.current = null;
     frozenNext.current = null;
     frozenThird.current = null;
@@ -124,6 +137,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const frozenSV = useSharedValue(0);
   const flippedSV = useSharedValue(0);
   const animatingSV = useSharedValue(0);
+  const resultBaseSV = useSharedValue(0);
   
   // Safety gate for gestures - prevent interaction when no current card
   const hasCurrentSV = useSharedValue(0);
@@ -136,6 +150,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     return () => {
       if (autoDismissTimeout) {
         clearTimeout(autoDismissTimeout);
+      }
+      if (landingResetTimeoutRef.current) {
+        clearTimeout(landingResetTimeoutRef.current);
       }
     };
   }, [autoDismissTimeout]);
@@ -160,16 +177,19 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       
       // Set the external stats card as the current flipped state
       setIsCardFlipped(true);
+      setResultsRevealActive(true);
       setLastVote(externalStatsCard.vote);
       setCurrentVote(null); // No current vote since this is historical
       
       // Set the flip animation to show the stats
       flipSV.value = 1;
       promoteSV.value = 1;
+      resultBaseSV.value = 0;
       animatingSV.value = 0;
     } else if (externalStatsCard === null && isCardFlipped) {
       // Reset when external stats card is dismissed
       setIsCardFlipped(false);
+      setResultsRevealActive(false);
       setLastVote(null);
       setCurrentVote(null);
       setLandingTake(null);
@@ -178,6 +198,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       flipSV.value = 0;
       promoteSV.value = 0;
       resultExitSV.value = 0;
+      resultBaseSV.value = 0;
       animatingSV.value = 0;
     }
   }, [externalStatsCard]);
@@ -193,15 +214,47 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Derive what to render - external stats card takes priority, then frozen data during promotion, then live props
   const renderCurrent = externalStatsCard ? externalStatsCard.take : 
     (useFrozen ? (landingTake ?? frozenCurrent.current ?? currentTake) : currentTake);
+  const promotedBaseTake = useFrozen && isCardFlipped && !externalStatsCard
+    ? frozenNext.current
+    : null;
+  const frozenNextTake = landingTake
+    ? (currentTake?.id === landingTake.id ? nextTake : thirdTake)
+    : frozenNext.current;
   const renderNext = useFrozen
-    ? (
-      landingTake
-        ? (currentTake?.id === landingTake.id ? nextTake : thirdTake)
-        : frozenNext.current
-    )
+    ? (promotedBaseTake ? frozenThird.current : frozenNextTake)
     : nextTake;
-  const renderThird = useFrozen ? frozenThird.current : thirdTake;
-  
+  const renderThird = promotedBaseTake ? null : useFrozen ? frozenThird.current : thirdTake;
+  const frontTake = promotedBaseTake ?? renderCurrent;
+  const statsTake = externalStatsCard
+    ? externalStatsCard.take
+    : useFrozen
+      ? frozenCurrent.current ?? renderCurrent
+      : renderCurrent;
+
+  useEffect(() => {
+    resultBaseSV.value = promotedBaseTake ? 1 : 0;
+  }, [promotedBaseTake?.id, resultBaseSV]);
+
+  useEffect(() => {
+    if (!useFrozen || !landingTake || isCardFlipped) return;
+
+    if (landingResetTimeoutRef.current) {
+      clearTimeout(landingResetTimeoutRef.current);
+    }
+
+    const liveFeedIsReady = currentTake?.id === landingTake.id;
+    landingResetTimeoutRef.current = setTimeout(() => {
+      finishFrozenReset();
+    }, liveFeedIsReady ? 80 : 260);
+
+    return () => {
+      if (landingResetTimeoutRef.current) {
+        clearTimeout(landingResetTimeoutRef.current);
+        landingResetTimeoutRef.current = null;
+      }
+    };
+  }, [currentTake?.id, finishFrozenReset, isCardFlipped, landingTake, useFrozen]);
+
   // Update safety gate for gestures based on current card availability
   useEffect(() => { hasCurrentSV.value = !!renderCurrent ? 1 : 0; }, [renderCurrent]);
 
@@ -263,7 +316,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   };
 
   // JS-thread helpers for runOnJS
-  const jsSetVote = (val: 'hot' | 'not' | null) => setCurrentVote(val);
+  const jsSetVote = (val: 'hot' | 'not' | 'skip' | null) => setCurrentVote(val);
   const jsSetAutoDismiss = () => {
     if (!autoAdvanceResults) return;
 
@@ -277,6 +330,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     endAfterDismissRef.current = false;
 
     setIsCardFlipped(false);
+    setResultsRevealActive(false);
     setLastVote(null);
     setCurrentVote(null);
 
@@ -284,10 +338,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     if (promotedTake) {
       frozenCurrent.current = promotedTake;
       setLandingTake(promotedTake);
-      requestAnimationFrame(() => {
-        finishFrozenReset();
-        resultExitSV.value = 0;
-      });
+      resultExitSV.value = 0;
       return;
     }
 
@@ -299,8 +350,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const flipCard = (vote: 'hot' | 'not') => {
     if (!renderCurrent) return; // Safety check
     
+    Vibration.vibrate(motion.haptic.heavy);
     setLastVote(vote);
     setIsCardFlipped(true);
+    setResultsRevealActive(false);
     setLandingTake(null);
     resultExitSV.value = 0;
     
@@ -316,7 +369,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       frozenNext.current = null;
       endAfterDismissRef.current = true; // no next; after stats we should end
     }
-    // MUST set frozen BEFORE the animation to lock in the card
+    // MUST set frozen BEFORE the animation to lock in the card. Keep the
+    // background card settled so it does not snap backward after a swipe.
+    promoteSV.value = 1;
+    resultBaseSV.value = frozenNext.current ? 1 : 0;
     setUseFrozen(true);
     
     // Store the vote details but DON'T submit yet
@@ -328,15 +384,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       'worklet';
       flipSV.value = withTiming(1, { duration: motion.duration.cardFlip, easing: Easing.out(Easing.cubic) }, (finished) => {
         if (finished) {
+          runOnJS(setResultsRevealActive)(true);
+          runOnJS(Vibration.vibrate)(motion.haptic.light);
           // NOW submit the vote after the flip is complete and stats are showing
           runOnJS(onVote)(voteToSubmit.id, voteToSubmit.vote);
           // Auto-advance stats card only when Results Autoplay is enabled.
           runOnJS(jsSetAutoDismiss)();
-          // Start promoting next card behind the stats card
-          promoteSV.value = withTiming(1, { duration: motion.duration.cardPromote }, () => {
-            'worklet';
-            animatingSV.value = 0; // Clear animation flag
-          });
+          animatingSV.value = 0; // Clear animation flag
         }
       });
       scale.value = withSpring(1);
@@ -373,10 +427,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       flipSV.value = 0;
       promoteSV.value = 0;
       resultExitSV.value = 0;
+      resultBaseSV.value = 0;
       animatingSV.value = 0;
       
       // Reset state
       setIsCardFlipped(false);
+      setResultsRevealActive(false);
       setLastVote(null);
       setCurrentVote(null);
       setLandingTake(null);
@@ -402,7 +458,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       translateY.value = 0;
       scale.value = 1;
       flipSV.value = 0;
-      promoteSV.value = 0;
       runOnJS(finishCardDismiss)();
       isAnimating.value = false;
     };
@@ -413,7 +468,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       } else {
         resultExitSV.value = withTiming(
           1,
-          { duration: motion.duration.cardResultExit, easing: Easing.in(Easing.cubic) },
+          { duration: resultExitDuration, easing: Easing.inOut(Easing.cubic) },
           resetAll
         );
       }
@@ -446,6 +501,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     
     const direction = vote === 'hot' ? 1 : -1;
     const swipeDistance = swipeThreshold * 0.8;
+    const arcY = vote === 'hot' ? -VOTE_COMMIT_ARC_Y : VOTE_COMMIT_ARC_Y;
     
     // Quick leap to edge with timing (no lingering)
     translateX.value = withTiming(swipeDistance * direction, { 
@@ -457,8 +513,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       translateX.value = withSpring(0, motion.spring.cardReturn);
       translateY.value = withSpring(0);
       scale.value = withSpring(1, motion.spring.cardReturn);
-      runOnJS(Vibration.vibrate)(motion.haptic.vote);
       runOnJS(flipCard)(vote);
+    });
+    translateY.value = withTiming(arcY, {
+      duration: motion.duration.cardNudge,
+      easing: Easing.out(Easing.quad),
     });
     
     // Quick scale down
@@ -468,6 +527,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Handle skip with animation (for both button press and swipe up/down)
   const handleSkipWithAnimation = (direction: 'up' | 'down' = 'down') => {
     if (!currentTake || isAnimating.value || externalStatsCard) return;
+
+    setCurrentVote('skip');
     
     // 🧊 FREEZE: Capture current state immediately when skip is triggered
     if (renderCurrent) {
@@ -510,6 +571,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           translateX.value = 0;
           translateY.value = 0;
           scale.value = 1;
+          runOnJS(jsSetVote)(null);
           runOnJS(setUseFrozen)(false); // 🔓 UNFREEZE
           animatingSV.value = 0;
           isAnimating.value = false;
@@ -517,6 +579,16 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       }
     );
   };
+
+  const lastSkipRequestTokenRef = React.useRef(skipRequestToken);
+  useEffect(() => {
+    if (skipRequestToken === lastSkipRequestTokenRef.current) {
+      return;
+    }
+
+    lastSkipRequestTokenRef.current = skipRequestToken;
+    handleSkipWithAnimation('down');
+  }, [skipRequestToken]);
 
   const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
     onStart: () => {
@@ -545,7 +617,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         } else if (shouldSwipeLeft) {
           runOnJS(jsSetVote)('not');
         } else if (shouldSwipeDown || shouldSwipeUp) {
-          runOnJS(jsSetVote)(null); // Clear vote for skip
+          runOnJS(jsSetVote)('skip');
         } else {
           runOnJS(jsSetVote)(null); // Clear vote when not at threshold
         }
@@ -574,7 +646,23 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       if (flippedSV.value) {
         const didSwipe = Math.abs(event.translationX) > 20 || Math.abs(event.translationY) > 20;
         if (didSwipe) {
-          runOnJS(continueToNext)(true);
+          const horizontalIntent = Math.abs(event.translationX) >= Math.abs(event.translationY);
+          const exitX = horizontalIntent
+            ? (event.translationX >= 0 ? screenWidth * 0.75 : -screenWidth * 0.75)
+            : event.translationX;
+          const exitY = horizontalIntent
+            ? event.translationY * 0.35
+            : (event.translationY >= 0 ? screenHeight * 0.36 : -screenHeight * 0.36);
+
+          translateX.value = withTiming(exitX, {
+            duration: resultExitDuration,
+            easing: Easing.out(Easing.cubic),
+          });
+          translateY.value = withTiming(exitY, {
+            duration: resultExitDuration,
+            easing: Easing.out(Easing.cubic),
+          });
+          runOnJS(continueToNext)(false);
         } else {
           translateX.value = withSpring(0);
           translateY.value = withSpring(0);
@@ -615,9 +703,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
       if (shouldSwipeRight && id && !flippedSV.value) {
         // Front side: Bounce back and flip to reveal
-        runOnJS(Vibration.vibrate)(motion.haptic.vote);
         translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        translateY.value = withTiming(-VOTE_COMMIT_ARC_Y, {
+          duration: motion.duration.cardNudge,
+          easing: Easing.out(Easing.quad),
+        }, () => {
+          'worklet';
+          translateY.value = withSpring(0);
+        });
         scale.value = withSpring(1);
         runOnJS(flipCard)('hot');
         return;
@@ -625,9 +718,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
       if (shouldSwipeLeft && id && !flippedSV.value) {
         // Front side: Bounce back and flip to reveal
-        runOnJS(Vibration.vibrate)(motion.haptic.vote);
         translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
+        translateY.value = withTiming(VOTE_COMMIT_ARC_Y, {
+          duration: motion.duration.cardNudge,
+          easing: Easing.out(Easing.quad),
+        }, () => {
+          'worklet';
+          translateY.value = withSpring(0);
+        });
         scale.value = withSpring(1);
         runOnJS(flipCard)('not');
         return;
@@ -644,10 +742,19 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // Outer card gets perspective so the 3D reads nicely
   const card3DStyle = useAnimatedStyle(() => {
+    const useResultOverlay = resultBaseSV.value > 0.5;
     const exitProgress = resultExitSV.value;
-    const exitOpacity = interpolate(exitProgress, [0, 1], [1, 0], Extrapolate.CLAMP);
-    const exitScale = interpolate(exitProgress, [0, 1], [1, 0.965], Extrapolate.CLAMP);
-    const exitTranslateY = interpolate(exitProgress, [0, 1], [0, -18], Extrapolate.CLAMP);
+    const exitOpacity = useResultOverlay
+      ? 1
+      : interpolate(exitProgress, [0, 1], [1, 0], Extrapolate.CLAMP);
+    const exitScale = useResultOverlay
+      ? 1
+      : interpolate(exitProgress, [0, 1], [1, 0.965], Extrapolate.CLAMP);
+    const exitTranslateY = useResultOverlay
+      ? 0
+      : interpolate(exitProgress, [0, 1], [0, -18], Extrapolate.CLAMP);
+    const entranceOpacity = interpolate(cardEntranceSV.value, [0, 1], [0, 1], Extrapolate.CLAMP);
+    const entranceScale = interpolate(cardEntranceSV.value, [0, 1], [0.97, 1], Extrapolate.CLAMP);
     const rotate = interpolate(
       translateX.value,
       [-screenWidth, 0, screenWidth],
@@ -661,24 +768,35 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       [1, 1, 0.7],
       Extrapolate.CLAMP
     );
+    const wrapperTranslateX = useResultOverlay ? 0 : translateX.value;
+    const wrapperTranslateY = useResultOverlay ? 0 : translateY.value + exitTranslateY;
+    const wrapperRotate = useResultOverlay ? '0deg' : `${rotate}deg`;
+    const wrapperOpacity = useResultOverlay ? 1 : opacity;
 
     return {
       transform: [
         { perspective: 1000 }, // 3D space
-        { translateX: translateX.value },
-        { translateY: translateY.value + exitTranslateY },
-        { rotate: `${rotate}deg` },
-        { scale: scale.value * exitScale },
+        { translateX: wrapperTranslateX },
+        { translateY: wrapperTranslateY },
+        { rotate: wrapperRotate },
+        { scale: scale.value * exitScale * entranceScale },
       ],
-      opacity: opacity * exitOpacity,
+      opacity: wrapperOpacity * exitOpacity * entranceOpacity,
       zIndex: flippedSV.value || animatingSV.value ? 150 : 100, // Higher during animation but below UI elements (footer: 200)
       elevation: flippedSV.value || animatingSV.value ? 6 : 4, // Android layering fix
     };
   });
 
   const nextCardStyle = useAnimatedStyle(() => {
-    // When frozen, animate by promoteSV only (0 -> 1), otherwise use drag progress
-    const p = frozenSV.value ? promoteSV.value : Math.min(Math.abs(translateX.value) / swipeThreshold, 1);
+    const isResultHandoff = frozenSV.value > 0.5 && flippedSV.value > 0.5;
+    // During a results reveal, keep the next card settled behind the stats card.
+    // Re-animating this slot reads as a glitch on Android because the card was
+    // already promoted by the swipe gesture before the freeze.
+    const p = isResultHandoff
+      ? 1
+      : frozenSV.value
+        ? promoteSV.value
+        : Math.min(Math.abs(translateX.value) / swipeThreshold, 1);
     const nextScale = 0.98 + 0.02 * p;
     const nextTranslateY = 8 * (1 - p);
     const nextOpacity = frozenSV.value ? 1 : 0.18 + 0.82 * p;
@@ -689,8 +807,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         { translateY: nextTranslateY },
       ],
       opacity: nextOpacity,
-      zIndex: frozenSV.value ? 80 : 50, // Higher during promotion, but lower than current card
-      elevation: frozenSV.value ? 3 : 2, // Android layering fix
+      zIndex: isResultHandoff ? 100 : frozenSV.value ? 80 : 50,
+      elevation: isResultHandoff ? 4 : frozenSV.value ? 3 : 2,
       position: 'absolute' as const,
       top: 0,
       left: 0,
@@ -701,6 +819,21 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // 3D flip animations
   const frontFaceStyle = useAnimatedStyle(() => {
+    const showResultBase = resultBaseSV.value > 0.5;
+    if (showResultBase) {
+      return {
+        opacity: 1,
+        transform: [{ perspective: 1000 }, { rotateY: '0deg' }],
+        backfaceVisibility: 'hidden' as const,
+        position: 'absolute' as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1,
+      };
+    }
+
     if (ANDROID_SAFE_FLIP) {
       return { 
         opacity: 1 - flipSV.value,
@@ -709,6 +842,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         left: 0,
         right: 0,
         bottom: 0, // Fill full container height
+        zIndex: 1,
       };
     }
     const deg = interpolate(flipSV.value, [0, 1], [0, 180]);
@@ -722,31 +856,76 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       left: 0,
       right: 0,
       bottom: 0, // Fill full container height
+      zIndex: 1,
     };
   });
   
   const backFaceStyle = useAnimatedStyle(() => {
+    const exitProgress = resultExitSV.value;
+    const exitOpacity = interpolate(exitProgress, [0, 1], [1, 0], Extrapolate.CLAMP);
+    const exitScale = interpolate(exitProgress, [0, 1], [1, 0.965], Extrapolate.CLAMP);
+    const exitTranslateY = interpolate(exitProgress, [0, 1], [0, -18], Extrapolate.CLAMP);
+
     if (ANDROID_SAFE_FLIP) {
+      const resultRevealStart = Math.max(0, 1 - motion.duration.resultReveal / motion.duration.cardFlip);
+      const resultOpacity = interpolate(
+        flipSV.value,
+        [resultRevealStart, 1],
+        [0, 1],
+        Extrapolate.CLAMP
+      );
+      const resultTranslateY = interpolate(
+        flipSV.value,
+        [resultRevealStart, 1],
+        [20, 0],
+        Extrapolate.CLAMP
+      );
+
       return { 
-        opacity: flipSV.value,
+        opacity: resultOpacity * exitOpacity,
+        transform: [
+          { translateX: translateX.value },
+          { translateY: translateY.value + resultTranslateY + exitTranslateY },
+          { scale: exitScale },
+        ],
         position: 'absolute' as const,
         top: 0,
         left: 0,
         right: 0,
         bottom: 0, // ADD MISSING BOTTOM
+        zIndex: 2,
       };
     }
     const deg = interpolate(flipSV.value, [0, 1], [180, 360]);
-    const opacity = interpolate(flipSV.value, [0.5, 0.55, 1], [0, 1, 1], Extrapolate.CLAMP);
+    const resultRevealStart = Math.max(0.5, 1 - motion.duration.resultReveal / motion.duration.cardFlip);
+    const opacity = interpolate(
+      flipSV.value,
+      [resultRevealStart, 1],
+      [0, 1],
+      Extrapolate.CLAMP
+    );
+    const resultTranslateY = interpolate(
+      flipSV.value,
+      [resultRevealStart, 1],
+      [20, 0],
+      Extrapolate.CLAMP
+    );
     return {
-      transform: [{ perspective: 1000 }, { rotateY: `${deg}deg` }],
-      opacity,
+      transform: [
+        { perspective: 1000 },
+        { rotateY: `${deg}deg` },
+        { translateX: translateX.value },
+        { translateY: translateY.value + resultTranslateY + exitTranslateY },
+        { scale: exitScale },
+      ],
+      opacity: opacity * exitOpacity,
       backfaceVisibility: 'hidden' as const,
       position: 'absolute' as const,
       top: 0,
       left: 0,
       right: 0,
       bottom: 0, // Fill full container height
+      zIndex: 2,
     };
   });
 
@@ -769,22 +948,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       Extrapolate.CLAMP
     );
     return { opacity };
-  });
-
-  const skipOverlayStyle = useAnimatedStyle(() => {
-    const downOpacity = interpolate(
-      translateY.value,
-      [0, swipeDownThreshold],
-      [0, 1],
-      Extrapolate.CLAMP
-    );
-    const upOpacity = interpolate(
-      translateY.value,
-      [-swipeUpThreshold, 0],
-      [1, 0],
-      Extrapolate.CLAMP
-    );
-    return { opacity: Math.max(downOpacity, upOpacity) };
   });
 
   // Third card style - sits behind next card (MUST be before any returns!)
@@ -842,10 +1005,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         <View style={styles.endContainer}>
           <Text style={styles.endEmoji}>🎉</Text>
           <Text style={[styles.endTitle, { color: theme.text }]}>
-            You've seen everything here
+            You're all caught up
           </Text>
           <Text style={[styles.endMessage, { color: theme.textSecondary }]}>
-            More takes are on the way. Pull down to check again, or add a fresh one yourself.
+            You've seen everything here. More takes are on the way.
           </Text>
 
           <View style={[styles.communityBadge, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
@@ -861,12 +1024,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
               scaleValue={0.95}
               hapticIntensity={15}
             >
-              <Text style={styles.submitButtonText}>✏️ Submit Take</Text>
+              <Text style={styles.submitButtonText}>✏️ Add a Take</Text>
             </AnimatedPressable>
           )}
           
           <Text style={[styles.endHint, { color: theme.textSecondary, opacity: 0.7 }]}>
-            New debates appear automatically as the community grows.
+            Pull down to check again, or add a fresh take yourself.
           </Text>
           
           <Text style={[styles.pullHint, { color: theme.textSecondary, opacity: 0.5, marginTop: 20 }]}>
@@ -942,10 +1105,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           collapsable={false}
         >
           {/* 👻 Invisible sizer only when we actually have a card */}
-          {!!renderCurrent && (
+          {!!frontTake && (
             <View pointerEvents="none" style={styles.ghostSizer}>
               <TakeCard
-                take={renderCurrent}
+                take={frontTake}
                 isDarkMode={isDarkMode}
                 showStats={false}
               />
@@ -953,13 +1116,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           )}
           
           {/* FRONT */}
-          {!!renderCurrent && (
+          {!!frontTake && (
             <Animated.View
               style={[frontFaceStyle]}
               pointerEvents={isCardFlipped ? 'none' : 'auto'}
             >
               <TakeCard
-                take={renderCurrent}
+                take={frontTake}
                 isDarkMode={isDarkMode}
                 onNotPress={() => handleButtonVote('not')}
                 onHotPress={() => handleButtonVote('hot')}
@@ -971,24 +1134,26 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           )}
 
           {/* BACK (stats) */}
-          {!!renderCurrent && (
+          {!!statsTake && (
             <Animated.View
               style={[backFaceStyle]}
               pointerEvents={isCardFlipped ? 'auto' : 'none'}
             >
               <TakeCard
                 take={{
-                  ...renderCurrent,
+                  ...statsTake,
                   // For external stats cards, don't add optimistic votes since they're historical
                   // For regular votes, add optimistic single-vote bump so stats include user's vote
-                  hotVotes: renderCurrent.hotVotes + (!externalStatsCard && lastVote === 'hot' ? 1 : 0),
-                  notVotes: renderCurrent.notVotes + (!externalStatsCard && lastVote === 'not' ? 1 : 0),
-                  totalVotes: renderCurrent.totalVotes + (!externalStatsCard && lastVote ? 1 : 0),
+                  hotVotes: statsTake.hotVotes + (!externalStatsCard && lastVote === 'hot' ? 1 : 0),
+                  notVotes: statsTake.notVotes + (!externalStatsCard && lastVote === 'not' ? 1 : 0),
+                  totalVotes: statsTake.totalVotes + (!externalStatsCard && lastVote ? 1 : 0),
                 }}
                 isDarkMode={isDarkMode}
                 showStats={true}
                 userVote={lastVote}
                 isFlipped={true}
+                animateResults={resultsRevealActive}
+                holdResultCountAtZero={!externalStatsCard}
                 onChangeVote={externalStatsCard ? handleChangeVote : undefined}
                 onVoteNow={onVoteNow}
               />
@@ -1004,10 +1169,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
               
               <Animated.View style={[styles.overlayRight, { backgroundColor: theme.not }, notOverlayStyle]}>
                 <Text style={styles.overlayText}>NOT</Text>
-              </Animated.View>
-
-              <Animated.View style={[styles.overlayBottom, { backgroundColor: 'rgba(0,0,0,0.8)' }, skipOverlayStyle]}>
-                <Text style={styles.overlayText}>SKIP</Text>
               </Animated.View>
             </>
           )}
@@ -1132,18 +1293,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     transform: [{ rotate: '-15deg' }],
-  },
-  overlayBottom: {
-    // position: 'absolute',
-    // bottom: dimensions.spacing.xxl * 2.5,
-    top: '50%',
-    // left: 0,
-    // right: 0,
-    width: 300,
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
   },
   overlayText: {
     color: 'white',

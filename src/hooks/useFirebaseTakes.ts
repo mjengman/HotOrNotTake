@@ -5,6 +5,7 @@ import {
   submitTake,
   requestGeneratedTakes,
   getUserVotedAndSkippedTakeIds,
+  getUserSkippedTakes,
   skipTake,
   fetchMoreTakesFilled,
   resetFeedCursor,
@@ -19,6 +20,7 @@ import {
 } from '../services/userService';
 import { useAuth } from './useAuth';
 import { StreakUpdateResult } from '../types/User';
+import { MY_SKIPS_CATEGORY, isMySkipsCategory } from '../constants';
 
 interface UseFirebaseTakesResult {
   takes: Take[];
@@ -47,6 +49,7 @@ const FEED_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const FEED_CACHE_BATCH_SIZE = 30;
 const FEED_CACHE_PREFIX = `feed-cache:${FEED_CACHE_VERSION}`;
 const LOCAL_VOTED_PREFIX = `local-voted:${FEED_CACHE_VERSION}`;
+const LOCAL_SKIPPED_PREFIX = `local-skipped:${FEED_CACHE_VERSION}`;
 
 type CachedTake = Omit<Take, 'createdAt' | 'submittedAt' | 'approvedAt' | 'rejectedAt'> & {
   createdAt: string;
@@ -66,6 +69,46 @@ const getFeedCacheKey = (userId: string, category: string) =>
   `${FEED_CACHE_PREFIX}:${userId}:${getCategoryCacheSlug(category)}`;
 
 const getLocalVotedKey = (userId: string) => `${LOCAL_VOTED_PREFIX}:${userId}`;
+const getLocalSkippedKey = (userId: string) => `${LOCAL_SKIPPED_PREFIX}:${userId}`;
+
+const getTakeTextFingerprint = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const filterUniqueTakes = (
+  takes: Take[],
+  options: {
+    excludedIds?: Set<string>;
+    excludedTextFingerprints?: Set<string>;
+  } = {}
+): Take[] => {
+  const seenIds = new Set(options.excludedIds ?? []);
+  const seenTextFingerprints = new Set(options.excludedTextFingerprints ?? []);
+  const uniqueTakes: Take[] = [];
+
+  takes.forEach((take) => {
+    const textFingerprint = getTakeTextFingerprint(take.text);
+    if (
+      seenIds.has(take.id) ||
+      (textFingerprint && seenTextFingerprints.has(textFingerprint))
+    ) {
+      return;
+    }
+
+    seenIds.add(take.id);
+    if (textFingerprint) {
+      seenTextFingerprints.add(textFingerprint);
+    }
+    uniqueTakes.push(take);
+  });
+
+  return uniqueTakes;
+};
 
 const serializeTake = (take: Take): CachedTake => ({
   ...take,
@@ -114,6 +157,31 @@ const writeLocalVotedIds = async (userId: string, votedIds: string[]) => {
   }
 };
 
+const readLocalSkippedIds = async (userId: string): Promise<string[]> => {
+  try {
+    const raw = await AsyncStorage.getItem(getLocalSkippedKey(userId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === 'string')
+      : [];
+  } catch (error) {
+    console.warn('Unable to read local skipped IDs:', error);
+    return [];
+  }
+};
+
+const writeLocalSkippedIds = async (userId: string, skippedIds: string[]) => {
+  try {
+    await AsyncStorage.setItem(
+      getLocalSkippedKey(userId),
+      JSON.stringify(Array.from(new Set(skippedIds)))
+    );
+  } catch (error) {
+    console.warn('Unable to write local skipped IDs:', error);
+  }
+};
+
 const addLocalVotedId = async (userId: string, takeId: string) => {
   const votedIds = await readLocalVotedIds(userId);
   if (!votedIds.includes(takeId)) {
@@ -121,9 +189,47 @@ const addLocalVotedId = async (userId: string, takeId: string) => {
   }
 };
 
+const addLocalSkippedId = async (userId: string, takeId: string) => {
+  const skippedIds = await readLocalSkippedIds(userId);
+  if (!skippedIds.includes(takeId)) {
+    await writeLocalSkippedIds(userId, [...skippedIds, takeId]);
+  }
+};
+
+const removeLocalSkippedId = async (userId: string, takeId: string) => {
+  const skippedIds = await readLocalSkippedIds(userId);
+  await writeLocalSkippedIds(userId, skippedIds.filter(id => id !== takeId));
+};
+
 const removeLocalVotedId = async (userId: string, takeId: string) => {
   const votedIds = await readLocalVotedIds(userId);
   await writeLocalVotedIds(userId, votedIds.filter(id => id !== takeId));
+};
+
+const prependTakeToFeedCache = async (
+  userId: string,
+  category: string,
+  take: Take
+) => {
+  const cachedTakes = await readFeedCache(userId, category, new Set());
+  const nextTakes = [
+    take,
+    ...cachedTakes.filter(cachedTake => cachedTake.id !== take.id),
+  ];
+  await writeFeedCache(userId, category, nextTakes);
+};
+
+const removeTakeFromFeedCache = async (
+  userId: string,
+  category: string,
+  takeId: string
+) => {
+  const cachedTakes = await readFeedCache(userId, category, new Set());
+  await writeFeedCache(
+    userId,
+    category,
+    cachedTakes.filter(take => take.id !== takeId)
+  );
 };
 
 const readFeedCache = async (
@@ -216,6 +322,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const { user, loading: authLoading } = useAuth();
   const userId = user?.uid;
   const { category = 'all' } = options;
+  const viewingMySkips = isMySkipsCategory(category);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [interactedTakeIds, setInteractedTakeIds] = useState<string[]>([]);
@@ -227,6 +334,15 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const generationInFlightRef = useRef(false);
   const generationTriggeredForRef = useRef<string | null>(null);
   const initialLoadRequestRef = useRef(0);
+  const sessionHiddenTakeIdsRef = useRef<Set<string>>(new Set());
+  const sessionHiddenFromMySkipsRef = useRef<Set<string>>(new Set());
+  const sessionSeenTextFingerprintsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    sessionHiddenTakeIdsRef.current.clear();
+    sessionHiddenFromMySkipsRef.current.clear();
+    sessionSeenTextFingerprintsRef.current.clear();
+  }, [userId]);
 
   // Stable category variety algorithm - freezes prefix to prevent reshuffling
   const ensureCategoryVariety = useCallback((takesArray: Take[], freezePrefixCount: number = 0): Take[] => {
@@ -305,13 +421,25 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       let renderedCache = false;
 
       try {
-        const localVotedIds = await readLocalVotedIds(userId);
+        const [localVotedIds, localSkippedIds] = await Promise.all([
+          readLocalVotedIds(userId),
+          readLocalSkippedIds(userId),
+        ]);
         if (!isCurrentRequest()) {
           return;
         }
 
-        const localVotedSet = new Set(localVotedIds);
-        const cachedTakes = await readFeedCache(userId, category, localVotedSet);
+        const localHiddenSet = new Set([
+          ...localVotedIds,
+          ...(viewingMySkips ? [] : localSkippedIds),
+          ...(viewingMySkips
+            ? sessionHiddenFromMySkipsRef.current
+            : sessionHiddenTakeIdsRef.current),
+        ]);
+        const cachedTakes = filterUniqueTakes(
+          await readFeedCache(userId, category, localHiddenSet),
+          { excludedIds: localHiddenSet }
+        );
 
         if (!isCurrentRequest()) {
           return;
@@ -323,7 +451,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
             : cachedTakes;
 
           setFeed(orderedCached);
-          setInteractedTakeIds(localVotedIds);
+          setInteractedTakeIds(Array.from(localHiddenSet));
           setHasMore(true);
           setLoading(false);
           renderedCache = true;
@@ -332,14 +460,48 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           setFeed([]);
         }
 
-        const { voted } = await getUserVotedAndSkippedTakeIds(userId);
+        const { voted, skipped } = await getUserVotedAndSkippedTakeIds(userId);
         if (!isCurrentRequest()) {
           return;
         }
-        const freshInteractedIds = new Set(voted);
-        setInteractedTakeIds(voted);
         writeLocalVotedIds(userId, voted).catch(console.warn);
-        console.log(`🔄 Refreshed user interactions: ${voted.length} voted takes`);
+        writeLocalSkippedIds(userId, skipped).catch(console.warn);
+
+        if (viewingMySkips) {
+          const skippedTakes = filterUniqueTakes(
+            await getUserSkippedTakes(userId),
+            {
+              excludedIds: new Set([...voted, ...sessionHiddenFromMySkipsRef.current]),
+            }
+          );
+
+          if (!isCurrentRequest()) {
+            return;
+          }
+
+          setInteractedTakeIds(Array.from(new Set(voted)));
+          setFeed(prev => {
+            const mergedSkippedTakes = filterUniqueTakes(
+              [...prev, ...skippedTakes],
+              {
+                excludedIds: new Set([...voted, ...sessionHiddenFromMySkipsRef.current]),
+              }
+            );
+            writeFeedCache(userId, category, mergedSkippedTakes).catch(console.warn);
+            return mergedSkippedTakes;
+          });
+          setHasMore(false);
+          console.log(`⏭️ Loaded ${skippedTakes.length} skipped takes`);
+          return;
+        }
+
+        const freshInteractedIds = new Set([
+          ...voted,
+          ...skipped,
+          ...sessionHiddenTakeIdsRef.current,
+        ]);
+        setInteractedTakeIds(Array.from(freshInteractedIds));
+        console.log(`🔄 Refreshed user interactions: ${voted.length} voted, ${skipped.length} skipped`);
 
         const { items, gotAny } = await fetchMoreTakesFilled({
           category,
@@ -361,14 +523,23 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         });
         
         // Apply variety once on initial load
-        const ordered = category === 'all' ? ensureCategoryVariety(doubleFiltered, 0) : doubleFiltered;
+        const textExclusions = new Set(sessionSeenTextFingerprintsRef.current);
+        const orderedItems = filterUniqueTakes(doubleFiltered, {
+          excludedIds: freshInteractedIds,
+          excludedTextFingerprints: textExclusions,
+        });
+        const ordered = category === 'all' ? ensureCategoryVariety(orderedItems, 0) : orderedItems;
         setFeed(prev => {
           const merged = renderedCache
             ? mergeLiveFeedWithVisibleDeck(prev, ordered, freshInteractedIds)
             : ordered;
+          const uniqueMerged = filterUniqueTakes(merged, {
+            excludedIds: freshInteractedIds,
+            excludedTextFingerprints: sessionSeenTextFingerprintsRef.current,
+          });
           const finalFeed = category === 'all' && renderedCache
-            ? ensureCategoryVariety(merged, prev.length)
-            : merged;
+            ? ensureCategoryVariety(uniqueMerged, prev.length)
+            : uniqueMerged;
           writeFeedCache(userId, category, finalFeed).catch(console.warn);
           return finalFeed;
         });
@@ -394,7 +565,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     return () => {
       isActive = false;
     };
-  }, [authLoading, category, userId, ensureCategoryVariety]);
+  }, [authLoading, category, userId, ensureCategoryVariety, viewingMySkips]);
 
   // Load more takes function
   const loadMore = useCallback(async (
@@ -402,17 +573,30 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     force: boolean = false,
     background: boolean = false
   ) => {
+    if (viewingMySkips) {
+      setHasMore(false);
+      return;
+    }
+
     if (!userId || (!force && !hasMore) || loading) return;
 
     try {
       if (!background) {
         setLoading(true);
       }
-      const interacted = new Set(interactedTakeIds);
+      const interacted = new Set([
+        ...interactedTakeIds,
+        ...sessionHiddenTakeIdsRef.current,
+      ]);
+      const excludedTextFingerprints = new Set(sessionSeenTextFingerprintsRef.current);
       
       // Also exclude what's already in feed to avoid duplicates
       for (const take of feed) {
         interacted.add(take.id);
+        const textFingerprint = getTakeTextFingerprint(take.text);
+        if (textFingerprint) {
+          excludedTextFingerprints.add(textFingerprint);
+        }
       }
 
       const { items, gotAny } = await fetchMoreTakesFilled({
@@ -430,9 +614,16 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         }
         return !isInteracted;
       });
+      const uniqueFreshTakes = filterUniqueTakes(doubleFiltered, {
+        excludedIds: interacted,
+        excludedTextFingerprints,
+      });
 
       setFeed(prev => {
-        const combined = [...prev, ...doubleFiltered];
+        const combined = filterUniqueTakes([...prev, ...uniqueFreshTakes], {
+          excludedIds: sessionHiddenTakeIdsRef.current,
+          excludedTextFingerprints: sessionSeenTextFingerprintsRef.current,
+        });
         if (category !== 'all') {
           writeFeedCache(userId, category, combined).catch(console.warn);
           return combined;
@@ -442,8 +633,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         writeFeedCache(userId, category, ordered).catch(console.warn);
         return ordered;
       });
-      setHasMore(gotAny && doubleFiltered.length > 0);
-      console.log(`📝 Loaded ${doubleFiltered.length} more takes (filtered from ${items.length}), hasMore: ${gotAny}, total feed: ${feed.length + doubleFiltered.length}`);
+      setHasMore(gotAny && uniqueFreshTakes.length > 0);
+      console.log(`📝 Loaded ${uniqueFreshTakes.length} more takes (filtered from ${items.length}), hasMore: ${gotAny}, total feed: ${feed.length + uniqueFreshTakes.length}`);
     } catch (err) {
       if (!background) {
         setError(err instanceof Error ? err.message : 'Failed to load more takes');
@@ -454,13 +645,13 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         setLoading(false);
       }
     }
-  }, [category, feed, hasMore, loading, interactedTakeIds, ensureCategoryVariety, userId]);
+  }, [category, feed, hasMore, loading, interactedTakeIds, ensureCategoryVariety, userId, viewingMySkips]);
 
   // Return feed directly - variety is applied once during load, not on every render
   const takes = feed;
 
   useEffect(() => {
-    if (!userId || loading) {
+    if (!userId || loading || viewingMySkips) {
       return;
     }
 
@@ -497,7 +688,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       .finally(() => {
         generationInFlightRef.current = false;
       });
-  }, [category, loadMore, loading, takes.length, userId]);
+  }, [category, loadMore, loading, takes.length, userId, viewingMySkips]);
 
   // Submit a vote
   const handleSubmitVote = useCallback(async (
@@ -527,11 +718,20 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
 
       // Mark as in-flight
       inFlightVotesRef.current.add(takeId);
+      const votedTake = feed.find(take => take.id === takeId);
+      sessionHiddenTakeIdsRef.current.add(takeId);
+      sessionHiddenFromMySkipsRef.current.add(takeId);
+      if (votedTake) {
+        const textFingerprint = getTakeTextFingerprint(votedTake.text);
+        if (textFingerprint) {
+          sessionSeenTextFingerprintsRef.current.add(textFingerprint);
+        }
+      }
 
       // Optimistically update interacted IDs and remove from feed
       setInteractedTakeIds(prev => {
         console.log('🗳️ Adding take to voted list:', takeId);
-        return [...prev, takeId];
+        return Array.from(new Set([...prev, takeId]));
       });
       setFeed(prev => {
         console.log('🗑️ Removing take from feed:', takeId, 'Feed length before:', prev.length);
@@ -544,10 +744,11 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Submit the vote to Firebase
       await submitVote(takeId, userId, vote);
       await addLocalVotedId(userId, takeId);
+      await removeLocalSkippedId(userId, takeId);
+      await removeTakeFromFeedCache(userId, MY_SKIPS_CATEGORY, takeId);
 
       let streakUpdate: StreakUpdateResult | null = null;
       try {
-        const votedTake = feed.find(take => take.id === takeId);
         const hotVotesAfter = votedTake
           ? votedTake.hotVotes + (vote === 'hot' ? 1 : 0)
           : undefined;
@@ -574,7 +775,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       }
       
       // Auto-load more if getting low
-      if (feed.length < 10 && hasMore) {
+      if (!viewingMySkips && feed.length < 10 && hasMore) {
         loadMore(20).catch(console.error);
       }
       
@@ -583,6 +784,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     } catch (err) {
       // Rollback on error
       setInteractedTakeIds(prev => prev.filter(id => id !== takeId));
+      sessionHiddenTakeIdsRef.current.delete(takeId);
+      sessionHiddenFromMySkipsRef.current.delete(takeId);
       console.error('Vote error, but handled gracefully:', err);
       // Don't throw - just log to prevent crashes
       return null;
@@ -590,7 +793,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Always clear in-flight flag
       inFlightVotesRef.current.delete(takeId);
     }
-  }, [userId, category, feed, hasMore, loadMore, interactedTakeIds]);
+  }, [userId, category, feed, hasMore, loadMore, interactedTakeIds, viewingMySkips]);
 
   // Skip a take
   const handleSkipTake = useCallback(async (takeId: string): Promise<void> => {
@@ -599,27 +802,52 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
 
     try {
-      // Remove from feed immediately (but don't add to interactedTakeIds since skips can reappear)
+      const skippedTake = feed.find(take => take.id === takeId);
+      if (viewingMySkips) {
+        sessionHiddenFromMySkipsRef.current.add(takeId);
+      } else {
+        sessionHiddenTakeIdsRef.current.add(takeId);
+      }
+      if (skippedTake) {
+        const textFingerprint = getTakeTextFingerprint(skippedTake.text);
+        if (textFingerprint) {
+          sessionSeenTextFingerprintsRef.current.add(textFingerprint);
+        }
+      }
+
+      setInteractedTakeIds(prev => Array.from(new Set([...prev, takeId])));
+
+      // Remove from this deck immediately; normal feeds treat skips as hidden,
+      // while My Skips lets users intentionally revisit them later.
       setFeed(prev => {
         const newFeed = prev.filter(take => take.id !== takeId);
         writeFeedCache(userId, category, newFeed).catch(console.warn);
         return newFeed;
       });
       
-      // Record the skip in Firebase
-      await skipTake(takeId, userId);
+      if (!viewingMySkips) {
+        await addLocalSkippedId(userId, takeId);
+        if (skippedTake) {
+          await prependTakeToFeedCache(userId, MY_SKIPS_CATEGORY, skippedTake);
+        }
+        // Record the skip in Firebase
+        await skipTake(takeId, userId);
+      }
       
       // Auto-load more if getting low
-      if (feed.length < 10 && hasMore) {
+      if (!viewingMySkips && feed.length < 10 && hasMore) {
         loadMore(20).catch(console.error);
       }
       
       console.log(`⏭️ Skipped take ${takeId}`);
     } catch (err) {
+      sessionHiddenTakeIdsRef.current.delete(takeId);
+      sessionHiddenFromMySkipsRef.current.delete(takeId);
+      setInteractedTakeIds(prev => prev.filter(id => id !== takeId));
       console.error('❌ Skip failed in hook:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to skip take');
     }
-  }, [userId, category, feed.length, hasMore, loadMore]);
+  }, [userId, category, feed, hasMore, loadMore, viewingMySkips]);
 
   // Submit a new take
   const handleSubmitNewTake = useCallback(async (
@@ -686,13 +914,43 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       
       // Reset the feed and cursor
       setFeed([]);
-      setHasMore(true);
+      setHasMore(!viewingMySkips);
       resetFeedCursor(category);
 
-      const { voted } = await getUserVotedAndSkippedTakeIds(userId);
-      const freshInteractedIds = new Set(voted);
-      setInteractedTakeIds(voted);
+      const { voted, skipped } = await getUserVotedAndSkippedTakeIds(userId);
       writeLocalVotedIds(userId, voted).catch(console.warn);
+      writeLocalSkippedIds(userId, skipped).catch(console.warn);
+
+      if (viewingMySkips) {
+        const skippedTakes = filterUniqueTakes(
+          await getUserSkippedTakes(userId),
+          {
+            excludedIds: new Set([...voted, ...sessionHiddenFromMySkipsRef.current]),
+          }
+        );
+
+        setInteractedTakeIds(Array.from(new Set(voted)));
+        setFeed(prev => {
+          const mergedSkippedTakes = filterUniqueTakes(
+            [...prev, ...skippedTakes],
+            {
+              excludedIds: new Set([...voted, ...sessionHiddenFromMySkipsRef.current]),
+            }
+          );
+          writeFeedCache(userId, category, mergedSkippedTakes).catch(console.warn);
+          return mergedSkippedTakes;
+        });
+        setHasMore(false);
+        console.log(`🔄 Refreshed skipped feed: ${skippedTakes.length} takes`);
+        return;
+      }
+
+      const freshInteractedIds = new Set([
+        ...voted,
+        ...skipped,
+        ...sessionHiddenTakeIdsRef.current,
+      ]);
+      setInteractedTakeIds(Array.from(freshInteractedIds));
       
       // Load fresh content
       const { items, gotAny } = await fetchMoreTakesFilled({
@@ -703,7 +961,11 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       });
       
       // Apply variety once to the fresh list
-      const ordered = category === 'all' ? ensureCategoryVariety(items, 0) : items;
+      const uniqueItems = filterUniqueTakes(items, {
+        excludedIds: freshInteractedIds,
+        excludedTextFingerprints: sessionSeenTextFingerprintsRef.current,
+      });
+      const ordered = category === 'all' ? ensureCategoryVariety(uniqueItems, 0) : uniqueItems;
       setFeed(ordered);
       writeFeedCache(userId, category, ordered).catch(console.warn);
       setHasMore(gotAny && ordered.length > 0);
@@ -713,7 +975,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     } finally {
       setLoading(false);
     }
-  }, [category, ensureCategoryVariety, userId]);
+  }, [category, ensureCategoryVariety, userId, viewingMySkips]);
 
   // Prepend a take to the front of the deck (used for vote changes)
   const prependTake = useCallback((take: Take) => {

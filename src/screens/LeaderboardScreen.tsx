@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScrollView } from 'react-native-gesture-handler';
 import { colors, dimensions, motion } from '../constants';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
@@ -20,6 +19,14 @@ import {
   getMostSkippedTakesByCategory,
   getDatabaseStats,
 } from '../services/takeService';
+import {
+  getLeaderboardCacheSnapshot,
+  readLeaderboardCache,
+  writeLeaderboardCache,
+  type LeaderboardCache,
+  type SkippedLeaderboard,
+  type TakeLeaderboard,
+} from '../services/leaderboardCacheService';
 
 interface LeaderboardScreenProps {
   onClose: () => void;
@@ -28,21 +35,7 @@ interface LeaderboardScreenProps {
 }
 
 type LeaderboardTab = 'hottest' | 'nottest' | 'divisive' | 'skipped';
-type TakeLeaderboard = Record<string, Take[]>;
-type SkippedLeaderboard = Record<string, { take: Take; skipCount: number }[]>;
 type LoadingTabs = Record<LeaderboardTab, boolean>;
-type LeaderboardCache = {
-  savedAt: number;
-  hottest: TakeLeaderboard;
-  nottest: TakeLeaderboard;
-  divisive: TakeLeaderboard;
-  skipped: SkippedLeaderboard;
-  skippedLoadFailed: boolean;
-};
-
-const LEADERBOARD_CACHE_VERSION = 'v1';
-const LEADERBOARD_CACHE_KEY = `leaderboards-cache:${LEADERBOARD_CACHE_VERSION}`;
-const LEADERBOARD_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 const DEFAULT_LOADING_TABS: LoadingTabs = {
   hottest: true,
@@ -58,85 +51,29 @@ const READY_TABS: LoadingTabs = {
   skipped: false,
 };
 
-const reviveDate = (value: unknown): Date | undefined => {
-  if (!value) return undefined;
-  const date = new Date(value as string);
-  return Number.isNaN(date.getTime()) ? undefined : date;
-};
-
-const reviveTake = (take: Take): Take => ({
-  ...take,
-  createdAt: reviveDate(take.createdAt) || new Date(),
-  submittedAt: reviveDate(take.submittedAt) || new Date(),
-  approvedAt: reviveDate(take.approvedAt),
-  rejectedAt: reviveDate(take.rejectedAt),
-});
-
-const reviveTakeLeaderboard = (data: TakeLeaderboard = {}): TakeLeaderboard =>
-  Object.fromEntries(
-    Object.entries(data).map(([category, takes]) => [
-      category,
-      takes.map(reviveTake),
-    ])
-  );
-
-const reviveSkippedLeaderboard = (data: SkippedLeaderboard = {}): SkippedLeaderboard =>
-  Object.fromEntries(
-    Object.entries(data).map(([category, items]) => [
-      category,
-      items.map(item => ({
-        ...item,
-        take: reviveTake(item.take),
-      })),
-    ])
-  );
-
-const readLeaderboardCache = async (): Promise<LeaderboardCache | null> => {
-  try {
-    const raw = await AsyncStorage.getItem(LEADERBOARD_CACHE_KEY);
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw);
-    if (!parsed.savedAt || Date.now() - parsed.savedAt > LEADERBOARD_CACHE_TTL_MS) {
-      return null;
-    }
-
-    return {
-      savedAt: parsed.savedAt,
-      hottest: reviveTakeLeaderboard(parsed.hottest),
-      nottest: reviveTakeLeaderboard(parsed.nottest),
-      divisive: reviveTakeLeaderboard(parsed.divisive),
-      skipped: reviveSkippedLeaderboard(parsed.skipped),
-      skippedLoadFailed: Boolean(parsed.skippedLoadFailed),
-    };
-  } catch (error) {
-    console.warn('Unable to read leaderboard cache:', error);
-    return null;
-  }
-};
-
 export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   onClose,
   onShowTakeStats,
   isDarkMode = false,
 }) => {
+  const initialCache = React.useMemo(() => getLeaderboardCacheSnapshot(), []);
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('hottest');
-  const [loadingTabs, setLoadingTabs] = useState<LoadingTabs>(DEFAULT_LOADING_TABS);
+  const [loadingTabs, setLoadingTabs] = useState<LoadingTabs>(initialCache ? READY_TABS : DEFAULT_LOADING_TABS);
   const [refreshing, setRefreshing] = useState(false);
   const [isAtTop, setIsAtTop] = useState(true);
   const [scrollEnabled, setScrollEnabled] = useState(true);
   
-  const [hottestTakes, setHottestTakes] = useState<TakeLeaderboard>({});
-  const [nottestTakes, setNottestTakes] = useState<TakeLeaderboard>({});
-  const [divisiveTakes, setDivisiveTakes] = useState<TakeLeaderboard>({});
-  const [skippedTakes, setSkippedTakes] = useState<SkippedLeaderboard>({});
-  const [skippedLoadFailed, setSkippedLoadFailed] = useState(false);
+  const [hottestTakes, setHottestTakes] = useState<TakeLeaderboard>(initialCache?.hottest || {});
+  const [nottestTakes, setNottestTakes] = useState<TakeLeaderboard>(initialCache?.nottest || {});
+  const [divisiveTakes, setDivisiveTakes] = useState<TakeLeaderboard>(initialCache?.divisive || {});
+  const [skippedTakes, setSkippedTakes] = useState<SkippedLeaderboard>(initialCache?.skipped || {});
+  const [skippedLoadFailed, setSkippedLoadFailed] = useState(Boolean(initialCache?.skippedLoadFailed));
   const leaderboardCacheRef = useRef<Omit<LeaderboardCache, 'savedAt'>>({
-    hottest: {},
-    nottest: {},
-    divisive: {},
-    skipped: {},
-    skippedLoadFailed: false,
+    hottest: initialCache?.hottest || {},
+    nottest: initialCache?.nottest || {},
+    divisive: initialCache?.divisive || {},
+    skipped: initialCache?.skipped || {},
+    skippedLoadFailed: Boolean(initialCache?.skippedLoadFailed),
   });
   
   // Hidden dev feature - tap counter for database stats
@@ -159,13 +96,10 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       ...patch,
     };
 
-    AsyncStorage.setItem(
-      LEADERBOARD_CACHE_KEY,
-      JSON.stringify({
+    writeLeaderboardCache({
         savedAt: Date.now(),
         ...leaderboardCacheRef.current,
-      })
-    ).catch(error => {
+    }).catch(error => {
       console.warn('Unable to write leaderboard cache:', error);
     });
   }, []);
@@ -488,8 +422,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const tabs: { key: LeaderboardTab; label: string; icon: string }[] = [
     { key: 'hottest', label: 'Hottest', icon: '🔥' },
     { key: 'nottest', label: 'Nottest', icon: '❄️' },
-    { key: 'divisive', label: 'Most Divisive', icon: '⚔️' },
-    { key: 'skipped', label: 'Most Skipped', icon: '⏭️' },
+    { key: 'divisive', label: 'Divisive', icon: '⚔️' },
+    { key: 'skipped', label: 'Skipped', icon: '⏭️' },
   ];
 
   return (

@@ -322,6 +322,15 @@ const normalizeGeneratedTake = (value: unknown): string | null => {
   return plainPunctuation.length ? plainPunctuation : null;
 };
 
+const getTakeTextFingerprint = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 const parseGeneratedTakes = (data: OpenAIChatCompletionResponse): string[] => {
   const content = data.choices?.[0]?.message?.content;
   if (!content) {
@@ -423,13 +432,38 @@ const generateTakeCandidates = async (category: Category): Promise<string[]> => 
 };
 
 const takeTextExists = async (text: string): Promise<boolean> => {
-  const snapshot = await db
+  const textFingerprint = getTakeTextFingerprint(text);
+  const [exactSnapshot, fingerprintSnapshot] = await Promise.all([
+    db
+      .collection('takes')
+      .where('text', '==', text)
+      .limit(1)
+      .get(),
+    db
+      .collection('takes')
+      .where('textFingerprint', '==', textFingerprint)
+      .limit(1)
+      .get(),
+  ]);
+
+  if (!exactSnapshot.empty || !fingerprintSnapshot.empty) {
+    return true;
+  }
+
+  // Older takes do not have textFingerprint yet, so scan a bounded slice to
+  // keep newly generated content from feeling repetitive before a backfill.
+  const legacySnapshot = await db
     .collection('takes')
-    .where('text', '==', text)
-    .limit(1)
+    .where('isApproved', '==', true)
+    .select('text')
+    .limit(1000)
     .get();
 
-  return !snapshot.empty;
+  return legacySnapshot.docs.some((doc) => {
+    const existingText = doc.get('text');
+    return typeof existingText === 'string' &&
+      getTakeTextFingerprint(existingText) === textFingerprint;
+  });
 };
 
 const createTake = async ({
@@ -448,6 +482,7 @@ const createTake = async ({
   const isApproved = status === 'approved';
   const takeData: FirebaseFirestore.DocumentData = {
     text,
+    textFingerprint: getTakeTextFingerprint(text),
     category,
     hotVotes: 0,
     notVotes: 0,

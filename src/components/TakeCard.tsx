@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  Animated,
+  Easing,
   View,
   Text,
   StyleSheet,
@@ -24,6 +26,8 @@ interface TakeCardProps {
   showStats?: boolean;
   userVote?: 'hot' | 'not' | null;
   isFlipped?: boolean;
+  animateResults?: boolean;
+  holdResultCountAtZero?: boolean;
   onChangeVote?: (take: Take, currentVote?: 'hot' | 'not' | null) => void;
   onVoteNow?: (take: Take) => void;
 }
@@ -56,6 +60,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   showStats = true,
   userVote = null,
   isFlipped = false,
+  animateResults = false,
+  holdResultCountAtZero = false,
   onChangeVote,
   onVoteNow,
 }) => {
@@ -65,6 +71,9 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const visualShareRef = useRef<ViewShot>(null);
+  const initialResultCountProgress = isFlipped && holdResultCountAtZero && !animateResults ? 0 : 1;
+  const resultCountAnim = useRef(new Animated.Value(initialResultCountProgress)).current;
+  const [resultCountProgress, setResultCountProgress] = useState(initialResultCountProgress);
 
   // Dynamic text sizing based on card height
   // For smaller cards (< 400px), reduce text size for better readability
@@ -117,6 +126,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const totalVotes = take.totalVotes || (take.hotVotes + take.notVotes) || 0;
   const hotPercentage = totalVotes > 0 ? Math.round((take.hotVotes / totalVotes) * 100) : 50;
   const notPercentage = totalVotes > 0 ? Math.round((take.notVotes / totalVotes) * 100) : 50;
+  const displayedHotPercentage = Math.round(hotPercentage * resultCountProgress);
+  const displayedNotPercentage = Math.round(notPercentage * resultCountProgress);
   const resultReaction = getResultReaction({
     userVote,
     hotPercentage,
@@ -159,6 +170,47 @@ export const TakeCard: React.FC<TakeCardProps> = ({
     minHeight: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.md,
   };
   const percentageItemHeight = isCompactResultCard ? 58 : 74;
+
+  useEffect(() => {
+    if (!isFlipped) {
+      resultCountAnim.stopAnimation();
+      resultCountAnim.setValue(1);
+      setResultCountProgress(1);
+      return undefined;
+    }
+
+    if (!animateResults) {
+      resultCountAnim.stopAnimation();
+      const nextProgress = holdResultCountAtZero ? 0 : 1;
+      resultCountAnim.setValue(nextProgress);
+      setResultCountProgress(nextProgress);
+      return undefined;
+    }
+
+    resultCountAnim.stopAnimation();
+    resultCountAnim.setValue(0);
+    setResultCountProgress(0);
+
+    const listenerId = resultCountAnim.addListener(({ value }) => {
+      setResultCountProgress(value);
+    });
+
+    Animated.timing(resultCountAnim, {
+      toValue: 1,
+      duration: motion.duration.resultCountUp,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) {
+        setResultCountProgress(1);
+      }
+    });
+
+    return () => {
+      resultCountAnim.removeListener(listenerId);
+      resultCountAnim.stopAnimation();
+    };
+  }, [animateResults, holdResultCountAtZero, hotPercentage, isFlipped, notPercentage, resultCountAnim, take.id]);
 
   // Check if this take is favorited
   useEffect(() => {
@@ -451,7 +503,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                         textAlign: 'center'
                       }
                     ]}>
-                      {notPercentage}%
+                      {displayedNotPercentage}%
                     </Text>
                   </View>
                   <View style={{ justifyContent: 'center', alignItems: 'center' }}>
@@ -493,7 +545,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                         textAlign: 'center'
                       }
                     ]}>
-                      {hotPercentage}%
+                      {displayedHotPercentage}%
                     </Text>
                   </View>
                   <View style={{ justifyContent: 'center', alignItems: 'center' }}>

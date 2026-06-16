@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   BackHandler,
   Switch,
+  Vibration,
 } from 'react-native';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
 import { colors, motion } from '../constants';
@@ -43,8 +44,15 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   const responsive = useResponsive();
   const burgerSize = Math.max(motion.touchTarget.comfortable, responsive.iconSize.xlarge + 2);
 
-  const handleMenuItemPress = (action: () => void) => {
+  const closeMenu = (withHaptic = true) => {
+    if (withHaptic) {
+      Vibration.vibrate(motion.haptic.light);
+    }
     setIsOpen(false);
+  };
+
+  const handleMenuItemPress = (action: () => void) => {
+    closeMenu();
     // Small delay to let the modal close before triggering action
     setTimeout(action, 100);
   };
@@ -99,7 +107,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
 
     const backAction = () => {
       if (isOpen) {
-        setIsOpen(false);
+        closeMenu();
         return true; // Prevent default back behavior
       }
       return false;
@@ -143,13 +151,13 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
         animationType="fade"
         statusBarTranslucent={true}
         presentationStyle="overFullScreen"
-        onRequestClose={() => setIsOpen(false)}
+        onRequestClose={() => closeMenu()}
       >
         <View style={StyleSheet.absoluteFillObject}>
           <TouchableOpacity
             style={styles.overlay}
             activeOpacity={1}
-            onPress={() => setIsOpen(false)}
+            onPress={() => closeMenu()}
           >
             <SafeAreaView style={[
               styles.menuContainer,

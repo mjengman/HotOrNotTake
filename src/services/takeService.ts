@@ -572,6 +572,70 @@ export const getUserVotedAndSkippedTakeIds = async (userId: string): Promise<{
   }
 };
 
+export const getUserSkippedTakes = async (
+  userId: string,
+  maxCount: number = 60
+): Promise<Take[]> => {
+  try {
+    const [votesSnapshot, skipsSnapshot] = await Promise.all([
+      getDocs(query(collection(db, 'votes'), where('userId', '==', userId))),
+      getDocs(query(collection(db, 'skips'), where('userId', '==', userId))),
+    ]);
+
+    const votedIds = new Set(votesSnapshot.docs.map(doc => doc.data().takeId));
+    const skipRecords = skipsSnapshot.docs
+      .map(doc => {
+        const data = doc.data();
+        return {
+          takeId: data.takeId as string | undefined,
+          skippedAt: data.skippedAt?.toDate?.() instanceof Date
+            ? data.skippedAt.toDate() as Date
+            : new Date(data.skippedAt || 0),
+        };
+      })
+      .filter((record): record is { takeId: string; skippedAt: Date } =>
+        typeof record.takeId === 'string' &&
+        record.takeId.length > 0 &&
+        !votedIds.has(record.takeId)
+      )
+      .sort((a, b) => b.skippedAt.getTime() - a.skippedAt.getTime());
+
+    const uniqueSkippedIds: string[] = [];
+    const seenIds = new Set<string>();
+    skipRecords.forEach((record) => {
+      if (!seenIds.has(record.takeId)) {
+        seenIds.add(record.takeId);
+        uniqueSkippedIds.push(record.takeId);
+      }
+    });
+
+    const skippedTakes = await Promise.all(
+      uniqueSkippedIds.slice(0, maxCount).map(async (takeId) => {
+        try {
+          const takeSnapshot = await getDoc(doc(db, TAKES_COLLECTION, takeId));
+          if (!takeSnapshot.exists()) {
+            return null;
+          }
+
+          const data = takeSnapshot.data();
+          if (data.isApproved !== true && data.status !== 'approved') {
+            return null;
+          }
+
+          return convertFirestoreTake(takeSnapshot.id, data);
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    return skippedTakes.filter((take): take is Take => take !== null);
+  } catch (error) {
+    console.error('Error fetching skipped takes:', error);
+    return [];
+  }
+};
+
 // Leaderboard: Get hottest takes (most HOT votes) by category
 export const getHottestTakesByCategory = async (): Promise<Record<string, Take[]>> => {
   try {

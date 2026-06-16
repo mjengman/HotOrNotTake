@@ -7,10 +7,10 @@ import {
   getNottestTakesByCategory,
 } from './takeService';
 
-type TakeLeaderboard = Record<string, Take[]>;
-type SkippedLeaderboard = Record<string, { take: Take; skipCount: number }[]>;
+export type TakeLeaderboard = Record<string, Take[]>;
+export type SkippedLeaderboard = Record<string, { take: Take; skipCount: number }[]>;
 
-type LeaderboardCache = {
+export type LeaderboardCache = {
   savedAt: number;
   hottest: TakeLeaderboard;
   nottest: TakeLeaderboard;
@@ -21,7 +21,8 @@ type LeaderboardCache = {
 
 const LEADERBOARD_CACHE_VERSION = 'v1';
 const LEADERBOARD_CACHE_KEY = `leaderboards-cache:${LEADERBOARD_CACHE_VERSION}`;
-const LEADERBOARD_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+let prefetchPromise: Promise<void> | null = null;
+let memoryCache: LeaderboardCache | null = null;
 
 const emptyCache = (): LeaderboardCache => ({
   savedAt: 0,
@@ -32,28 +33,91 @@ const emptyCache = (): LeaderboardCache => ({
   skippedLoadFailed: false,
 });
 
-const readCache = async (): Promise<LeaderboardCache> => {
+const reviveDate = (value: unknown): Date | undefined => {
+  if (!value) return undefined;
+  const date = new Date(value as string);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
+const reviveTake = (take: Take): Take => ({
+  ...take,
+  createdAt: reviveDate(take.createdAt) || new Date(),
+  submittedAt: reviveDate(take.submittedAt) || new Date(),
+  approvedAt: reviveDate(take.approvedAt),
+  rejectedAt: reviveDate(take.rejectedAt),
+});
+
+const reviveTakeLeaderboard = (data: TakeLeaderboard = {}): TakeLeaderboard =>
+  Object.fromEntries(
+    Object.entries(data).map(([category, takes]) => [
+      category,
+      Array.isArray(takes) ? takes.map(reviveTake) : [],
+    ])
+  );
+
+const reviveSkippedLeaderboard = (data: SkippedLeaderboard = {}): SkippedLeaderboard =>
+  Object.fromEntries(
+    Object.entries(data).map(([category, items]) => [
+      category,
+      Array.isArray(items)
+        ? items.map(item => ({
+            ...item,
+            take: reviveTake(item.take),
+          }))
+        : [],
+    ])
+  );
+
+const reviveCache = (cache: Partial<LeaderboardCache>): LeaderboardCache => ({
+  ...emptyCache(),
+  ...cache,
+  hottest: reviveTakeLeaderboard(cache.hottest),
+  nottest: reviveTakeLeaderboard(cache.nottest),
+  divisive: reviveTakeLeaderboard(cache.divisive),
+  skipped: reviveSkippedLeaderboard(cache.skipped),
+  skippedLoadFailed: Boolean(cache.skippedLoadFailed),
+});
+
+export const getLeaderboardCacheSnapshot = (): LeaderboardCache | null => memoryCache;
+
+export const readLeaderboardCache = async (): Promise<LeaderboardCache | null> => {
+  if (memoryCache) {
+    return memoryCache;
+  }
+
   try {
     const raw = await AsyncStorage.getItem(LEADERBOARD_CACHE_KEY);
-    if (!raw) return emptyCache();
+    if (!raw) return null;
 
-    return {
-      ...emptyCache(),
-      ...JSON.parse(raw),
-    };
+    memoryCache = reviveCache(JSON.parse(raw));
+    return memoryCache;
   } catch (error) {
     console.warn('Unable to read leaderboard prefetch cache:', error);
-    return emptyCache();
+    return null;
   }
 };
 
-export const prefetchLeaderboardCache = async () => {
-  const existing = await readCache();
-  const isFresh = existing.savedAt && Date.now() - existing.savedAt < LEADERBOARD_CACHE_TTL_MS;
+export const writeLeaderboardCache = async (cache: LeaderboardCache) => {
+  memoryCache = reviveCache(cache);
+  await AsyncStorage.setItem(LEADERBOARD_CACHE_KEY, JSON.stringify(memoryCache));
+};
 
-  if (isFresh) {
-    return;
+export const prefetchLeaderboardCache = async () => {
+  if (prefetchPromise) {
+    return prefetchPromise;
   }
+
+  prefetchPromise = refreshLeaderboardCache();
+
+  try {
+    await prefetchPromise;
+  } finally {
+    prefetchPromise = null;
+  }
+};
+
+const refreshLeaderboardCache = async () => {
+  const existing = (await readLeaderboardCache()) || emptyCache();
 
   const [hottestResult, nottestResult, divisiveResult, skippedResult] = await Promise.allSettled([
     getHottestTakesByCategory(),
@@ -72,5 +136,5 @@ export const prefetchLeaderboardCache = async () => {
     skippedLoadFailed: skippedResult.status === 'rejected' ? true : false,
   };
 
-  await AsyncStorage.setItem(LEADERBOARD_CACHE_KEY, JSON.stringify(nextCache));
+  await writeLeaderboardCache(nextCache);
 };

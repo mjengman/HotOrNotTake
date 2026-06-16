@@ -10,6 +10,7 @@ import {
   Animated,
   Platform,
   TouchableOpacity,
+  Vibration,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,7 +43,7 @@ const THEME_PREFERENCE_KEY = 'themePreference';
 const RESULTS_AUTOPLAY_PREFERENCE_KEY = 'resultsAutoplayPreference';
 const DAILY_CHALLENGE_NUDGE_PREFIX = 'dailyChallengeNudgeShown';
 const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
-type EngagementToast = { title: string; subtitle: string };
+type EngagementToast = { title: string; subtitle: string; hapticIntensity?: number };
 
 const formatCompactCount = (count: number) => {
   if (count >= 1000000) {
@@ -97,6 +98,7 @@ export const HomeScreen: React.FC = () => {
   const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
   const [communityTotalVotes, setCommunityTotalVotes] = useState<number>(0);
   const [streakToast, setStreakToast] = useState<EngagementToast | null>(null);
+  const [skipRequestToken, setSkipRequestToken] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const streakToastAnim = useRef(new Animated.Value(0)).current;
   const toastQueueRef = useRef<EngagementToast[]>([]);
@@ -108,7 +110,7 @@ export const HomeScreen: React.FC = () => {
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
     category: selectedCategory
   });
-  const { stats, loading: statsLoading, refreshStats } = useUserStats();
+  const { stats, loading: statsLoading, refreshStats, applyEngagementUpdate } = useUserStats();
   
   // Use the hook-based interstitial ads
   const { onCardComplete, onSessionEnd } = useInterstitialAds();
@@ -136,11 +138,11 @@ export const HomeScreen: React.FC = () => {
 
   // Rotating instruction messages
   const instructionTexts = useMemo(() => [
-    "Swipe right for 🔥 HOT • Swipe left for ❄️ NOT",
+    "Swipe right 🔥 HOT • Swipe left ❄️ NOT",
     streakInstructionText,
-    "Swipe up ⬆️ or down ⬇️ to SKIP",
-    "🚀 More swipes = fewer ads!",
-    "☰ Tap the menu button for more options",
+    "Swipe up ⬆️ or down ⬇️ to skip",
+    "🚀 Keep voting to space out ads",
+    "☰ Menu has history, favorites, and settings",
   ], [streakInstructionText]);
 
   const statsBarSegments = useMemo(() => {
@@ -361,6 +363,9 @@ export const HomeScreen: React.FC = () => {
 
     toastAnimatingRef.current = true;
     setStreakToast(nextToast);
+    if (nextToast.hapticIntensity) {
+      Vibration.vibrate(nextToast.hapticIntensity);
+    }
     streakToastAnim.stopAnimation();
     streakToastAnim.setValue(0);
     Animated.sequence([
@@ -405,6 +410,7 @@ export const HomeScreen: React.FC = () => {
       subtitle: isMilestone
         ? 'Milestone hit. Keep it rolling tomorrow.'
         : 'Come back tomorrow to keep it alive.',
+      hapticIntensity: isMilestone ? motion.haptic.medium : undefined,
     });
   }, [enqueueToast]);
 
@@ -497,18 +503,28 @@ export const HomeScreen: React.FC = () => {
       changeVoteTakeIdsRef.current.delete(takeId);
       // Track completed card for ad service (called after vote is cast)
       onCardComplete();
-      // Update vote counter immediately
-      await refreshStats();
       if (streakUpdate?.didUpdateToday) {
+        applyEngagementUpdate(streakUpdate);
         showStreakToast(streakUpdate);
       }
       if (streakUpdate?.challengeCompleted) {
+        if (!streakUpdate.didUpdateToday) {
+          applyEngagementUpdate(streakUpdate);
+        }
         enqueueToast({
           title: '🎯 Challenge complete!',
           subtitle: `${streakUpdate.dailyChallenge?.title || "Today's quest"} is done. Come back tomorrow.`,
+          hapticIntensity: motion.haptic.medium,
         });
+      } else if (streakUpdate && !streakUpdate.didUpdateToday) {
+        applyEngagementUpdate(streakUpdate);
       }
-      streakUpdate?.achievementToasts?.forEach(enqueueToast);
+      streakUpdate?.achievementToasts?.forEach(toast => enqueueToast({
+        ...toast,
+        hapticIntensity: motion.haptic.medium,
+      }));
+      // Reconcile with Firestore after the local footer update lands.
+      await refreshStats();
       // Also refresh community stats
       await refreshCommunityStats();
       
@@ -607,6 +623,7 @@ export const HomeScreen: React.FC = () => {
 
   const handleChangeVote = (take: any, currentVote?: 'hot' | 'not' | null) => {
     if (!user) return;
+    Vibration.vibrate(motion.haptic.medium);
     const voteToRemove = currentVote;
     changeVoteTakeIdsRef.current.add(take.id);
 
@@ -754,6 +771,7 @@ export const HomeScreen: React.FC = () => {
             onVoteNow={handleVoteNow}
             communityTotalVotes={communityTotalVotes}
             autoAdvanceResults={resultsAutoplay}
+            skipRequestToken={skipRequestToken}
           />
         )}
       </View>
@@ -793,7 +811,7 @@ export const HomeScreen: React.FC = () => {
             ]} 
             onPress={() => {
               if (takes[0]) {
-                handleSkip(takes[0].id);
+                setSkipRequestToken(prev => prev + 1);
               }
             }}
             disabled={!takes[0]}

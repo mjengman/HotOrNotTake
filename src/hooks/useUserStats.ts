@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserStats } from '../types/User';
+import { StreakUpdateResult, UserStats } from '../types/User';
 import { getUserStats } from '../services/userService';
 import { useAuth } from './useAuth';
 
@@ -9,6 +9,7 @@ interface UseUserStatsResult {
   loading: boolean;
   error: string | null;
   refreshStats: () => Promise<void>;
+  applyEngagementUpdate: (update: StreakUpdateResult) => void;
 }
 
 const getTodayKey = () => {
@@ -133,6 +134,26 @@ export const useUserStats = (): UseUserStatsResult => {
     }
   }, [user]);
 
+  const applyEngagementUpdate = useCallback((update: StreakUpdateResult) => {
+    setStats(prevStats => {
+      const nextStats: UserStats = {
+        ...prevStats,
+        votingStreak: update.currentStreak,
+        longestVotingStreak: update.longestVotingStreak,
+        totalStreakDays: update.totalStreakDays,
+        lastStreakDate: update.lastStreakDate,
+        streakUpdatedToday: true,
+        dailyChallenge: update.dailyChallenge || prevStats.dailyChallenge,
+      };
+
+      if (user) {
+        writeCachedStats(user.uid, nextStats);
+      }
+
+      return nextStats;
+    });
+  }, [user]);
+
   // Load stats when user changes
   useEffect(() => {
     loadStats();
@@ -143,5 +164,6 @@ export const useUserStats = (): UseUserStatsResult => {
     loading,
     error,
     refreshStats: loadStats,
+    applyEngagementUpdate,
   };
 };

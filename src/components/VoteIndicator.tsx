@@ -16,7 +16,7 @@ import Animated, {
 import { colors, dimensions } from '../constants';
 
 interface VoteIndicatorProps {
-  vote: 'hot' | 'not' | null;
+  vote: 'hot' | 'not' | 'skip' | null;
   isDarkMode?: boolean;
 }
 
@@ -44,8 +44,9 @@ export const VoteIndicator: React.FC<VoteIndicatorProps> = ({
         easing: Easing.out(Easing.quad) 
       });
       
+      const rotationTarget = vote === 'hot' ? -5 : vote === 'not' ? 5 : 0;
       rotation.value = withSequence(
-        withTiming(vote === 'hot' ? -5 : 5, { duration: 150 }),
+        withTiming(rotationTarget, { duration: 150 }),
         withSpring(0, { damping: 10 })
       );
       
@@ -56,7 +57,11 @@ export const VoteIndicator: React.FC<VoteIndicatorProps> = ({
       );
       
       // Enhanced haptic feedback based on vote type
-      const vibrationPattern = vote === 'hot' ? [0, 20, 40, 20] : [0, 15, 30, 15];
+      const vibrationPattern = vote === 'hot'
+        ? [0, 20, 40, 20]
+        : vote === 'not'
+          ? [0, 15, 30, 15]
+          : [0, 12, 30, 12];
       Vibration.vibrate(vibrationPattern);
       
       // Auto-hide after a longer delay to let user appreciate the animation
@@ -91,10 +96,25 @@ export const VoteIndicator: React.FC<VoteIndicatorProps> = ({
 
   if (!vote) return null;
 
-  const isHot = vote === 'hot';
-  const backgroundColor = isHot ? theme.hot : theme.not;
-  const icon = isHot ? '🔥' : '❄️';
-  const label = isHot ? 'HOT' : 'NOT';
+  const indicatorConfig = {
+    hot: {
+      backgroundColor: theme.hot,
+      icon: '🔥',
+      label: 'HOT',
+    },
+    not: {
+      backgroundColor: theme.not,
+      icon: '❄️',
+      label: 'NOT',
+    },
+    skip: {
+      backgroundColor: theme.accent,
+      icon: '⏭️',
+      label: 'SKIP',
+    },
+  }[vote];
+
+  const { backgroundColor, icon, label } = indicatorConfig;
 
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
