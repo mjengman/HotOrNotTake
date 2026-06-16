@@ -651,44 +651,18 @@ export const getMostDivisiveTakesByCategory = async (): Promise<Record<string, T
   };
 
   try {
-    const byId = new Map<string, Take>();
+    // Use a simple approved-takes query and compute divisiveness client-side.
+    // This avoids missing-index failures while percentage fields populate over time.
+    const divisiveQuery = query(
+      collection(db, TAKES_COLLECTION),
+      where('isApproved', '==', true),
+      limit(250)
+    );
 
-    try {
-      const divisiveQuery = query(
-        collection(db, TAKES_COLLECTION),
-        where('isApproved', '==', true),
-        where('hotPercentage', '>=', 40),
-        where('hotPercentage', '<=', 60),
-        orderBy('hotPercentage', 'asc'),
-        orderBy('totalVotes', 'desc'),
-        limit(50)
-      );
-
-      const snapshot = await getDocs(divisiveQuery);
-      snapshot.docs
-        .map(doc => convertFirestoreTake(doc.id, doc.data()))
-        .filter(isDivisiveTake)
-        .forEach(take => byId.set(take.id, take));
-    } catch (error) {
-      console.warn('Stored divisive leaderboard query unavailable, using computed fallback:', error);
-    }
-
-    if (byId.size < 20) {
-      const fallbackQuery = query(
-        collection(db, TAKES_COLLECTION),
-        where('isApproved', '==', true),
-        orderBy('totalVotes', 'desc'),
-        limit(150)
-      );
-
-      const fallbackSnapshot = await getDocs(fallbackQuery);
-      fallbackSnapshot.docs
-        .map(doc => convertFirestoreTake(doc.id, doc.data()))
-        .filter(isDivisiveTake)
-        .forEach(take => byId.set(take.id, take));
-    }
-
-    const divisiveTakes = Array.from(byId.values())
+    const snapshot = await getDocs(divisiveQuery);
+    const divisiveTakes = snapshot.docs
+      .map(doc => convertFirestoreTake(doc.id, doc.data()))
+      .filter(isDivisiveTake)
       .sort((a, b) => b.totalVotes - a.totalVotes)
       .slice(0, 20);
 

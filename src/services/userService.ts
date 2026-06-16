@@ -17,16 +17,40 @@ import { auth, db } from './firebase';
 import {
   AchievementToast,
   DailyChallenge,
+  DailyChallengeType,
   StreakUpdateResult,
   User,
   UserFirestore,
   UserStats,
+  VoteEngagementContext,
 } from '../types/User';
 
 // Collection references
 const USERS_COLLECTION = 'users';
 const STREAK_MILESTONES = new Set([3, 7, 14, 30, 50, 100, 365]);
 const DAILY_CHALLENGE_GOAL = 20;
+const DAILY_QUEST_CATEGORIES = [
+  { value: 'entertainment', label: 'Entertainment' },
+  { value: 'environment', label: 'Environment' },
+  { value: 'food', label: 'Food' },
+  { value: 'life', label: 'Life' },
+  { value: 'pets', label: 'Pets' },
+  { value: 'politics', label: 'Politics' },
+  { value: 'relationships', label: 'Relationships' },
+  { value: 'society', label: 'Society' },
+  { value: 'sports', label: 'Sports' },
+  { value: 'technology', label: 'Technology' },
+  { value: 'travel', label: 'Travel' },
+  { value: 'wellness', label: 'Wellness' },
+  { value: 'work', label: 'Work' },
+] as const;
+const DAILY_QUEST_TYPES: DailyChallengeType[] = [
+  'vote_count',
+  'category_votes',
+  'fresh_votes',
+  'divisive_votes',
+  'multi_category_votes',
+];
 const VOTE_ACHIEVEMENTS = [
   {
     id: 'votes_10',
@@ -119,14 +143,88 @@ const getDateKeyDistance = (olderDateKey: string, newerDateKey: string): number 
   return Math.round((newerDate.getTime() - olderDate.getTime()) / (1000 * 60 * 60 * 24));
 };
 
-const convertDailyChallenge = (data: any): DailyChallenge | undefined => {
+const getStableQuestIndex = (seed: string, modulo: number): number => {
+  let hash = 0;
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+
+  return modulo > 0 ? hash % modulo : 0;
+};
+
+const getQuestCategory = (dateKey: string, userId = 'global') =>
+  DAILY_QUEST_CATEGORIES[
+    getStableQuestIndex(`${userId}:${dateKey}:category`, DAILY_QUEST_CATEGORIES.length)
+  ];
+
+const getDailyQuestTemplate = (dateKey: string, userId?: string) => {
+  const questType =
+    DAILY_QUEST_TYPES[getStableQuestIndex(`${userId || 'global'}:${dateKey}:type`, DAILY_QUEST_TYPES.length)];
+  const category = getQuestCategory(dateKey, userId);
+
+  switch (questType) {
+    case 'category_votes':
+      return {
+        type: questType,
+        title: `${category.label} tour`,
+        description: `Vote on 10 ${category.label.toLowerCase()} takes today.`,
+        category: category.value,
+        categoryLabel: category.label,
+        goal: 10,
+      };
+    case 'fresh_votes':
+      return {
+        type: questType,
+        title: 'Fresh eyes',
+        description: 'Vote on 5 takes with fewer than 10 votes.',
+        goal: 5,
+      };
+    case 'divisive_votes':
+      return {
+        type: questType,
+        title: 'Find the fault lines',
+        description: 'Vote on 3 takes that split the room 40/60 or closer.',
+        goal: 3,
+      };
+    case 'multi_category_votes':
+      return {
+        type: questType,
+        title: 'Sampler platter',
+        description: 'Vote in 3 different categories today.',
+        goal: 3,
+      };
+    case 'vote_count':
+    default:
+      return {
+        type: 'vote_count' as const,
+        title: 'Daily heat check',
+        description: 'Vote on 20 takes today.',
+        goal: DAILY_CHALLENGE_GOAL,
+      };
+  }
+};
+
+const convertDailyChallenge = (data: any, userId?: string): DailyChallenge | undefined => {
   if (!data || typeof data !== 'object') {
     return undefined;
   }
 
+  const date = typeof data.date === 'string' ? data.date : getLocalDateKey();
+  const template = getDailyQuestTemplate(date, userId);
+  const hasKnownType =
+    typeof data.type === 'string' && DAILY_QUEST_TYPES.includes(data.type as DailyChallengeType);
+  const type = hasKnownType ? data.type as DailyChallengeType : template.type;
+  const goal = hasKnownType && typeof data.goal === 'number' ? data.goal : template.goal;
+
   return {
-    date: typeof data.date === 'string' ? data.date : getLocalDateKey(),
-    goal: typeof data.goal === 'number' ? data.goal : DAILY_CHALLENGE_GOAL,
+    date,
+    type,
+    title: hasKnownType && typeof data.title === 'string' ? data.title : template.title,
+    description: hasKnownType && typeof data.description === 'string' ? data.description : template.description,
+    category: hasKnownType && typeof data.category === 'string' ? data.category : template.category,
+    categoryLabel: hasKnownType && typeof data.categoryLabel === 'string' ? data.categoryLabel : template.categoryLabel,
+    goal,
     progress: typeof data.progress === 'number' ? data.progress : 0,
     completed: Boolean(data.completed),
     completedAt: data.completedAt?.toDate
@@ -134,39 +232,126 @@ const convertDailyChallenge = (data: any): DailyChallenge | undefined => {
       : data.completedAt
         ? new Date(data.completedAt)
         : undefined,
+    trackedCategories: Array.isArray(data.trackedCategories)
+      ? data.trackedCategories.filter((category: unknown): category is string => typeof category === 'string')
+      : undefined,
   };
 };
 
-const getFreshDailyChallenge = (dateKey = getLocalDateKey()): DailyChallenge => ({
-  date: dateKey,
-  goal: DAILY_CHALLENGE_GOAL,
-  progress: 0,
-  completed: false,
-});
+const getFreshDailyChallenge = (
+  dateKey = getLocalDateKey(),
+  userId?: string
+): DailyChallenge => {
+  const template = getDailyQuestTemplate(dateKey, userId);
+
+  return {
+    date: dateKey,
+    ...template,
+    progress: 0,
+    completed: false,
+    ...(template.type === 'multi_category_votes' ? { trackedCategories: [] } : {}),
+  };
+};
 
 const normalizeDailyChallenge = (
   challenge: DailyChallenge | undefined,
-  dateKey = getLocalDateKey()
+  dateKey = getLocalDateKey(),
+  userId?: string
 ): DailyChallenge => {
   if (!challenge || challenge.date !== dateKey) {
-    return getFreshDailyChallenge(dateKey);
+    return getFreshDailyChallenge(dateKey, userId);
   }
+
+  const template = getDailyQuestTemplate(dateKey, userId);
+  const goal = challenge.goal || template.goal;
 
   return {
     ...challenge,
-    goal: challenge.goal || DAILY_CHALLENGE_GOAL,
-    progress: Math.max(0, Math.min(challenge.progress || 0, challenge.goal || DAILY_CHALLENGE_GOAL)),
+    type: challenge.type || template.type,
+    title: challenge.title || template.title,
+    description: challenge.description || template.description,
+    category: challenge.category || template.category,
+    categoryLabel: challenge.categoryLabel || template.categoryLabel,
+    goal,
+    progress: Math.max(0, Math.min(challenge.progress || 0, goal)),
     completed: Boolean(challenge.completed),
+    trackedCategories: challenge.trackedCategories || (template.type === 'multi_category_votes' ? [] : undefined),
   };
 };
 
 const serializeDailyChallenge = (challenge: DailyChallenge) => ({
   date: challenge.date,
+  ...(challenge.type ? { type: challenge.type } : {}),
+  ...(challenge.title ? { title: challenge.title } : {}),
+  ...(challenge.description ? { description: challenge.description } : {}),
+  ...(challenge.category ? { category: challenge.category } : {}),
+  ...(challenge.categoryLabel ? { categoryLabel: challenge.categoryLabel } : {}),
   goal: challenge.goal,
   progress: challenge.progress,
   completed: challenge.completed,
   ...(challenge.completedAt ? { completedAt: Timestamp.fromDate(challenge.completedAt) } : {}),
+  ...(challenge.trackedCategories ? { trackedCategories: challenge.trackedCategories } : {}),
 });
+
+const isDivisiveVote = (context: VoteEngagementContext): boolean => {
+  const totalVotesAfter = context.totalVotesAfter || 0;
+
+  if (totalVotesAfter <= 0 || context.hotVotesAfter === undefined || context.notVotesAfter === undefined) {
+    return false;
+  }
+
+  const hotPercentage = Math.round((context.hotVotesAfter / totalVotesAfter) * 100);
+  return hotPercentage >= 40 && hotPercentage <= 60;
+};
+
+const updateDailyChallengeProgress = (
+  challenge: DailyChallenge,
+  context: VoteEngagementContext
+): DailyChallenge => {
+  if (challenge.completed) {
+    return challenge;
+  }
+
+  const nextChallenge = { ...challenge };
+  let nextProgress = challenge.progress || 0;
+
+  switch (challenge.type) {
+    case 'category_votes':
+      if (context.category && context.category === challenge.category) {
+        nextProgress += 1;
+      }
+      break;
+    case 'fresh_votes':
+      if ((context.totalVotesBefore ?? Number.MAX_SAFE_INTEGER) < 10) {
+        nextProgress += 1;
+      }
+      break;
+    case 'divisive_votes':
+      if (isDivisiveVote(context)) {
+        nextProgress += 1;
+      }
+      break;
+    case 'multi_category_votes': {
+      if (context.category && VALID_VOTE_CATEGORIES.includes(context.category as typeof VALID_VOTE_CATEGORIES[number])) {
+        const trackedCategories = Array.from(new Set([
+          ...(challenge.trackedCategories || []),
+          context.category,
+        ]));
+        nextChallenge.trackedCategories = trackedCategories;
+        nextProgress = trackedCategories.length;
+      }
+      break;
+    }
+    case 'vote_count':
+    default:
+      nextProgress += 1;
+  }
+
+  return {
+    ...nextChallenge,
+    progress: Math.min(nextChallenge.goal, nextProgress),
+  };
+};
 
 const getBackfilledAchievements = ({
   totalVotes,
@@ -211,7 +396,7 @@ const convertFirestoreUser = (id: string, data: any): User => ({
   totalStreakDays: data.totalStreakDays || 0,
   lastStreakDate: data.lastStreakDate,
   lastActiveAt: data.lastActiveAt?.toDate() || new Date(data.lastActiveAt),
-  dailyChallenge: convertDailyChallenge(data.dailyChallenge),
+  dailyChallenge: convertDailyChallenge(data.dailyChallenge, id),
   achievements: Array.isArray(data.achievements) ? data.achievements : undefined,
   categoriesVoted: Array.isArray(data.categoriesVoted) ? data.categoriesVoted : [],
 });
@@ -239,7 +424,7 @@ export const createUserIfNotExists = async (userId: string): Promise<void> => {
     
     if (!userSnap.exists()) {
       const now = new Date();
-      const dailyChallenge = getFreshDailyChallenge();
+      const dailyChallenge = getFreshDailyChallenge(undefined, userId);
       const userData: UserFirestore = {
         isAnonymous: true,
         totalVotes: 0,
@@ -398,6 +583,7 @@ export const updateUserEngagementAfterVote = async (
   options: {
     category?: string;
     countDailyEngagement?: boolean;
+    voteContext?: VoteEngagementContext;
   } = {}
 ): Promise<StreakUpdateResult> => {
   const userRef = doc(db, USERS_COLLECTION, userId);
@@ -441,8 +627,9 @@ export const updateUserEngagementAfterVote = async (
     );
     const achievementToasts: AchievementToast[] = [];
     const existingChallenge = normalizeDailyChallenge(
-      convertDailyChallenge(data.dailyChallenge),
-      todayKey
+      convertDailyChallenge(data.dailyChallenge, userId),
+      todayKey,
+      userId
     );
     let dailyChallenge = existingChallenge;
     let challengeCompleted = false;
@@ -454,11 +641,14 @@ export const updateUserEngagementAfterVote = async (
     let lastStreakDate = previousDateKey || todayKey;
 
     if (countDailyEngagement) {
-      const nextProgress = Math.min(existingChallenge.goal, existingChallenge.progress + 1);
-      challengeCompleted = !existingChallenge.completed && nextProgress >= existingChallenge.goal;
+      const nextChallengeProgress = updateDailyChallengeProgress(existingChallenge, {
+        ...options.voteContext,
+        category: options.category || options.voteContext?.category,
+      });
+      challengeCompleted =
+        !existingChallenge.completed && nextChallengeProgress.progress >= nextChallengeProgress.goal;
       dailyChallenge = {
-        ...existingChallenge,
-        progress: nextProgress,
+        ...nextChallengeProgress,
         completed: existingChallenge.completed || challengeCompleted,
         completedAt: challengeCompleted ? now : existingChallenge.completedAt,
       };
@@ -590,7 +780,7 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
         longestVotingStreak: 0,
         totalStreakDays: 0,
         streakUpdatedToday: false,
-        dailyChallenge: getFreshDailyChallenge(),
+        dailyChallenge: getFreshDailyChallenge(undefined, userId),
         favoriteCategories: [],
         joinedAt: new Date(),
       };
@@ -603,7 +793,7 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
     const storedStreakIsActive =
       storedStreakDistance !== null && storedStreakDistance >= 0 && storedStreakDistance <= 1;
     const votingStreak = storedStreakIsActive ? user.votingStreak : 0;
-    const dailyChallenge = normalizeDailyChallenge(user.dailyChallenge, todayKey);
+    const dailyChallenge = normalizeDailyChallenge(user.dailyChallenge, todayKey, userId);
 
     if (user.achievements === undefined) {
       const backfilledAchievements = getBackfilledAchievements({
@@ -652,7 +842,7 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
       longestVotingStreak: 0,
       totalStreakDays: 0,
       streakUpdatedToday: false,
-      dailyChallenge: getFreshDailyChallenge(),
+      dailyChallenge: getFreshDailyChallenge(undefined, userId),
       favoriteCategories: [],
       joinedAt: new Date(),
     };

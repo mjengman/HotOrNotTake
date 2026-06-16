@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScrollView } from 'react-native-gesture-handler';
 import { colors, dimensions, motion } from '../constants';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
@@ -27,6 +28,92 @@ interface LeaderboardScreenProps {
 }
 
 type LeaderboardTab = 'hottest' | 'nottest' | 'divisive' | 'skipped';
+type TakeLeaderboard = Record<string, Take[]>;
+type SkippedLeaderboard = Record<string, { take: Take; skipCount: number }[]>;
+type LoadingTabs = Record<LeaderboardTab, boolean>;
+type LeaderboardCache = {
+  savedAt: number;
+  hottest: TakeLeaderboard;
+  nottest: TakeLeaderboard;
+  divisive: TakeLeaderboard;
+  skipped: SkippedLeaderboard;
+  skippedLoadFailed: boolean;
+};
+
+const LEADERBOARD_CACHE_VERSION = 'v1';
+const LEADERBOARD_CACHE_KEY = `leaderboards-cache:${LEADERBOARD_CACHE_VERSION}`;
+const LEADERBOARD_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+const DEFAULT_LOADING_TABS: LoadingTabs = {
+  hottest: true,
+  nottest: true,
+  divisive: true,
+  skipped: true,
+};
+
+const READY_TABS: LoadingTabs = {
+  hottest: false,
+  nottest: false,
+  divisive: false,
+  skipped: false,
+};
+
+const reviveDate = (value: unknown): Date | undefined => {
+  if (!value) return undefined;
+  const date = new Date(value as string);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
+const reviveTake = (take: Take): Take => ({
+  ...take,
+  createdAt: reviveDate(take.createdAt) || new Date(),
+  submittedAt: reviveDate(take.submittedAt) || new Date(),
+  approvedAt: reviveDate(take.approvedAt),
+  rejectedAt: reviveDate(take.rejectedAt),
+});
+
+const reviveTakeLeaderboard = (data: TakeLeaderboard = {}): TakeLeaderboard =>
+  Object.fromEntries(
+    Object.entries(data).map(([category, takes]) => [
+      category,
+      takes.map(reviveTake),
+    ])
+  );
+
+const reviveSkippedLeaderboard = (data: SkippedLeaderboard = {}): SkippedLeaderboard =>
+  Object.fromEntries(
+    Object.entries(data).map(([category, items]) => [
+      category,
+      items.map(item => ({
+        ...item,
+        take: reviveTake(item.take),
+      })),
+    ])
+  );
+
+const readLeaderboardCache = async (): Promise<LeaderboardCache | null> => {
+  try {
+    const raw = await AsyncStorage.getItem(LEADERBOARD_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed.savedAt || Date.now() - parsed.savedAt > LEADERBOARD_CACHE_TTL_MS) {
+      return null;
+    }
+
+    return {
+      savedAt: parsed.savedAt,
+      hottest: reviveTakeLeaderboard(parsed.hottest),
+      nottest: reviveTakeLeaderboard(parsed.nottest),
+      divisive: reviveTakeLeaderboard(parsed.divisive),
+      skipped: reviveSkippedLeaderboard(parsed.skipped),
+      skippedLoadFailed: Boolean(parsed.skippedLoadFailed),
+    };
+  } catch (error) {
+    console.warn('Unable to read leaderboard cache:', error);
+    return null;
+  }
+};
 
 export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   onClose,
@@ -34,16 +121,23 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   isDarkMode = false,
 }) => {
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('hottest');
-  const [loading, setLoading] = useState(true);
+  const [loadingTabs, setLoadingTabs] = useState<LoadingTabs>(DEFAULT_LOADING_TABS);
   const [refreshing, setRefreshing] = useState(false);
   const [isAtTop, setIsAtTop] = useState(true);
   const [scrollEnabled, setScrollEnabled] = useState(true);
   
-  const [hottestTakes, setHottestTakes] = useState<Record<string, Take[]>>({});
-  const [nottestTakes, setNottestTakes] = useState<Record<string, Take[]>>({});
-  const [divisiveTakes, setDivisiveTakes] = useState<Record<string, Take[]>>({});
-  const [skippedTakes, setSkippedTakes] = useState<Record<string, { take: Take; skipCount: number }[]>>({});
+  const [hottestTakes, setHottestTakes] = useState<TakeLeaderboard>({});
+  const [nottestTakes, setNottestTakes] = useState<TakeLeaderboard>({});
+  const [divisiveTakes, setDivisiveTakes] = useState<TakeLeaderboard>({});
+  const [skippedTakes, setSkippedTakes] = useState<SkippedLeaderboard>({});
   const [skippedLoadFailed, setSkippedLoadFailed] = useState(false);
+  const leaderboardCacheRef = useRef<Omit<LeaderboardCache, 'savedAt'>>({
+    hottest: {},
+    nottest: {},
+    divisive: {},
+    skipped: {},
+    skippedLoadFailed: false,
+  });
   
   // Hidden dev feature - tap counter for database stats
   const [hottestTapCount, setHottestTapCount] = useState(0);
@@ -59,48 +153,101 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   
   const theme = isDarkMode ? colors.dark : colors.light;
 
-  const loadLeaderboards = async () => {
-    try {
-      setLoading(true);
-      const [hottestResult, nottestResult, divisiveResult, skippedResult] = await Promise.allSettled([
-        getHottestTakesByCategory(),
-        getNottestTakesByCategory(),
-        getMostDivisiveTakesByCategory(),
-        getMostSkippedTakesByCategory(),
-      ]);
+  const persistLeaderboardCache = React.useCallback((patch: Partial<Omit<LeaderboardCache, 'savedAt'>>) => {
+    leaderboardCacheRef.current = {
+      ...leaderboardCacheRef.current,
+      ...patch,
+    };
 
-      if (hottestResult.status === 'fulfilled') {
-        setHottestTakes(hottestResult.value);
-      } else {
-        console.error('Error loading hottest leaderboard:', hottestResult.reason);
+    AsyncStorage.setItem(
+      LEADERBOARD_CACHE_KEY,
+      JSON.stringify({
+        savedAt: Date.now(),
+        ...leaderboardCacheRef.current,
+      })
+    ).catch(error => {
+      console.warn('Unable to write leaderboard cache:', error);
+    });
+  }, []);
+
+  const setTabLoading = React.useCallback((tab: LeaderboardTab, value: boolean) => {
+    setLoadingTabs(previous => ({
+      ...previous,
+      [tab]: value,
+    }));
+  }, []);
+
+  const loadLeaderboards = React.useCallback(async () => {
+    const hasLeaderboardData = (tab: LeaderboardTab) =>
+      Object.keys(leaderboardCacheRef.current[tab]).length > 0;
+
+    setLoadingTabs(previous => ({
+      hottest: previous.hottest && !hasLeaderboardData('hottest'),
+      nottest: previous.nottest && !hasLeaderboardData('nottest'),
+      divisive: previous.divisive && !hasLeaderboardData('divisive'),
+      skipped: previous.skipped && !hasLeaderboardData('skipped'),
+    }));
+
+    const loadHottest = async () => {
+      setTabLoading('hottest', !hasLeaderboardData('hottest'));
+      try {
+        const value = await getHottestTakesByCategory();
+        setHottestTakes(value);
+        persistLeaderboardCache({ hottest: value });
+      } catch (error) {
+        console.warn('Hottest leaderboard unavailable:', error);
+      } finally {
+        setTabLoading('hottest', false);
       }
+    };
 
-      if (nottestResult.status === 'fulfilled') {
-        setNottestTakes(nottestResult.value);
-      } else {
-        console.error('Error loading nottest leaderboard:', nottestResult.reason);
+    const loadNottest = async () => {
+      setTabLoading('nottest', !hasLeaderboardData('nottest'));
+      try {
+        const value = await getNottestTakesByCategory();
+        setNottestTakes(value);
+        persistLeaderboardCache({ nottest: value });
+      } catch (error) {
+        console.warn('Nottest leaderboard unavailable:', error);
+      } finally {
+        setTabLoading('nottest', false);
       }
+    };
 
-      if (divisiveResult.status === 'fulfilled') {
-        setDivisiveTakes(divisiveResult.value);
-      } else {
-        console.error('Error loading divisive leaderboard:', divisiveResult.reason);
+    const loadDivisive = async () => {
+      setTabLoading('divisive', !hasLeaderboardData('divisive'));
+      try {
+        const value = await getMostDivisiveTakesByCategory();
+        setDivisiveTakes(value);
+        persistLeaderboardCache({ divisive: value });
+      } catch (error) {
+        console.warn('Divisive leaderboard unavailable:', error);
+        setDivisiveTakes({});
+        persistLeaderboardCache({ divisive: {} });
+      } finally {
+        setTabLoading('divisive', false);
       }
+    };
 
-      if (skippedResult.status === 'fulfilled') {
-        setSkippedTakes(skippedResult.value);
+    const loadSkipped = async () => {
+      setTabLoading('skipped', !hasLeaderboardData('skipped'));
+      try {
+        const value = await getMostSkippedTakesByCategory();
+        setSkippedTakes(value);
         setSkippedLoadFailed(false);
-      } else {
-        console.warn('Skipped leaderboard unavailable:', skippedResult.reason);
+        persistLeaderboardCache({ skipped: value, skippedLoadFailed: false });
+      } catch (error) {
+        console.warn('Skipped leaderboard unavailable:', error);
         setSkippedTakes({});
         setSkippedLoadFailed(true);
+        persistLeaderboardCache({ skipped: {}, skippedLoadFailed: true });
+      } finally {
+        setTabLoading('skipped', false);
       }
-    } catch (error) {
-      console.error('Error loading leaderboards:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    await Promise.all([loadHottest(), loadNottest(), loadDivisive(), loadSkipped()]);
+  }, [persistLeaderboardCache, setTabLoading]);
 
   const onRefresh = async () => {
     // Only refresh if we're at the top
@@ -149,7 +296,39 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   };
 
   useEffect(() => {
-    loadLeaderboards();
+    let isMounted = true;
+
+    const bootstrapLeaderboards = async () => {
+      const cached = await readLeaderboardCache();
+
+      if (cached && isMounted) {
+        leaderboardCacheRef.current = {
+          hottest: cached.hottest,
+          nottest: cached.nottest,
+          divisive: cached.divisive,
+          skipped: cached.skipped,
+          skippedLoadFailed: cached.skippedLoadFailed,
+        };
+        setHottestTakes(cached.hottest);
+        setNottestTakes(cached.nottest);
+        setDivisiveTakes(cached.divisive);
+        setSkippedTakes(cached.skipped);
+        setSkippedLoadFailed(cached.skippedLoadFailed);
+        setLoadingTabs(READY_TABS);
+      }
+
+      if (isMounted) {
+        loadLeaderboards();
+      }
+    };
+
+    bootstrapLeaderboards();
+
+    return () => {
+      isMounted = false;
+    };
+    // Load once on mount; refreshes are triggered manually.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleTakePress = (take: Take) => {
@@ -273,6 +452,9 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     }
   };
 
+  const currentData = getCurrentData();
+  const isCurrentTabLoading = loadingTabs[activeTab] && Object.keys(currentData).length === 0;
+
   const getEmptyStateCopy = () => {
     if (activeTab === 'hottest') {
       return {
@@ -385,7 +567,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         scrollEventThrottle={16}
         scrollEnabled={scrollEnabled}
       >
-        {loading ? (
+        {isCurrentTabLoading ? (
           <View style={styles.contentContainer}>
             <LeaderboardSkeleton isDarkMode={isDarkMode} />
           </View>
@@ -426,7 +608,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
               </View>
             )}
 
-            {Object.keys(getCurrentData()).length === 0 ? (
+            {Object.keys(currentData).length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>
                   {getEmptyStateCopy().title}
@@ -436,7 +618,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 </Text>
               </View>
             ) : (
-              Object.entries(getCurrentData()).map(([category, takes]) =>
+              Object.entries(currentData).map(([category, takes]) =>
                 renderCategorySection(category, takes)
               )
             )}

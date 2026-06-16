@@ -300,6 +300,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     if (!renderCurrent) return; // Safety check
     
     setLastVote(vote);
+    setIsCardFlipped(true);
     setLandingTake(null);
     resultExitSV.value = 0;
     
@@ -327,7 +328,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       'worklet';
       flipSV.value = withTiming(1, { duration: motion.duration.cardFlip, easing: Easing.out(Easing.cubic) }, (finished) => {
         if (finished) {
-          runOnJS(setIsCardFlipped)(true); // set after flip completes
           // NOW submit the vote after the flip is complete and stats are showing
           runOnJS(onVote)(voteToSubmit.id, voteToSubmit.vote);
           // Auto-advance stats card only when Results Autoplay is enabled.
@@ -989,7 +989,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
                 showStats={true}
                 userVote={lastVote}
                 isFlipped={true}
-                onChangeVote={handleChangeVote}
+                onChangeVote={externalStatsCard ? handleChangeVote : undefined}
                 onVoteNow={onVoteNow}
               />
             </Animated.View>

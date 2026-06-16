@@ -548,9 +548,26 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       let streakUpdate: StreakUpdateResult | null = null;
       try {
         const votedTake = feed.find(take => take.id === takeId);
+        const hotVotesAfter = votedTake
+          ? votedTake.hotVotes + (vote === 'hot' ? 1 : 0)
+          : undefined;
+        const notVotesAfter = votedTake
+          ? votedTake.notVotes + (vote === 'not' ? 1 : 0)
+          : undefined;
+        const totalVotesAfter =
+          hotVotesAfter !== undefined && notVotesAfter !== undefined
+            ? hotVotesAfter + notVotesAfter
+            : undefined;
         streakUpdate = await updateUserEngagementAfterVote(userId, {
           category: votedTake?.category,
           countDailyEngagement: options.countDailyEngagement !== false,
+          voteContext: {
+            category: votedTake?.category,
+            totalVotesBefore: votedTake?.totalVotes,
+            hotVotesAfter,
+            notVotesAfter,
+            totalVotesAfter,
+          },
         });
       } catch (streakError) {
         console.warn('Vote engagement update failed:', streakError);

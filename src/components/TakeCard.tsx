@@ -3,9 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Share,
 } from 'react-native';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 import ViewShot from 'react-native-view-shot';
 import RNShare from 'react-native-share';
 import { Take } from '../types';

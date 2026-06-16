@@ -1,9 +1,22 @@
+export type DailyChallengeType =
+  | 'vote_count'
+  | 'category_votes'
+  | 'fresh_votes'
+  | 'divisive_votes'
+  | 'multi_category_votes';
+
 export interface DailyChallenge {
   date: string;
+  type?: DailyChallengeType;
+  title?: string;
+  description?: string;
+  category?: string;
+  categoryLabel?: string;
   goal: number;
   progress: number;
   completed: boolean;
   completedAt?: Date;
+  trackedCategories?: string[];
 }
 
 export interface AchievementToast {
@@ -54,6 +67,14 @@ export interface StreakUpdateResult {
   dailyChallenge?: DailyChallenge;
   challengeCompleted?: boolean;
   achievementToasts?: AchievementToast[];
+}
+
+export interface VoteEngagementContext {
+  category?: string;
+  totalVotesBefore?: number;
+  hotVotesAfter?: number;
+  notVotesAfter?: number;
+  totalVotesAfter?: number;
 }
 
 // Firestore data transfer object for user

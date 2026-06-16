@@ -9,6 +9,7 @@ import {
   BackHandler,
   Animated,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +32,7 @@ import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
 import { useResponsive } from '../hooks/useResponsive';
 import { deleteVote, getUserVoteForTake } from '../services/voteService';
 import { getCommunityStats } from '../services/userService';
+import { prefetchLeaderboardCache } from '../services/leaderboardCacheService';
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 import { colors, motion } from '../constants';
 import { StreakUpdateResult } from '../types';
@@ -38,6 +40,8 @@ import RNShare from 'react-native-share';
 
 const THEME_PREFERENCE_KEY = 'themePreference';
 const RESULTS_AUTOPLAY_PREFERENCE_KEY = 'resultsAutoplayPreference';
+const DAILY_CHALLENGE_NUDGE_PREFIX = 'dailyChallengeNudgeShown';
+const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
 type EngagementToast = { title: string; subtitle: string };
 
 const formatCompactCount = (count: number) => {
@@ -50,6 +54,29 @@ const formatCompactCount = (count: number) => {
   }
 
   return count.toLocaleString();
+};
+
+const getChallengeProgressCopy = (challenge: {
+  title?: string;
+  description?: string;
+  goal: number;
+  progress: number;
+  completed: boolean;
+}) => {
+  const remaining = Math.max(0, challenge.goal - challenge.progress);
+  const progressCopy = `${challenge.progress}/${challenge.goal} complete`;
+
+  if (challenge.completed) {
+    return {
+      title: '🎯 Quest complete',
+      subtitle: `${challenge.title || "Today's quest"} is done. Come back tomorrow for a fresh goal.`,
+    };
+  }
+
+  return {
+    title: `🎯 ${challenge.title || "Today's quest"}`,
+    subtitle: `${challenge.description || 'Vote today to complete it.'} ${remaining} to go. ${progressCopy}.`,
+  };
 };
 
 export const HomeScreen: React.FC = () => {
@@ -76,11 +103,12 @@ export const HomeScreen: React.FC = () => {
   const toastAnimatingRef = useRef(false);
   const changeVoteTakeIdsRef = useRef<Set<string>>(new Set());
   const changeVoteDeletePromisesRef = useRef<Map<string, Promise<boolean>>>(new Map());
+  const leaderboardPrefetchStartedRef = useRef(false);
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
     category: selectedCategory
   });
-  const { stats, refreshStats } = useUserStats();
+  const { stats, loading: statsLoading, refreshStats } = useUserStats();
   
   // Use the hook-based interstitial ads
   const { onCardComplete, onSessionEnd } = useInterstitialAds();
@@ -115,13 +143,17 @@ export const HomeScreen: React.FC = () => {
     "☰ Tap the menu button for more options",
   ], [streakInstructionText]);
 
-  const statsBarText = useMemo(() => {
+  const statsBarSegments = useMemo(() => {
     const dailyChallenge = stats.dailyChallenge;
     const challengeText = dailyChallenge.completed
-      ? '🎯 Done for today ✓'
+      ? '🎯 Done ✓'
       : `🎯 ${dailyChallenge.progress}/${dailyChallenge.goal}`;
 
-    return `🔥 ${stats.votingStreak}d | ${challengeText} | 👥 ${formatCompactCount(communityTotalVotes)}`;
+    return {
+      streak: `🔥 ${stats.votingStreak}d`,
+      challenge: challengeText,
+      community: `👥 ${formatCompactCount(communityTotalVotes)}`,
+    };
   }, [communityTotalVotes, stats.dailyChallenge, stats.votingStreak]);
 
   useEffect(() => {
@@ -186,12 +218,37 @@ export const HomeScreen: React.FC = () => {
 
   // Fetch community stats on mount and key actions
   const refreshCommunityStats = async () => {
-    const stats = await getCommunityStats();
-    setCommunityTotalVotes(stats.totalVotes);
+    try {
+      const stats = await getCommunityStats();
+      setCommunityTotalVotes(stats.totalVotes);
+      AsyncStorage.setItem(
+        COMMUNITY_STATS_CACHE_KEY,
+        JSON.stringify({ totalVotes: stats.totalVotes, savedAt: Date.now() })
+      ).catch((error) => {
+        console.warn('Unable to cache community stats:', error);
+      });
+    } catch (error) {
+      console.warn('Unable to refresh community stats:', error);
+    }
   };
 
   // Initial load and periodic refresh
   React.useEffect(() => {
+    const loadCachedCommunityStats = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(COMMUNITY_STATS_CACHE_KEY);
+        if (!raw) return;
+
+        const cached = JSON.parse(raw);
+        if (typeof cached.totalVotes === 'number') {
+          setCommunityTotalVotes(cached.totalVotes);
+        }
+      } catch (error) {
+        console.warn('Unable to read community stats cache:', error);
+      }
+    };
+
+    loadCachedCommunityStats();
     refreshCommunityStats();
     
     // Refresh every 60 seconds if the app is active
@@ -204,6 +261,25 @@ export const HomeScreen: React.FC = () => {
   React.useEffect(() => {
     refreshCommunityStats();
   }, [selectedCategory]);
+
+  React.useEffect(() => {
+    if (!user || authLoading || takesLoading || leaderboardPrefetchStartedRef.current) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      if (leaderboardPrefetchStartedRef.current) {
+        return;
+      }
+
+      leaderboardPrefetchStartedRef.current = true;
+      prefetchLeaderboardCache().catch(error => {
+        console.warn('Unable to prefetch leaderboards:', error);
+      });
+    }, 1800);
+
+    return () => clearTimeout(timeout);
+  }, [authLoading, takesLoading, user]);
 
   // Handle back button/gesture to close modals in proper order
   useEffect(() => {
@@ -332,6 +408,75 @@ export const HomeScreen: React.FC = () => {
     });
   }, [enqueueToast]);
 
+  const showStreakInfo = React.useCallback(() => {
+    if (stats.votingStreak <= 0) {
+      enqueueToast({
+        title: '🔥 Daily streak',
+        subtitle: 'Vote today to start your streak.',
+      });
+      return;
+    }
+
+    enqueueToast({
+      title: `🔥 ${stats.votingStreak}-day streak`,
+      subtitle: stats.streakUpdatedToday
+        ? "You've kept it alive today. Come back tomorrow."
+        : 'Vote today to keep it alive.',
+    });
+  }, [enqueueToast, stats.streakUpdatedToday, stats.votingStreak]);
+
+  const showChallengeInfo = React.useCallback(() => {
+    const challenge = stats.dailyChallenge;
+    const copy = getChallengeProgressCopy(challenge);
+
+    enqueueToast({
+      title: copy.title,
+      subtitle: copy.subtitle,
+    });
+  }, [enqueueToast, stats.dailyChallenge]);
+
+  const showCommunityInfo = React.useCallback(() => {
+    enqueueToast({
+      title: `👥 ${communityTotalVotes.toLocaleString()} community votes`,
+      subtitle: 'Votes cast across Hot or Not Takes.',
+    });
+  }, [communityTotalVotes, enqueueToast]);
+
+  useEffect(() => {
+    if (!user || authLoading || statsLoading || stats.dailyChallenge.completed) {
+      return;
+    }
+
+    const challenge = stats.dailyChallenge;
+    const storageKey = `${DAILY_CHALLENGE_NUDGE_PREFIX}:${user.uid}:${challenge.date}`;
+    let cancelled = false;
+
+    const showDailyChallengeNudge = async () => {
+      try {
+        const alreadyShown = await AsyncStorage.getItem(storageKey);
+        if (alreadyShown || cancelled) return;
+
+        await AsyncStorage.setItem(storageKey, 'true');
+        if (cancelled) return;
+
+        const copy = getChallengeProgressCopy(challenge);
+        enqueueToast({
+          title: copy.title,
+          subtitle: copy.subtitle,
+        });
+      } catch (error) {
+        console.warn('Unable to show daily challenge nudge:', error);
+      }
+    };
+
+    const timeout = setTimeout(showDailyChallengeNudge, 900);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [authLoading, enqueueToast, stats.dailyChallenge, statsLoading, user]);
+
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
       // Find the take that was voted on
@@ -360,7 +505,7 @@ export const HomeScreen: React.FC = () => {
       if (streakUpdate?.challengeCompleted) {
         enqueueToast({
           title: '🎯 Challenge complete!',
-          subtitle: 'Come back tomorrow.',
+          subtitle: `${streakUpdate.dailyChallenge?.title || "Today's quest"} is done. Come back tomorrow.`,
         });
       }
       streakUpdate?.achievementToasts?.forEach(enqueueToast);
@@ -664,14 +809,60 @@ export const HomeScreen: React.FC = () => {
         {/* Vote Counter Row - showing personal and community totals */}
         <View style={styles.voteCounterRow}>
           <View style={[styles.voteCounter, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}>
-            <Text 
-              style={[styles.voteCounterText, { color: theme.textSecondary }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
+            <TouchableOpacity
+              style={styles.statsBarSegment}
+              onPress={showStreakInfo}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Explain daily streak"
             >
-              {statsBarText}
-            </Text>
+              <Text
+                style={[styles.voteCounterText, { color: theme.textSecondary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+              >
+                {statsBarSegments.streak}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={[styles.statsBarDivider, { backgroundColor: theme.border }]} />
+
+            <TouchableOpacity
+              style={styles.statsBarSegment}
+              onPress={showChallengeInfo}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Explain daily quest"
+            >
+              <Text
+                style={[styles.voteCounterText, { color: theme.textSecondary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+              >
+                {statsBarSegments.challenge}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={[styles.statsBarDivider, { backgroundColor: theme.border }]} />
+
+            <TouchableOpacity
+              style={styles.statsBarSegment}
+              onPress={showCommunityInfo}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Explain community votes"
+            >
+              <Text
+                style={[styles.voteCounterText, { color: theme.textSecondary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+              >
+                {statsBarSegments.community}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -903,6 +1094,7 @@ export const HomeScreen: React.FC = () => {
 const createStyles = (responsive: any, insets: any) => {
   const roundControlSize = Math.max(motion.touchTarget.comfortable, responsive.iconSize.xlarge);
   const footerFabBottom = Math.max(144, responsive.spacing.xxl * 3 + insets.bottom);
+  const toastBottom = footerFabBottom + roundControlSize + responsive.spacing.xxl * 2;
 
   return StyleSheet.create({
   container: {
@@ -1070,10 +1262,14 @@ const createStyles = (responsive: any, insets: any) => {
     fontWeight: 'bold',
   },
   voteCounter: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 0,
     borderRadius: 25,
-    minWidth: 200, // Ensure enough space for the expanded content
+    minWidth: 240,
+    maxWidth: '100%',
     // Add shadow/elevation
     elevation: 4,
     shadowColor: '#000',
@@ -1087,12 +1283,26 @@ const createStyles = (responsive: any, insets: any) => {
   voteCounterText: {
     fontSize: responsive.fontSize.medium,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  statsBarSegment: {
+    minHeight: motion.touchTarget.minimum,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: responsive.spacing.xs,
+    flexShrink: 1,
+  },
+  statsBarDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 22,
+    opacity: 0.55,
+    marginHorizontal: 2,
   },
   streakToast: {
     position: 'absolute',
     left: responsive.spacing.xl,
     right: responsive.spacing.xl,
-    bottom: footerFabBottom + roundControlSize + responsive.spacing.md,
+    bottom: toastBottom,
     borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: responsive.spacing.md,

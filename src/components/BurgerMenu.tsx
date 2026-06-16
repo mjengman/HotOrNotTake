@@ -49,6 +49,50 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
     setTimeout(action, 100);
   };
 
+  const menuItems = [
+    {
+      label: isDarkMode ? 'Light Mode' : 'Dark Mode',
+      icon: isDarkMode ? '☀️' : '🌙',
+      onPress: () => handleMenuItemPress(onToggleTheme),
+    },
+    {
+      label: 'Instructions',
+      icon: '❓',
+      onPress: () => handleMenuItemPress(onInstructions),
+    },
+    {
+      label: 'Leaderboard',
+      icon: '🏆',
+      onPress: () => handleMenuItemPress(onLeaderboard),
+    },
+    {
+      label: 'My Favorites',
+      icon: '⭐',
+      onPress: () => handleMenuItemPress(onFavorites),
+    },
+    {
+      label: 'My Takes',
+      icon: '📝',
+      onPress: () => handleMenuItemPress(onMyTakes),
+    },
+    {
+      label: 'Results Autoplay',
+      icon: '▶️',
+      onPress: onToggleResultsAutoplay,
+      isSwitch: true,
+    },
+    {
+      label: 'Safety & Reporting',
+      icon: '🛡️',
+      onPress: () => handleMenuItemPress(onSafety),
+    },
+    {
+      label: 'Vote History',
+      icon: '📊',
+      onPress: () => handleMenuItemPress(onRecentVotes),
+    },
+  ].sort((first, second) => first.label.localeCompare(second.label));
+
   // Handle back button when burger menu is open
   useEffect(() => {
     if (!isOpen) return;
@@ -115,170 +159,47 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
               }
             ]}>
             <View style={[styles.menu, { backgroundColor: theme.background }]}>
-              <TouchableOpacity
-                style={[styles.menuItem, { borderBottomColor: theme.border }]}
-                onPress={() => handleMenuItemPress(onMyTakes)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={styles.menuIcon}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >📝</Text>
-                <Text
-                  style={[styles.menuText, { color: theme.text }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >My Takes</Text>
-              </TouchableOpacity>
+              {menuItems.map((item, index) => {
+                const isLastItem = index === menuItems.length - 1;
 
-              <TouchableOpacity
-                style={[styles.menuItem, { borderBottomColor: theme.border }]}
-                onPress={() => handleMenuItemPress(onLeaderboard)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={styles.menuIcon}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >🏆</Text>
-                <Text
-                  style={[styles.menuText, { color: theme.text }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >Leaderboard</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { borderBottomColor: theme.border }]}
-                onPress={() => handleMenuItemPress(onRecentVotes)}
-                activeOpacity={0.7}
-              >
-                <Text 
-                  style={styles.menuIcon}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >📊</Text>
-                <Text 
-                  style={[styles.menuText, { color: theme.text }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >Vote History</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { borderBottomColor: theme.border }]}
-                onPress={() => handleMenuItemPress(onFavorites)}
-                activeOpacity={0.7}
-              >
-                <Text 
-                  style={styles.menuIcon}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >⭐</Text>
-                <Text 
-                  style={[styles.menuText, { color: theme.text }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >My Favorites</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { borderBottomColor: theme.border }]}
-                onPress={() => handleMenuItemPress(onInstructions)}
-                activeOpacity={0.7}
-              >
-                <Text 
-                  style={styles.menuIcon}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >❓</Text>
-                <Text 
-                  style={[styles.menuText, { color: theme.text }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >Instructions</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { borderBottomColor: theme.border }]}
-                onPress={() => handleMenuItemPress(onSafety)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={styles.menuIcon}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >🛡️</Text>
-                <Text
-                  style={[styles.menuText, { color: theme.text }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >Safety & Reporting</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { borderBottomColor: theme.border }]}
-                onPress={() => handleMenuItemPress(onToggleTheme)}
-                activeOpacity={0.7}
-              >
-                <Text 
-                  style={styles.menuIcon}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >{isDarkMode ? '☀️' : '🌙'}</Text>
-                <Text 
-                  style={[styles.menuText, { color: theme.text }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >
-                  {isDarkMode ? 'Light Mode' : 'Dark Mode'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={onToggleResultsAutoplay}
-                activeOpacity={0.7}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: resultsAutoplay }}
-                accessibilityLabel="Results autoplay"
-              >
-                <Text
-                  style={styles.menuIcon}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >▶️</Text>
-                <Text
-                  style={[styles.menuText, { color: theme.text }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.75}
-                >
-                  Results Autoplay
-                </Text>
-                <Switch
-                  value={resultsAutoplay}
-                  onValueChange={onToggleResultsAutoplay}
-                  trackColor={{ false: theme.border, true: theme.primaryLight }}
-                  thumbColor={resultsAutoplay ? theme.primary : theme.textSecondary}
-                />
-              </TouchableOpacity>
+                return (
+                  <TouchableOpacity
+                    key={item.label}
+                    style={[
+                      styles.menuItem,
+                      !isLastItem && { borderBottomColor: theme.border },
+                    ]}
+                    onPress={item.onPress}
+                    activeOpacity={0.7}
+                    accessibilityRole={item.isSwitch ? 'switch' : 'button'}
+                    accessibilityState={item.isSwitch ? { checked: resultsAutoplay } : undefined}
+                    accessibilityLabel={item.label}
+                  >
+                    <Text
+                      style={styles.menuIcon}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                    >{item.icon}</Text>
+                    <Text
+                      style={[styles.menuText, { color: theme.text }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={item.isSwitch ? 0.75 : 0.8}
+                    >
+                      {item.label}
+                    </Text>
+                    {item.isSwitch && (
+                      <Switch
+                        value={resultsAutoplay}
+                        onValueChange={onToggleResultsAutoplay}
+                        trackColor={{ false: theme.border, true: theme.primaryLight }}
+                        thumbColor={resultsAutoplay ? theme.primary : theme.textSecondary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </SafeAreaView>
         </TouchableOpacity>
