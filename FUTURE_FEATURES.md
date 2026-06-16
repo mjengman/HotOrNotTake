@@ -1,22 +1,40 @@
 # Future Features Backlog - Hot or Not Takes
 
-**Updated**: June 15, 2026
+**Updated**: June 16, 2026
 **Status**: Living product backlog
-**Purpose**: Capture product ideas, deployment constraints, and likely sprint candidates. This is not a promise list; it is the place to keep good ideas warm until they are scoped.
+**Purpose**: Capture product ideas, deploy constraints, and likely sprint candidates. This is not a promise list; it is where good ideas stay warm until they are scoped.
 
-Hot or Not Takes is now a production app with server-side moderation, AI-generated endless feed support, daily streak basics, in-app safety reporting, and a more polished swipe loop. Future work should make the existing loop more rewarding before adding heavy new surfaces.
+Hot or Not Takes is a production app with server-side moderation, AI-generated feed refill, warm-start feed cache, daily quests, vote history, My Skips, in-app safety reporting, cached leaderboards, and a much richer core swipe loop. Future work should make the loop more personally rewarding before adding heavy new surfaces.
 
 ## Product Principles
 
 - **Strengthen the core loop first**: Swipe, reveal, react, repeat.
-- **Make the app feel purpose-built**: Motion, copy, spacing, feedback, and surfaces should cohere as deliberate product choices, not leftover vibe-code.
-- **Prefer OTA improvements**: Ship JavaScript-only polish and retention features quickly when possible.
 - **Make every vote feel alive**: Results should feel like a social reveal, not just a stat panel.
-- **Make launch feel instant**: Returning users should see a take quickly, not a skeleton every time.
 - **Build identity before comparison**: Personal stats and taste profiles should come before heavier global ranking mechanics.
-- **Keep onboarding obvious**: New users should understand HOT, NOT, and skip without hunting through menus.
-- **Protect store trust**: Safety, moderation, child-safety standards, and store metadata are product features, not chores.
+- **Protect flow speed**: Menus, card transitions, cache reads, and result reveals should feel instant or intentionally animated.
+- **Prefer OTA improvements**: Ship JavaScript-only polish and retention features quickly when possible.
+- **Keep onboarding obvious**: New users should understand HOT, NOT, skip, results, and daily quests without hunting.
+- **Protect store trust**: Safety, moderation, child-safety standards, and store metadata are product features.
 - **Stay anonymous-friendly**: Do not force real names or full accounts unless the value is obvious.
+- **Make AI invisible in the right way**: AI content should feel human, varied, and category-appropriate.
+
+## Current Product Baseline
+
+These are no longer future ideas; they are part of the working product foundation.
+
+- Server-side moderation through Firebase Cloud Functions; OpenAI key stays off the client.
+- Cloud Function AI generation refills under-supplied categories and avoids obvious duplicates.
+- Client feed warm-start cache renders returning users into cards quickly.
+- Feed filtering respects voted and skipped takes; My Skips lets users revisit skipped takes.
+- Vote History is the primary history surface, replacing the old last-10 Recent Votes model.
+- Results card has dynamic reaction copy, percentage count-up, Save, Share result, Change vote, and Results Autoplay preference.
+- Daily quest system supports vote count, category votes, fresh takes, divisive takes, and multi-category quests.
+- Achievement-lite toasts exist for vote count, streak, and all-category milestones.
+- Footer stats expose streak, daily quest, and community votes with tap-to-explain nudges.
+- Leaderboards include Hottest, Nottest, Divisive, and Skipped, with local cache/prefetch.
+- Dark mode preference persists.
+- In-app safety/reporting standards exist through the menu flow.
+- Store child-safety standards are published externally and reflected in app content.
 
 ## North Star Metric
 
@@ -25,345 +43,281 @@ Hot or Not Takes is now a production app with server-side moderation, AI-generat
 The app wins when people come back and vote again. Total downloads, total takes, and total votes are useful, but Weekly Active Voters best captures whether Hot or Not Takes is becoming a repeat habit.
 
 Supporting metrics:
+
 - Votes per active user.
 - Votes per session.
 - D1 and D7 retention.
-- Daily challenge completion rate.
+- Daily quest completion rate.
 - Streak continuation rate.
 - Share taps and completed shares.
+- Vote History opens.
+- My Skips opens and skipped-take conversions.
 - Report volume and moderation pending volume.
+- Store page conversion after screenshot refresh.
 
-## Churn Risks
+## Current Risks
 
-Known or likely reasons users may leave:
+- **First-session clarity**: The app is more polished now, but brand-new users may still need a clearer first minute.
+- **Perceived community size**: Small vote counts can make a take feel less alive unless copy frames it well.
+- **AI repetition**: Generated content can still overuse certain phrasing, punctuation, or topics.
+- **Duplicate/near-duplicate fatigue**: Users noticing similar takes will erode trust that their votes matter.
+- **Haptic sensitivity**: iOS haptics can feel mistimed or blocking; keep haptics conservative unless tested on real devices.
+- **Menu responsiveness**: Utility surfaces must open instantly; any lag makes the app feel heavier than it is.
+- **Firestore rules drift**: Vote percentage denormalization currently needs rules/backfill care so Divisive data stays reliable.
+- **Store release friction**: Android/iOS builds, OTA compatibility, and service-account automation should be kept healthy.
 
-- Cold starts feel slow because users see skeleton loading before cards appear.
-- New users may not immediately understand swipe direction, skip gestures, or the results reveal.
-- Low perceived community size can make the app feel less alive than it is.
-- Results can become predictable if too many takes are obvious consensus opinions.
-- AI-generated phrasing can feel repetitive, especially semicolon-heavy writing.
-- Weak personal investment if the app does not reflect the user's taste, identity, or voting history back to them.
-- Empty states can feel broken rather than intentional.
-- Disconnected polish can make the app feel assembled rather than intentionally designed.
+## Recommended Next OTA Sprint Candidates
 
-## Recommended Next OTA Sprint
+### 1. Personal Stats and Taste Profile
 
-### 1. Warm-Start Feed Cache
-- Cache a small batch of approved, unvoted takes locally after a successful feed load.
-- On app launch, render cached takes immediately while Firestore refreshes in the background.
-- Cache should be scoped by user and category.
-- Filter cached takes against known voted IDs before display when possible.
-- Use a simple TTL so stale content does not live forever.
-- Fall back to skeleton only when no usable cache exists.
+**Why**: This is the most natural next retention layer. The app already has vote history, categories, crowd splits, and results reactions. Now it should reflect the user's identity back to them.
 
-### 2. Daily Challenge
-- Add a daily challenge such as "Vote on 20 takes today."
-- Show progress near the existing streak/vote stats area.
-- Support simple variants over time:
-  - Vote on 20 takes today.
-  - Vote on 10 takes in a category.
-  - Vote on 5 divisive takes.
-- Completion should trigger a satisfying toast or lightweight celebration.
+Scope ideas:
 
-### 3. Reveal Moment / Controversy Engine
-- Treat the results card as the emotional core of the app.
-- Add contextual copy to the results card after a vote.
-- Example lines:
-  - "You're in the minority."
-  - "Most people agree with you."
-  - "This one split the room."
-  - "Certified heater."
-  - "Ice cold take."
-  - "The room is divided."
-- Highlight surprising vote moments:
-  - "Only 8% agreed with you."
-  - "You went against the crowd."
-  - "Almost nobody took your side."
-- Keep lines short, varied, and tied to vote percentages.
-
-### 4. Personal Taste Profile
-- Generate a lightweight identity from existing vote history.
-- No login required; anonymous user data is enough.
-- Possible labels:
+- Crowd agreement percentage: "You agree with the room 68% of the time."
+- HOT vs NOT tendency.
+- Favorite/hottest/coldest personal categories.
+- Contrarian category: "Politics is where you break from the crowd."
+- Close-call voter: "You keep landing on split-room takes."
+- Lightweight labels:
   - Contrarian
   - Crowd Follower
   - Chaos Agent
   - Category Loyalist
   - Optimist
   - Skeptic
-  - Sports Purist
   - Food Critic
-- Start as a teaser or compact stats card before building a full profile surface.
-
-### 5. Personal Stats Before Global Leaderboards
-- Reflect the user's behavior back to them.
-- Example stats:
-  - "You agree with the crowd 72% of the time."
-  - "Food is your hottest category."
-  - "You vote NOT more often than most users."
-  - "You love close-call takes."
-- Personal identity should take priority over global ranking polish.
-
-### 6. Vote History
-- Make previous votes revisitable instead of limiting the user to a tiny recent slice.
-- Use pagination or "Load more" rather than loading every vote at once.
-- Let users revisit takes, see current community split, share later, and change votes when supported.
-- Treat history as a foundation for personal stats and taste profile.
-
-### 7. Core Loop Enrichment Pass
-- Audit the main gameplay loop as a single intentional experience:
-  - App launch
-  - First visible card
-  - Swipe gesture
-  - Vote feedback
-  - Results reveal
-  - Save/share/change-vote actions
-  - Return to the next card
-- Tune motion, haptics cadence, copy, spacing, card texture, and transition timing so the loop feels rich and coherent.
-- This is not a redesign; it is an intentionality pass over the product's most important seconds.
-
-### 8. Empty State and Loading Polish
-- Better no-feed card: "You've seen everything in this category. More takes are on the way."
-- Show community vote count or streak encouragement instead of blank space.
-- Keep skeleton/loading states calm and consistent.
-
-## OTA Eligible Ideas
-
-These should be possible without app store review if implemented with existing dependencies and Firestore/Cloud Functions already in place.
-
-### Launch and Feed Performance
-- Warm-start feed cache so returning users see cards immediately on launch.
-- Persist the latest usable batch of approved takes locally after successful feed loads.
-- Store cache by user ID and selected category.
-- Filter out cached takes the user has already voted on when local interaction history is available.
-- Refresh from Firestore in the background and reconcile the deck without a jarring card swap.
-- Use skeleton loading only for first launch, empty cache, or expired cache.
-- Keep cache TTL simple at first, likely 6-24 hours.
-- Treat this as high-priority perceived-quality work.
-
-### Retention and Reward
-- Daily challenges.
-- Category-specific daily challenges.
-- Streak milestone toasts beyond the current streak counter.
-- "Vote to keep your streak" nudge banner.
-- "You're on fire" session moment after a user votes on several takes in one session.
-- Lightweight achievement notifications with no new native permissions.
-- Achievement-lite milestones:
-  - First 10 votes
-  - 100 votes
-  - 1,000 votes
-  - First streak
-  - 7-day streak
-  - Voted in every category
-  - Took the unpopular side
-
-### Reveal Moment and Gameplay Feel
-- Post-vote personality lines based on percentage split.
-- Better result reveal copy for landslides, close calls, and unpopular votes.
-- Controversy engine moments:
-  - "91% HOT, you voted NOT."
-  - "Only 8% agreed with you."
-  - "You took the unpopular side."
-  - "This one split the room."
-- Most surprising votes list based on the user's vote differing sharply from the crowd.
-- Encourage screenshots/shares when a result is unusually surprising.
-- More natural results-card transitions as needed.
-- More consistent button states and disabled states.
-- Fine-tune skip/recent-vote affordances based on observed testing.
-- Dedicated core loop enrichment pass so swipe, reveal, result, and next-card transitions feel like one purpose-built experience.
-
-### Personal Stats and Taste Profile
-- Build personal stats from existing vote history before investing heavily in global leaderboards.
-- Possible stats:
-  - Crowd agreement percentage.
-  - HOT vs NOT tendency.
-  - Hottest/coldest personal category.
-  - Most contrarian category.
-  - Number of close-call votes.
-- Possible taste labels:
-  - Contrarian
-  - Crowd Follower
-  - Chaos Agent
-  - Category Loyalist
-  - Optimist
-  - Skeptic
   - Sports Purist
-  - Food Critic
-- Start with a compact card or toast, then graduate to a profile surface if users respond.
 
-### Vote History
-- Keep Vote History paginated, newest first.
-- Show vote choice, category, current community split, and take text.
-- Let users revisit a take/results view from history.
-- Preserve "change your vote" behavior where the existing vote system supports it.
-- Use history as a bridge to personal stats, taste profile, and later sharing moments.
+Start with a compact stats card or result-card teaser before building a full profile screen.
 
-### Feed and Category Experience
-- Better empty feed state.
-- Better favorites empty state.
-- Better vote history empty state.
-- Category stats in the category picker, such as overall HOT percentage or vote count by category.
-- Alphabetized category ordering should remain enforced.
-- Continue auditing category miscategorizations when AI generation creates odd placements.
-- Keep the "all" category balanced by generating under-supplied categories first.
+### 2. Results Share Card 2.0
+
+**Why**: The results card is the emotional core. Sharing should feel like sharing a story, not a table of numbers.
+
+Scope ideas:
+
+- Sharper visual share card for close calls, landslides, and contrarian moments.
+- Use result reaction headline as share lead.
+- Stronger CTA when user is in a small minority.
+- Preserve one-tap native share behavior.
+- Avoid new native share targets unless truly needed.
+
+Example copy:
+
+- "Only 12% agreed with me on this one."
+- "The room split 51/49."
+- "I took the unpopular side."
+- "Almost everyone said HOT."
+
+### 3. First-Session Onboarding
+
+**Why**: The app is simple once understood, but the first minute determines whether new users get to the good part.
+
+Scope ideas:
+
+- First-launch guided card or lightweight tutorial.
+- Show HOT, NOT, and skip affordances before the user needs them.
+- Explain the results reveal after the first vote.
+- Keep the existing Instructions screen swipeable, but do not rely on it for first-session comprehension.
+- Avoid a marketing-style landing page; drop users into gameplay quickly.
+
+### 4. Store Screenshots and Listing Refresh
+
+**Why**: Conversion is free growth. The app now looks much better than old store assets probably show.
+
+Suggested screenshot story:
+
+1. Vote HOT or NOT on spicy takes.
+2. See how the community voted.
+3. Keep your daily quest/streak alive.
+4. Revisit skipped takes and vote history.
+5. Browse Hottest, Nottest, Divisive, and Skipped.
+6. Submit your own take after moderation.
+
+Include both light and dark mode if store slots allow it.
+
+### 5. Feed Quality and Duplicate Defense
+
+**Why**: The endless feed only works if users believe they are seeing fresh takes and that votes/skips count.
+
+Scope ideas:
+
+- Improve near-duplicate detection beyond exact text/fingerprint.
+- Add small admin script for scanning repeated topics/phrases.
+- Track AI source prompts/categories for quality audits.
+- Keep semicolon use low in generation prompts.
+- Continue correcting category drift.
+- Consider lightweight recency/topic diversity controls.
+
+### 6. Quest and Achievement Depth
+
+**Why**: Daily quests are a strong first pass. They need variety, clarity, and better emotional payoff.
+
+Scope ideas:
+
+- More quest variants:
+  - Take the unpopular side 3 times.
+  - Vote on 3 close-call takes.
+  - Revisit Vote History.
+  - Clear 5 skipped takes.
+  - Save or share one result.
+- Better completion moment.
+- Quest copy bank with more personality.
+- Quest history or "yesterday's quest" only if it adds motivation.
+- Rewards should stay cosmetic/identity-based, not pay-to-win.
+
+### 7. Menu and Surface Performance
+
+**Why**: The main game now feels strong. Secondary surfaces should feel equally snappy.
+
+Scope ideas:
+
+- Keep burger menu opening instant.
+- Defer leaderboard prefetch and ad work away from first interactions.
+- Reduce noisy ad re-render/log churn where possible.
+- Profile slow surface opens on real Android and iOS devices.
+- Keep overlay transitions consistent through `FullScreenOverlay`.
+
+## OTA Eligible Backlog
+
+These should be possible without app store review if implemented with current dependencies and backend shape.
+
+### Core Loop and Results
+
+- More reaction headline variants.
+- More nuanced rare-contrarian visual treatment.
+- Better result-card share copy.
+- Continue tuning results-card exit and next-card handoff.
+- Keep Results Autoplay default off unless user behavior suggests otherwise.
+- Keep haptics conservative; reintroduce only after device-tested proof.
+
+### Personal Identity
+
+- Personal stats card.
+- Taste profile label.
+- Weekly recap: "Your voting week."
+- Category personality summaries.
+- "You surprised the room" moments.
+- "You agree with the crowd" milestone copy.
+
+### History and Revisit Surfaces
+
+- Vote History filters by category, vote type, or close-call status.
+- Search within Vote History.
+- My Skips count badge in category picker.
+- One-tap "clear this skipped take" behavior if needed.
+- Better empty states for History, Favorites, My Takes, and My Skips.
 
 ### Leaderboards and Discovery
-- Treat global leaderboards as secondary to personal stats until the community feels larger.
-- Most divisive takes.
+
+- Better cached leaderboard freshness indicators.
+- Trending takes based on recent vote velocity.
 - Fresh debates.
-- Trending takes based on recent voting velocity.
-- Category-specific leaderboard filters.
-- More visual hierarchy and clearer labels in leaderboard rows.
-- Lightweight pull-to-refresh polish.
-
-### Sharing and Virality
-- Polish the existing share button on the results card.
-- Improve generated share card copy and visual hierarchy.
-- Add stronger calls to action after a surprising result.
-- Consider shareable stats cards:
-  - "I voted with 12% of people."
-  - "This take split the room 51/49."
-- No new native share targets unless required.
-
-### Onboarding and First Session
-- First-launch swipe tutorial or instruction card.
-- Make HOT, NOT, and skip gestures clear in the first minute.
-- Consider a short guided first vote rather than a separate explanatory screen.
-- Keep instructions screen swipeable, since page dots imply swipe.
-
-### Copy and UX Tweaks
-- Tone pass on all user-facing strings.
-- Reduce intimidating punctuation in AI-generated takes, especially semicolons.
-- Keep submit copy aligned with moderation reality.
-- Keep safety/reporting copy aligned with the menu-based reporting flow.
+- Category-specific tabs or chips.
+- More visual hierarchy in rows.
+- Backfill or repair `hotPercentage`/`notPercentage` for older takes if rules allow.
 
 ### AI Content Quality
-- Reduce semicolon frequency in generated takes.
-- Increase sentence rhythm variety.
+
+- Reduce semicolon frequency.
+- More sentence rhythm variety.
 - Avoid generic filler.
-- Avoid overuse of the same topics or framing.
-- Improve duplicate and near-duplicate detection.
-- Improve category fit checks.
+- Avoid overusing the same topic frame.
+- Add near-duplicate checks.
+- Add category-fit validation.
 - Keep generated takes opinionated, human-feeling, and debatable.
-- Continue using server-side moderation before generated takes are written.
+
+### Safety and Trust
+
+- Improve report confirmation copy.
+- Admin/review helper script for reported takes.
+- Periodic content scans for profanity, CSAE terms, and obvious policy violations.
+- Keep safety standards URL functional and app/developer-name aligned.
+- Keep fail-closed moderation behavior.
 
 ### Growth Without Native Changes
-- Store screenshot refresh planning and copywriting.
-- App Store / Google Play listing copy updates.
-- Review prompt via a simple link if native in-app review support is not already available.
-- A/B wording ideas for screenshots and store descriptions.
 
-## Full Release Required Ideas
+- Store screenshot copywriting.
+- Store description refresh.
+- Simple "Rate us" link after a positive moment.
+- Share-copy experiments.
+- Referral copy if using existing share primitives only.
+
+## Full Release Required Backlog
 
 These likely need new native permissions, native configuration, new native dependencies, or store review.
 
 ### Notifications and Native Engagement
-- Push notifications for streak reminders, daily challenges, or trending takes.
+
+- Push notifications for streak reminders, daily quests, or trending takes.
 - APNs and FCM setup.
-- iOS Live Activities for streaks or daily challenges.
+- iOS Live Activities for streaks or daily quests.
 - iOS home screen widget showing a daily take.
 - Android widgets or quick tiles.
 
 ### Native Sharing and Platform Features
-- New share sheet targets or behavior that requires native configuration.
+
+- New share sheet targets or behavior requiring native configuration.
 - iMessage stickers.
 - SharePlay or group voting sessions.
 - New deep-linking behavior if native config changes are required.
 
 ### Ads and Monetization
-- Any new AdMob ad format.
+
+- New AdMob ad formats.
 - Native ad placement changes that require configuration.
 - Subscription or in-app purchase support.
 - Significant ATT/consent flow changes.
 
 ### Authentication and Permissions
-- OAuth login with Apple, Google, or other providers if native setup is required.
+
+- OAuth login with Apple, Google, or other providers.
 - Contacts-based friend discovery.
 - Photo library or camera access for avatars.
-- Any new permission prompt.
+- Cross-device account sync that requires native auth setup.
 
 ## Either Path Depending on Implementation
 
 ### User Profiles
-- **OTA path**: Anonymous-first profile with display name, local avatar choice, basic stats, and Firestore-backed history.
+
+- **OTA path**: Anonymous-first profile with display name, local avatar choice, and basic stats.
 - **Full release path**: OAuth login, photo upload, cross-device identity, or new native permissions.
 
 ### Achievements System
+
 - **OTA path**: Display-only achievements calculated from existing Firestore stats.
 - **Backend path**: Cloud Functions for authoritative achievement awarding or anti-abuse controls.
 - **Full release path**: Native notifications or background processing.
 
 ### Friends and Leaderboards
-- **OTA path**: Firestore-based public/friends code leaderboard with no contacts permission.
+
+- **OTA path**: Firestore-based friend code or public profile links with no contacts permission.
 - **Full release path**: Contacts import, push notifications, or deep native integrations.
 
 ### Review Prompt
+
 - **OTA path**: Simple "Rate us" link after a positive moment.
 - **Full release path**: Native in-app review prompt if the required module/config is not already present.
 
 ### Share Improvements
+
 - **OTA path**: Improve existing share button copy, share card, and trigger timing.
 - **Full release path**: Add or configure new native share targets.
 
-## Strategic Growth Tasks
-
-### Store Screenshots
-- Current screenshots should be treated as a growth opportunity.
-- Better screenshots can improve install conversion without changing the app.
-- Suggested screenshot story:
-  1. Vote HOT or NOT on spicy takes.
-  2. See how the community voted.
-  3. Keep your daily streak alive.
-  4. Browse the hottest, coldest, and most divisive takes.
-  5. Submit your own take after AI moderation.
-- Include both light and dark mode if the store slots allow it.
-
-### Review Strategy
-- Prompt only after a positive moment:
-  - Daily challenge complete.
-  - Streak milestone.
-  - Several votes in one session.
-  - A fun results reveal.
-- Do not prompt on first launch or immediately after errors/rejections.
-
-### Metrics to Watch
-- Weekly Active Voters (north star).
-- D1 retention.
-- D7 retention.
-- Votes per session.
-- Sessions per user per day.
-- Challenge completion rate.
-- Streak continuation rate.
-- Share taps and completed shares.
-- Store page conversion after screenshot refresh.
-- Report volume and moderation failure/pending volume.
-
 ## Longer-Term Product Ideas
 
-### User Profiles and Accounts
+### Profiles and Accounts
+
 - Username and avatar while staying anonymous-first.
 - Optional bio/tagline.
 - Stats display: votes cast, takes submitted, streak, favorite categories.
 - Badge collection showcase.
 - Favorite takes collection.
-- Optional take history.
 - Cross-device sync if accounts become worth the complexity.
 
-### Badges and Levels
-- Bronze/Silver/Gold voter levels.
-- Category badges such as Food Critic, Tech Guru, Sports Analyst.
-- Event badges for holiday or trending-topic takes.
-- Rare badges for surprising achievements.
-- Badge showcase on profiles.
-
-### Favorites and Collections
-- Keep starring/bookmarking takes.
-- Create collections such as "Wild Food Takes" or "Controversial Politics."
-- Public/private collection toggle.
-- Share collections.
-- Trending collections discovery.
-
 ### Social Graph
+
 - Follow other users, opt-in only.
 - Friends leaderboard.
 - Share takes directly to followers.
@@ -371,6 +325,7 @@ These likely need new native permissions, native configuration, new native depen
 - Referral rewards for inviting friends.
 
 ### Content Discovery
+
 - Personalized "For You" feed based on voting patterns.
 - Trending takes algorithm.
 - Category deep dives.
@@ -378,6 +333,7 @@ These likely need new native permissions, native configuration, new native depen
 - Regional takes only if location/privacy tradeoffs are worth it.
 
 ### AI and Content Features
+
 - AI take suggestions for users drafting submissions.
 - Smart category recommendations.
 - AI-powered take battles.
@@ -385,8 +341,8 @@ These likely need new native permissions, native configuration, new native depen
 - Topic freshness controls so generated content reflects current culture without becoming news-dependent.
 
 ### Monetization
+
 - Ad-free premium tier.
-- Unlimited skips.
 - Advanced statistics.
 - Exclusive themes or badge designs.
 - Priority moderation for submitted takes.
@@ -402,10 +358,13 @@ These likely need new native permissions, native configuration, new native depen
 - Political bias in algorithms.
 - Client-side OpenAI calls or exposed AI keys.
 - Auto-approving content when moderation fails.
+- Adding native permissions without a clear product reason.
 
 ## Backlog Hygiene
 
-- Move completed ideas into `CLAUDE.md` only when they change current operating behavior.
+- Keep this file focused on product possibilities and sprint candidates.
+- Move durable operating knowledge into `CLAUDE.md`.
 - Keep historical launch notes in `docs/archive/`.
 - Keep deploy-path labels current before each sprint.
-- Before implementing any "full release required" feature, confirm the store review and permission implications first.
+- Mark completed work as current baseline instead of leaving it in the future list.
+- Before implementing any full-release-required feature, confirm store review and permission implications first.

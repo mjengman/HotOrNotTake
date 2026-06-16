@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -43,17 +43,17 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   const responsive = useResponsive();
   const burgerSize = Math.max(motion.touchTarget.comfortable, responsive.iconSize.xlarge + 2);
 
-  const closeMenu = () => {
+  const closeMenu = useCallback(() => {
     setIsOpen(false);
-  };
+  }, []);
 
-  const handleMenuItemPress = (action: () => void) => {
+  const handleMenuItemPress = useCallback((action: () => void) => {
     closeMenu();
     // Small delay to let the modal close before triggering action
     setTimeout(action, 100);
-  };
+  }, [closeMenu]);
 
-  const menuItems = [
+  const menuItems = useMemo(() => [
     {
       label: isDarkMode ? 'Light Mode' : 'Dark Mode',
       icon: isDarkMode ? '☀️' : '🌙',
@@ -95,7 +95,18 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
       icon: '📊',
       onPress: () => handleMenuItemPress(onRecentVotes),
     },
-  ].sort((first, second) => first.label.localeCompare(second.label));
+  ].sort((first, second) => first.label.localeCompare(second.label)), [
+    handleMenuItemPress,
+    isDarkMode,
+    onFavorites,
+    onInstructions,
+    onLeaderboard,
+    onMyTakes,
+    onRecentVotes,
+    onSafety,
+    onToggleResultsAutoplay,
+    onToggleTheme,
+  ]);
 
   // Handle back button when burger menu is open
   useEffect(() => {
@@ -129,7 +140,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
         ]}
         onPress={() => setIsOpen(true)}
         scaleValue={0.9}
-        hapticIntensity={motion.haptic.light}
+        hapticFeedback={false}
         accessibilityRole="button"
         accessibilityLabel="Open menu"
       >
@@ -144,7 +155,8 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
       <Modal
         visible={isOpen}
         transparent={true}
-        animationType="fade"
+        animationType="none"
+        hardwareAccelerated={true}
         statusBarTranslucent={true}
         presentationStyle="overFullScreen"
         onRequestClose={() => closeMenu()}
