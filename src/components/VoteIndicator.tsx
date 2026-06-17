@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Vibration,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -14,6 +13,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { colors, dimensions } from '../constants';
+import { vibrate } from '../utils/haptics';
 
 interface VoteIndicatorProps {
   vote: 'hot' | 'not' | 'skip' | null;
@@ -59,7 +59,7 @@ export const VoteIndicator: React.FC<VoteIndicatorProps> = ({
       // Enhanced haptic feedback based on vote type
       if (vote !== 'skip') {
         const vibrationPattern = vote === 'hot' ? [0, 20, 40, 20] : [0, 15, 30, 15];
-        Vibration.vibrate(vibrationPattern);
+        vibrate(vibrationPattern);
       }
       
       // Auto-hide after a longer delay to let user appreciate the animation

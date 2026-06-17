@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   Text,
-  Vibration,
   Platform,
   RefreshControl,
   ScrollView,
@@ -29,6 +28,7 @@ import { VoteIndicator } from './VoteIndicator';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
 import { dimensions, colors, motion } from '../constants';
 import { useResponsive } from '../hooks/useResponsive';
+import { vibrate } from '../utils/haptics';
 
 interface CustomSwipeableCardDeckProps {
   takes: Take[];
@@ -51,6 +51,7 @@ interface CustomSwipeableCardDeckProps {
   skipRequestToken?: number;
   identityTeaser?: { takeId: string; text: string } | null;
   onIdentityTeaserPress?: () => void;
+  onVisibleResultChange?: (takeId: string | null) => void;
 }
 
 // Safe flip for Android - no 3D to avoid compositor crashes
@@ -81,6 +82,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   skipRequestToken = 0,
   identityTeaser = null,
   onIdentityTeaserPress,
+  onVisibleResultChange,
 }) => {
   const responsive = useResponsive();
   const screenWidth = responsive.screen.width;
@@ -234,6 +236,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     : useFrozen
       ? frozenCurrent.current ?? renderCurrent
       : renderCurrent;
+
+  useEffect(() => {
+    if (externalStatsCard) {
+      return;
+    }
+
+    onVisibleResultChange?.(isCardFlipped && statsTake ? statsTake.id : null);
+  }, [externalStatsCard, isCardFlipped, onVisibleResultChange, statsTake?.id]);
 
   useEffect(() => {
     resultBaseSV.value = promotedBaseTake ? 1 : 0;
@@ -515,7 +525,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       translateX.value = withSpring(0, motion.spring.cardReturn);
       translateY.value = withSpring(0);
       scale.value = withSpring(1, motion.spring.cardReturn);
-      runOnJS(Vibration.vibrate)(motion.haptic.vote);
+      runOnJS(vibrate)(motion.haptic.vote);
       runOnJS(flipCard)(vote);
     });
     translateY.value = withTiming(arcY, {
@@ -557,7 +567,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     
     isAnimating.value = true;
     animatingSV.value = 1;
-    Vibration.vibrate(motion.haptic.medium);
+    vibrate(motion.haptic.medium);
     
     // Animate up or down based on direction
     const targetY = direction === 'up' ? -screenHeight * 0.8 : screenHeight * 0.8;
@@ -597,7 +607,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     onStart: () => {
       if (isAnimating.value || !hasCurrentSV.value) return; // ignore new gestures mid-flight or no card
       scale.value = withSpring(0.95);
-      runOnJS(Vibration.vibrate)(motion.haptic.selection);
+      runOnJS(vibrate)(motion.haptic.selection);
     },
     onActive: (event) => {
       if (isAnimating.value || !hasCurrentSV.value) return;
@@ -627,17 +637,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         
         // Horizontal swipe feedback
         if ((shouldSwipeRight || shouldSwipeLeft) && Math.abs(event.translationX) > swipeThreshold && Math.abs(event.translationX) < swipeThreshold + 20) {
-          runOnJS(Vibration.vibrate)(motion.haptic.medium);
+          runOnJS(vibrate)(motion.haptic.medium);
         }
         
         // Down swipe feedback
         if (shouldSwipeDown && Math.abs(event.translationY) > swipeDownThreshold && Math.abs(event.translationY) < swipeDownThreshold + 30) {
-          runOnJS(Vibration.vibrate)(motion.haptic.selection);
+          runOnJS(vibrate)(motion.haptic.selection);
         }
         
         // Up swipe feedback
         if (shouldSwipeUp && Math.abs(event.translationY) > swipeUpThreshold && Math.abs(event.translationY) < swipeUpThreshold + 30) {
-          runOnJS(Vibration.vibrate)(motion.haptic.selection);
+          runOnJS(vibrate)(motion.haptic.selection);
         }
       }
     },
@@ -706,7 +716,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
       if (shouldSwipeRight && id && !flippedSV.value) {
         // Front side: Bounce back and flip to reveal
-        runOnJS(Vibration.vibrate)(motion.haptic.vote);
+        runOnJS(vibrate)(motion.haptic.vote);
         translateX.value = withSpring(0);
         translateY.value = withTiming(-VOTE_COMMIT_ARC_Y, {
           duration: motion.duration.cardNudge,
@@ -722,7 +732,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
       if (shouldSwipeLeft && id && !flippedSV.value) {
         // Front side: Bounce back and flip to reveal
-        runOnJS(Vibration.vibrate)(motion.haptic.vote);
+        runOnJS(vibrate)(motion.haptic.vote);
         translateX.value = withSpring(0);
         translateY.value = withTiming(VOTE_COMMIT_ARC_Y, {
           duration: motion.duration.cardNudge,
@@ -737,7 +747,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       }
 
       // bounce back - clear vote indicator
-      runOnJS(Vibration.vibrate)(motion.haptic.light);
+      runOnJS(vibrate)(motion.haptic.light);
       runOnJS(jsSetVote)(null); // Clear vote indicator
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);

@@ -51,6 +51,9 @@ const DAILY_CHALLENGE_NUDGE_PREFIX = 'dailyChallengeNudgeShown';
 const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
 type EngagementToast = { title: string; subtitle: string };
 type IdentityTeaser = { takeId: string; text: string };
+type SessionVoteHistoryEntry = { take: Take; vote: 'hot' | 'not' };
+
+const SESSION_VOTE_HISTORY_LIMIT = 10;
 
 const formatCompactCount = (count: number) => {
   if (count >= 1000000) {
@@ -111,8 +114,9 @@ export const HomeScreen: React.FC = () => {
   const [showRecentVotesModal, setShowRecentVotesModal] = useState(false);
   const [showFavoritesModal, setShowFavoritesModal] = useState(false);
   const [showVotingStyleModal, setShowVotingStyleModal] = useState(false);
-  const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: any, vote: 'hot' | 'not' | null} | null>(null);
-  const [lastVotedTake, setLastVotedTake] = useState<any | null>(null);
+  const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: Take, vote: 'hot' | 'not' | null} | null>(null);
+  const [sessionVoteHistory, setSessionVoteHistory] = useState<SessionVoteHistoryEntry[]>([]);
+  const [visibleInternalResultTakeId, setVisibleInternalResultTakeId] = useState<string | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
@@ -148,6 +152,12 @@ export const HomeScreen: React.FC = () => {
 
   // Create responsive styles
   const styles = useMemo(() => createStyles(responsive, insets), [responsive, insets]);
+  const visibleResultTakeId = selectedTakeForStats?.take?.id || visibleInternalResultTakeId;
+  const visibleHistoryIndex = visibleResultTakeId
+    ? sessionVoteHistory.findIndex(entry => entry.take.id === visibleResultTakeId)
+    : -1;
+  const canRewind = sessionVoteHistory.length > 0 &&
+    (visibleHistoryIndex === -1 || visibleHistoryIndex < sessionVoteHistory.length - 1);
 
   const streakInstructionText = useMemo(() => {
     if (stats.votingStreak <= 0) {
@@ -550,7 +560,7 @@ export const HomeScreen: React.FC = () => {
       // Also refresh community stats
       await refreshCommunityStats();
 
-      // Set lastVotedTake with updated vote counts after vote submission
+      // Keep a small in-session rewind stack with the user's vote baked in.
       if (votedTake) {
         const updatedHotVotes = vote === 'hot' ? votedTake.hotVotes + 1 : votedTake.hotVotes;
         const updatedNotVotes = vote === 'not' ? votedTake.notVotes + 1 : votedTake.notVotes;
@@ -560,7 +570,10 @@ export const HomeScreen: React.FC = () => {
           notVotes: updatedNotVotes,
           totalVotes: updatedHotVotes + updatedNotVotes,
         };
-        setLastVotedTake(updatedTake);
+        setSessionVoteHistory(prev => [
+          { take: updatedTake, vote },
+          ...prev.filter(entry => entry.take.id !== updatedTake.id),
+        ].slice(0, SESSION_VOTE_HISTORY_LIMIT));
 
         const totalVotesAfterVote = Math.max(
           stats.totalVotes + (isVoteChange ? 0 : 1),
@@ -683,6 +696,7 @@ export const HomeScreen: React.FC = () => {
 
     // Restore the card immediately so the interaction feels snappy.
     prependTake(updatedTake);
+    setSessionVoteHistory(prev => prev.filter(entry => entry.take.id !== take.id));
 
     const deletePromise = (async () => {
       try {
@@ -717,19 +731,18 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  const handleShowLastVote = async () => {
-    if (!lastVotedTake || !user) return;
+  const handleShowLastVote = () => {
+    if (!canRewind) return;
 
-    try {
-      // Get the user's vote for this take
-      const userVoteRecord = await getUserVoteForTake(lastVotedTake.id, user.uid);
-      if (userVoteRecord && userVoteRecord.vote) {
-        // Show the stats card for the last voted take
-        setSelectedTakeForStats({ take: lastVotedTake, vote: userVoteRecord.vote });
-      }
-    } catch (error) {
-      console.error('Error showing last vote:', error);
-    }
+    const currentIndex = visibleResultTakeId
+      ? sessionVoteHistory.findIndex(entry => entry.take.id === visibleResultTakeId)
+      : -1;
+    const nextIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
+    const historyEntry = sessionVoteHistory[nextIndex];
+
+    if (!historyEntry) return;
+
+    setSelectedTakeForStats({ take: historyEntry.take, vote: historyEntry.vote });
   };
 
   return (
@@ -821,6 +834,7 @@ export const HomeScreen: React.FC = () => {
             skipRequestToken={skipRequestToken}
             identityTeaser={identityTeaser}
             onIdentityTeaserPress={() => setShowVotingStyleModal(true)}
+            onVisibleResultChange={setVisibleInternalResultTakeId}
           />
         )}
       </View>
@@ -855,17 +869,17 @@ export const HomeScreen: React.FC = () => {
             style={[
               styles.bottomButton,
               styles.coolFooterButton,
-              !lastVotedTake && styles.disabledControl,
+              !canRewind && styles.disabledControl,
               isDarkMode
                 ? { backgroundColor: theme.surface, borderColor: 'rgba(116, 185, 255, 0.28)' }
                 : { backgroundColor: '#F0F0F1', borderColor: 'rgba(116, 185, 255, 0.36)' }
             ]}
             onPress={handleShowLastVote}
-            disabled={!lastVotedTake}
+            disabled={!canRewind}
             scaleValue={0.9}
             hapticIntensity={motion.haptic.light}
             accessibilityRole="button"
-            accessibilityLabel="Show your last vote"
+            accessibilityLabel="Show previous result"
           >
             <Text style={[styles.buttonIcon, isDarkMode && { color: theme.text }]}>↩️</Text>
           </AnimatedPressable>

@@ -2,7 +2,6 @@ import React from 'react';
 import {
   TouchableOpacity,
   TouchableOpacityProps,
-  Vibration,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -11,6 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { motion } from '../../constants';
+import { vibrate } from '../../utils/haptics';
 
 interface AnimatedPressableProps extends TouchableOpacityProps {
   children: React.ReactNode;
@@ -45,12 +45,12 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
     if (!disabled) {
       scale.value = withSpring(scaleValue, springConfig);
       opacity.value = withTiming(0.82, { duration: motion.duration.pressIn });
-      
+
       if (hapticFeedback) {
-        Vibration.vibrate(hapticIntensity);
+        vibrate(hapticIntensity);
       }
     }
-    
+
     onPressIn?.(event);
   };
 
@@ -59,7 +59,7 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
       scale.value = withSpring(1, springConfig);
       opacity.value = withTiming(1, { duration: motion.duration.pressOut });
     }
-    
+
     onPressOut?.(event);
   };
 
