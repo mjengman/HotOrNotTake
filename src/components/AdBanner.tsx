@@ -7,8 +7,8 @@ interface AdBannerProps {
   size?: BannerAdSize;
 }
 
-// Production ads enabled - setup verified
-const USE_PRODUCTION_ADS = true;
+// Use Google's test banner in dev so local testing is stable and never requests live ads.
+const USE_PRODUCTION_ADS = !__DEV__;
 
 const adUnitId = Platform.select({
   ios: USE_PRODUCTION_ADS ? 'ca-app-pub-1745058833253836/7308079457' : TestIds.BANNER,
@@ -35,7 +35,6 @@ const AdBannerInner: React.FC<AdBannerProps> = ({ size = BannerAdSize.BANNER }) 
         requestOptions={requestOptions}
         onAdFailedToLoad={(error) => {
           if (__DEV__) {
-            console.log('Banner ad failed to load:', error);
           }
         }}
       />

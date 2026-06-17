@@ -211,12 +211,10 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     setHottestTapCount(newCount);
     
     if (newCount >= 5 && !showDbStats) {
-      console.log('🔍 Loading database stats (dev feature)...');
       try {
         const stats = await getDatabaseStats();
         setDbStats(stats);
         setShowDbStats(true);
-        console.log('📊 Database stats loaded:', stats);
       } catch (error) {
         console.error('Error loading database stats:', error);
       }

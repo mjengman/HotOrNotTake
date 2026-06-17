@@ -54,5 +54,4 @@ export const testPersonalityActivation = async (
 ): Promise<void> => {
   void category;
   void iterations;
-  console.log(DISABLED_MESSAGE);
 };

@@ -15,7 +15,6 @@ import {
   Timestamp,
   increment,
   startAfter,
-  runTransaction,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Take, TakeSubmission, TakeStatus } from '../types/Take';
@@ -139,23 +138,6 @@ const isPermissionDeniedError = (error: unknown) =>
   error !== null &&
   'code' in error &&
   (error as { code?: unknown }).code === 'permission-denied';
-
-const calculateVotePercentages = (hotVotes: number, notVotes: number) => {
-  const totalVotes = hotVotes + notVotes;
-
-  if (totalVotes <= 0) {
-    return {
-      hotPercentage: 50,
-      notPercentage: 50,
-    };
-  }
-
-  const hotPercentage = Math.round((hotVotes / totalVotes) * 100);
-  return {
-    hotPercentage,
-    notPercentage: 100 - hotPercentage,
-  };
-};
 
 const updateTakeVotesLegacy = async (
   takeId: string,
@@ -378,9 +360,7 @@ export const submitTake = async (
     });
 
     if (result.status === 'pending') {
-      console.log(`🕒 Take submitted for moderation review: ${result.takeId}`);
     } else {
-      console.log(`✅ Take approved by server moderation: ${result.takeId}`);
     }
 
     return result.takeId;
@@ -409,76 +389,18 @@ export const updateTakeVotes = async (
   takeId: string,
   voteType: 'hot' | 'not'
 ): Promise<void> => {
-  try {
-    const takeRef = doc(db, TAKES_COLLECTION, takeId);
-
-    await runTransaction(db, async (transaction) => {
-      const takeSnap = await transaction.get(takeRef);
-      if (!takeSnap.exists()) {
-        throw new Error('Take not found');
-      }
-
-      const data = takeSnap.data();
-      const hotVotes = (data.hotVotes || 0) + (voteType === 'hot' ? 1 : 0);
-      const notVotes = (data.notVotes || 0) + (voteType === 'not' ? 1 : 0);
-      const totalVotes = hotVotes + notVotes;
-      const percentages = calculateVotePercentages(hotVotes, notVotes);
-
-      transaction.update(takeRef, {
-        hotVotes,
-        notVotes,
-        totalVotes,
-        ...percentages,
-      });
-    });
-  } catch (error) {
-    if (isPermissionDeniedError(error)) {
-      console.warn('Vote percentage update blocked by current Firestore rules; using legacy vote count update.');
-      await updateTakeVotesLegacy(takeId, voteType);
-      return;
-    }
-
-    console.error('Error updating take votes:', error);
-    throw new Error('Failed to update vote');
-  }
+  // Clients are only allowed to update vote counts. Percentage denormalization
+  // should happen server-side; trying it here adds a rejected RPC to every vote.
+  await updateTakeVotesLegacy(takeId, voteType);
 };
 
 export const decrementTakeVotes = async (
   takeId: string,
   voteType: 'hot' | 'not'
 ): Promise<void> => {
-  try {
-    const takeRef = doc(db, TAKES_COLLECTION, takeId);
-
-    await runTransaction(db, async (transaction) => {
-      const takeSnap = await transaction.get(takeRef);
-      if (!takeSnap.exists()) {
-        return;
-      }
-
-      const data = takeSnap.data();
-      const hotVotes = Math.max(0, (data.hotVotes || 0) - (voteType === 'hot' ? 1 : 0));
-      const notVotes = Math.max(0, (data.notVotes || 0) - (voteType === 'not' ? 1 : 0));
-      const totalVotes = hotVotes + notVotes;
-      const percentages = calculateVotePercentages(hotVotes, notVotes);
-
-      transaction.update(takeRef, {
-        hotVotes,
-        notVotes,
-        totalVotes,
-        ...percentages,
-      });
-    });
-  } catch (error) {
-    if (isPermissionDeniedError(error)) {
-      console.warn('Vote percentage decrement blocked by current Firestore rules; using legacy vote count update.');
-      await decrementTakeVotesLegacy(takeId, voteType);
-      return;
-    }
-
-    console.error('Error decrementing take votes:', error);
-    throw new Error('Failed to update vote');
-  }
+  // Clients are only allowed to update vote counts. Percentage denormalization
+  // should happen server-side; trying it here adds a rejected RPC to every vote.
+  await decrementTakeVotesLegacy(takeId, voteType);
 };
 
 // Report a take (for moderation)
@@ -964,10 +886,8 @@ export const fetchMoreTakesFilled = async ({
       results.push(...pageTakes);
 
       // If page didn't add anything (because filtering removed all), loop again
-      console.log(`📄 Page ${guardPages}: fetched ${snapshot.docs.length}, after filtering: +${pageTakes.length} (total: ${results.length}/${targetCount})`);
     }
 
-    console.log(`✅ Pagination complete: ${results.length} takes found, guardPages: ${guardPages}`);
     
     // Shuffle the results to randomize order for each user
     const shuffledResults = [...results].sort(() => Math.random() - 0.5);

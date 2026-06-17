@@ -47,6 +47,7 @@ interface UseFirebaseTakesOptions {
 const FEED_CACHE_VERSION = 'v1';
 const FEED_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const FEED_CACHE_BATCH_SIZE = 30;
+const LIVE_FEED_RECONCILE_DELAY_MS = 2500;
 const FEED_CACHE_PREFIX = `feed-cache:${FEED_CACHE_VERSION}`;
 const LOCAL_VOTED_PREFIX = `local-voted:${FEED_CACHE_VERSION}`;
 const LOCAL_SKIPPED_PREFIX = `local-skipped:${FEED_CACHE_VERSION}`;
@@ -370,7 +371,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         } else {
           // No different categories available, just warn once and continue
           if (consecutiveCount === maxConsecutive) {
-            console.log(`⚠️ Only ${lastCategory} remains, allowing consecutive takes`);
           }
         }
       }
@@ -391,7 +391,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     
     // Log summary
     const categories = result.slice(0, 10).map(t => t.category);
-    console.log(`✅ Category variety: ${result.length} takes, first 10: ${categories.join(' → ')}, froze prefix: ${freezePrefixCount}`);
     
     return result;
   }, [category]);
@@ -455,9 +454,15 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           setHasMore(true);
           setLoading(false);
           renderedCache = true;
-          console.log(`⚡ Warm-started ${orderedCached.length} cached takes for ${userId}:${category}`);
         } else {
           setFeed([]);
+        }
+
+        if (renderedCache) {
+          await new Promise(resolve => setTimeout(resolve, LIVE_FEED_RECONCILE_DELAY_MS));
+          if (!isCurrentRequest()) {
+            return;
+          }
         }
 
         const { voted, skipped } = await getUserVotedAndSkippedTakeIds(userId);
@@ -491,7 +496,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
             return mergedSkippedTakes;
           });
           setHasMore(false);
-          console.log(`⏭️ Loaded ${skippedTakes.length} skipped takes`);
           return;
         }
 
@@ -501,7 +505,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           ...sessionHiddenTakeIdsRef.current,
         ]);
         setInteractedTakeIds(Array.from(freshInteractedIds));
-        console.log(`🔄 Refreshed user interactions: ${voted.length} voted, ${skipped.length} skipped`);
 
         const { items, gotAny } = await fetchMoreTakesFilled({
           category,
@@ -544,7 +547,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           return finalFeed;
         });
         setHasMore(gotAny && ordered.length > 0);
-        console.log(`✅ Initial feed loaded: ${doubleFiltered.length} takes (filtered from ${items.length}), hasMore: ${gotAny}`);
       } catch (err) {
         if (!isCurrentRequest()) {
           return;
@@ -634,7 +636,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         return ordered;
       });
       setHasMore(gotAny && uniqueFreshTakes.length > 0);
-      console.log(`📝 Loaded ${uniqueFreshTakes.length} more takes (filtered from ${items.length}), hasMore: ${gotAny}, total feed: ${feed.length + uniqueFreshTakes.length}`);
     } catch (err) {
       if (!background) {
         setError(err instanceof Error ? err.message : 'Failed to load more takes');
@@ -678,12 +679,10 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         if (result.addedCount > 0) {
           resetFeedCursor(category);
           loadMore(20, true, true).catch((err) => {
-            console.log('Background feed refill failed:', err);
           });
         }
       })
       .catch((err) => {
-        console.log('AI take generation skipped:', err instanceof Error ? err.message : err);
       })
       .finally(() => {
         generationInFlightRef.current = false;
@@ -702,7 +701,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
 
     // Atomic guard against concurrent duplicate submits
     if (inFlightVotesRef.current.has(takeId)) {
-      console.log('⚠️ Vote already in progress for take:', takeId);
       return null; // Silent return, don't throw
     }
 
@@ -729,14 +727,9 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       }
 
       // Optimistically update interacted IDs and remove from feed
-      setInteractedTakeIds(prev => {
-        console.log('🗳️ Adding take to voted list:', takeId);
-        return Array.from(new Set([...prev, takeId]));
-      });
+      setInteractedTakeIds(prev => Array.from(new Set([...prev, takeId])));
       setFeed(prev => {
-        console.log('🗑️ Removing take from feed:', takeId, 'Feed length before:', prev.length);
         const newFeed = prev.filter(take => take.id !== takeId);
-        console.log('🗑️ Feed length after:', newFeed.length);
         writeFeedCache(userId, category, newFeed).catch(console.warn);
         return newFeed;
       });
@@ -779,7 +772,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         loadMore(20).catch(console.error);
       }
       
-      console.log(`🗳️ Voted ${vote} on take ${takeId}`);
       return streakUpdate;
     } catch (err) {
       // Rollback on error
@@ -839,7 +831,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         loadMore(20).catch(console.error);
       }
       
-      console.log(`⏭️ Skipped take ${takeId}`);
     } catch (err) {
       sessionHiddenTakeIdsRef.current.delete(takeId);
       sessionHiddenFromMySkipsRef.current.delete(takeId);
@@ -866,7 +857,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       
       // Approved takes are live immediately; moderation failures are queued
       // as pending and remain visible only to the submitting user.
-      console.log(`✅ Take submitted successfully`);
     } catch (err) {
       // If the error message contains "Take rejected:", it's a moderation rejection
       const errorMessage = err instanceof Error ? err.message : 'Failed to submit take';
@@ -941,7 +931,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           return mergedSkippedTakes;
         });
         setHasMore(false);
-        console.log(`🔄 Refreshed skipped feed: ${skippedTakes.length} takes`);
         return;
       }
 
@@ -969,7 +958,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setFeed(ordered);
       writeFeedCache(userId, category, ordered).catch(console.warn);
       setHasMore(gotAny && ordered.length > 0);
-      console.log(`🔄 Refreshed feed: ${items.length} takes, hasMore: ${gotAny}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh takes');
     } finally {
@@ -998,7 +986,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       return nextFeed;
     });
     
-    console.log(`🔄 Prepended take ${take.id} to front of deck for re-voting`);
   }, [category, userId]);
 
   return {

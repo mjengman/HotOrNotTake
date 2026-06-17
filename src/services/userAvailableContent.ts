@@ -50,7 +50,6 @@ export const categoryNeedsContentForUser = async (category: string, threshold: n
     const availableCounts = await getUserAvailableTakesByCategory();
     const availableCount = availableCounts[category] || 0;
     
-    console.log(`📊 Category "${category}": ${availableCount} available takes for user`);
     return availableCount < threshold;
   } catch (error) {
     console.error(`Error checking if category ${category} needs content:`, error);

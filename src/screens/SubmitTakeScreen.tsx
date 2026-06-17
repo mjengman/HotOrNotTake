@@ -115,15 +115,12 @@ export const SubmitTakeScreen: React.FC<SubmitTakeScreenProps> = ({
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Submission error:', error);
-      console.log(`🔍 Error message: "${errorMessage}"`);
       
       // Check if this is a moderation rejection
       if (errorMessage.startsWith('Your take was not approved:')) {
         const reason = errorMessage.replace('Your take was not approved: ', '');
-        console.log(`🔍 Setting moderation error: "${reason}"`);
         setModerationError(reason);
       } else {
-        console.log(`🔍 Not a moderation error, showing alert`);
         // General error - show alert
         Alert.alert(
           'Submission Failed',

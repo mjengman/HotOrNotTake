@@ -31,6 +31,7 @@ export async function initAdsAndConsent(debug?: {
 
     // 1) Refresh consent info (with optional debug)
     let consentRequired = false;
+    let useConsentFallback = false;
     try {
       await AdsConsent.requestInfoUpdate({
         debugGeography: debug?.eea ? AdsConsentDebugGeography.EEA : undefined,
@@ -39,10 +40,15 @@ export async function initAdsAndConsent(debug?: {
       consentRequired = true;
     } catch (error: any) {
       // Handle common UMP configuration errors gracefully
-      if (error?.message?.includes('no form(s) configured') || 
-          error?.message?.includes('Publisher misconfiguration')) {
-        console.log('📝 UMP forms not configured - proceeding without consent dialog (common in development)');
+      const message = error?.message || '';
+      if (
+        message.includes('no form(s) configured') ||
+        message.includes('Publisher misconfiguration') ||
+        message.includes('Error making request') ||
+        message.toLowerCase().includes('network')
+      ) {
         consentRequired = false;
+        useConsentFallback = true;
       } else {
         throw error; // Re-throw unexpected errors
       }
@@ -57,19 +63,22 @@ export async function initAdsAndConsent(debug?: {
           await AdsConsent.loadAndShowConsentFormIfRequired();
         }
       } catch (formError: any) {
-        console.log('📝 Consent form error (proceeding):', formError?.message || formError);
       }
     }
 
     // 3) Read final state (with fallback if UMP unavailable)
     let info: any, gdprApplies: boolean | undefined;
-    try {
-      info = await AdsConsent.getConsentInfo();
-      gdprApplies = await AdsConsent.getGdprApplies();
-    } catch (error: any) {
-      console.log('📝 UMP info unavailable, using defaults:', error?.message || error);
+    if (useConsentFallback) {
       info = { status: AdsConsentStatus.NOT_REQUIRED, canRequestAds: true };
       gdprApplies = undefined;
+    } else {
+      try {
+        info = await AdsConsent.getConsentInfo();
+        gdprApplies = await AdsConsent.getGdprApplies();
+      } catch (error: any) {
+        info = { status: AdsConsentStatus.NOT_REQUIRED, canRequestAds: true };
+        gdprApplies = undefined;
+      }
     }
     
     const { status, canRequestAds } = info;
@@ -102,7 +111,6 @@ export async function initAdsAndConsent(debug?: {
       adsInitialized = true;
     }
 
-    console.log('🎯 Ads consent initialized:', { status, canRequestAds, personalized, gdprApplies });
     return { status, canRequestAds, personalized };
   } catch (error) {
     console.error('❌ Error initializing ads consent:', error);
@@ -127,7 +135,6 @@ export async function initAdsAndConsent(debug?: {
 export async function showPrivacyOptionsForm(): Promise<void> {
   try {
     const consentInfo = await AdsConsent.getConsentInfo();
-    console.log('🔧 Privacy options status:', consentInfo);
 
     // Always try to show the consent form—UMP decides if it should display
     if (typeof (AdsConsent as any).gatherConsent === 'function') {
@@ -136,7 +143,6 @@ export async function showPrivacyOptionsForm(): Promise<void> {
       await AdsConsent.loadAndShowConsentFormIfRequired();
     }
 
-    console.log('✅ Privacy options form completed');
   } catch (error) {
     console.error('❌ Error showing privacy options form:', error);
   }

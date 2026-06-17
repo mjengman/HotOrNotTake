@@ -245,13 +245,11 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       // Try visual sharing first
       if (visualShareRef.current?.capture) {
         try {
-          console.log('🖼️ Generating visual share card...');
 
           // Capture the visual share card as image
           const imageUri = await visualShareRef.current.capture();
 
           if (!imageUri) throw new Error('Capture failed / imageUri missing');
-          console.log('✅ Visual share card generated:', imageUri);
 
           await RNShare.open({
             title: 'Hot or Not Takes',
@@ -263,7 +261,6 @@ export const TakeCard: React.FC<TakeCardProps> = ({
           return; // Success - exit early
 
         } catch (visualError) {
-          console.log('⚠️ Visual sharing failed, falling back to text:', visualError);
         }
       }
 
@@ -274,13 +271,11 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       });
 
     } catch (error) {
-      console.log('All sharing failed:', error);
       // Final fallback to built-in Share
       try {
         const fallbackMessage = `"${take.text}"\n\nCheck out this hot take! https://hot-or-not-takes.web.app/download`;
         await Share.share({ message: fallbackMessage });
       } catch (finalError) {
-        console.log('Final fallback failed:', finalError);
       }
     }
   };

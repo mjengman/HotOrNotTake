@@ -33,12 +33,10 @@ class ReserveContentManager {
       return; // Already initialized
     }
     
-    console.log(`🔄 Initializing ${category} reserves...`);
     
     try {
       this.reserves[category] = [];
       await this.replenishReserves(category, this.RESERVE_SIZE, true);
-      console.log(`✅ ${category} ready: ${this.reserves[category].length} reserves`);
     } catch (error) {
       console.error(`❌ Failed to initialize ${category}:`, error);
       this.reserves[category] = []; // Ensure array exists even if initialization fails
@@ -47,45 +45,36 @@ class ReserveContentManager {
   
   // Initialize for "all" mode - ensure variety across categories
   private async initializeForAllMode(): Promise<void> {
-    console.log('🔄 Initializing mixed categories for "all" mode...');
     
     // Initialize multiple categories to ensure variety
     // Shuffle and pick 5-6 random categories to start with
     const shuffledCategories = this.shuffleArray([...CATEGORIES]);
     const categoriesToInit = shuffledCategories.slice(0, 6);
     
-    console.log(`📋 Initializing categories: ${categoriesToInit.join(', ')}`);
     
     for (const category of categoriesToInit) {
       await this.initializeCategoryIfNeeded(category);
     }
     
-    console.log('✅ Mixed categories ready for "all" mode with variety');
   }
 
   // Get reserve takes for immediate display (smooth UX)
   public async getReserveContent(category: string, count: number = 10): Promise<TakeSubmission[]> {
-    console.log(`📦 getReserveContent: Starting for ${category}, count: ${count}`);
     
     // Handle "all" category by mixing from different categories
     if (category === 'all') {
-      console.log(`📦 getReserveContent: Initializing for "all" mode...`);
       await this.initializeForAllMode();
-      console.log(`📦 getReserveContent: Getting mixed content...`);
       return await this.getReserveContentMix(count);
     }
 
     // Initialize specific category if needed
-    console.log(`📦 getReserveContent: Initializing ${category} if needed...`);
     await this.initializeCategoryIfNeeded(category);
-    console.log(`📦 getReserveContent: Initialization complete for ${category}`);
     
     // Get specific category reserves
     const categoryReserves = this.reserves[category] || [];
     const available = Math.min(count, categoryReserves.length);
     
     if (available === 0) {
-      console.log(`⚠️ No reserves available for ${category}, generating on-demand`);
       return this.generateImmediateContent(category, count);
     }
 
@@ -97,7 +86,6 @@ class ReserveContentManager {
       this.safeBackgroundReplenish(category);
     }
 
-    console.log(`🎯 Served ${available} ${category} takes`);
     return reservesToReturn;
   }
 
@@ -114,7 +102,6 @@ class ReserveContentManager {
     }
 
     if (allReserves.length === 0) {
-      console.log(`⚠️ No reserves available for "all", generating on-demand`);
       return this.generateImmediateContent('all', count);
     }
 
@@ -141,7 +128,6 @@ class ReserveContentManager {
       }
     }
 
-    console.log(`🎯 Mixed reserves: ${selected.length} takes from ${allReserves.length} available`);
     return selected;
   }
 
@@ -156,7 +142,6 @@ class ReserveContentManager {
         const categoriesPerBatch = Math.min(5, CATEGORIES.length); // Use 5 different categories per batch
         const takesPerCategory = Math.ceil(generateCount / categoriesPerBatch);
         
-        console.log(`⚡ Generating ${generateCount} mixed takes across ${categoriesPerBatch} categories`);
         
         // Shuffle categories to get random selection
         const shuffledCategories = this.shuffleArray([...CATEGORIES]);
@@ -169,20 +154,17 @@ class ReserveContentManager {
               const submission = convertAITakeToSubmission(aiTake);
               content.push(submission);
             } catch (error) {
-              console.log(`⚠️ Failed to generate take for ${selectedCategory}:`, error);
             }
           }
         }
         
         // Shuffle the final content to mix categories
         const shuffledContent = this.shuffleArray(content);
-        console.log(`✅ Generated ${shuffledContent.length} mixed takes`);
         return shuffledContent;
       } else {
         // Single category generation
         const generateCount = Math.min(count, 5); // Limit to 5 for performance
         
-        console.log(`⚡ Generating ${generateCount} immediate takes for ${category}`);
         
         for (let i = 0; i < generateCount; i++) {
           const aiTake = await generateAITake(category);
@@ -190,7 +172,6 @@ class ReserveContentManager {
           content.push(submission);
         }
         
-        console.log(`✅ Generated ${content.length} immediate takes`);
       }
     } catch (error) {
       console.error(`❌ Failed to generate immediate content for ${category}:`, error);
@@ -207,13 +188,11 @@ class ReserveContentManager {
     
     // Check cooldown period
     if (now - lastReplenish < this.REPLENISH_COOLDOWN) {
-      console.log(`⏸️ ${category} replenishment on cooldown (${Math.round((this.REPLENISH_COOLDOWN - (now - lastReplenish)) / 1000)}s remaining)`);
       return;
     }
     
     // Check max attempts
     if (attempts >= this.MAX_REPLENISH_ATTEMPTS) {
-      console.log(`🛑 ${category} hit max replenishment attempts (${attempts}/${this.MAX_REPLENISH_ATTEMPTS})`);
       return;
     }
     
@@ -235,7 +214,6 @@ class ReserveContentManager {
       
       if (needed > 0) {
         await this.replenishReserves(category, needed, false);
-        console.log(`🔄 Replenished ${category}: +${needed} reserves (attempt ${this.replenishAttempts[category]})`);
         
         // Reset attempts on successful replenishment
         if (this.reserves[category]?.length >= this.MIN_RESERVE_THRESHOLD) {
@@ -243,7 +221,6 @@ class ReserveContentManager {
         }
       }
     } catch (error) {
-      console.log(`⚠️ Failed to replenish reserves for ${category}: ${error instanceof Error ? error.message : 'unknown error'}`);
     } finally {
       this.isReplenishing[category] = false;
     }
@@ -252,7 +229,6 @@ class ReserveContentManager {
   // Generate and store new reserves
   private async replenishReserves(category: string, count: number, isInitial: boolean = false): Promise<void> {
     const logPrefix = isInitial ? '🚀' : '🔄';
-    console.log(`${logPrefix} Generating ${count} reserve takes for ${category}...`);
 
     const newReserves: TakeSubmission[] = [];
 
@@ -266,7 +242,6 @@ class ReserveContentManager {
           await new Promise(resolve => setTimeout(resolve, 800));
         }
       } catch (error) {
-        console.log(`⚠️ Skipped reserve take ${i + 1} for ${category}: ${error instanceof Error ? error.message : 'generation failed'}`);
       }
     }
 
@@ -276,19 +251,15 @@ class ReserveContentManager {
     }
     this.reserves[category].push(...newReserves);
 
-    console.log(`✅ Generated ${newReserves.length}/${count} reserve takes for ${category}`);
   }
 
   // Submit reserve content to Firebase and update items with document IDs
   public async submitReserveContent(reserveContent: TakeSubmission[]): Promise<TakeSubmission[]> {
-    console.log(`📤 submitReserveContent: Starting submission of ${reserveContent.length} items`);
     
     const currentUser = auth.currentUser;
-    console.log(`📤 submitReserveContent: Current user:`, !!currentUser);
     
     if (!currentUser) {
       const error = 'No authenticated user for reserve content submission';
-      console.log(`❌ submitReserveContent: ${error}`);
       throw new Error(error);
     }
 
@@ -297,11 +268,9 @@ class ReserveContentManager {
     
     for (let i = 0; i < reserveContent.length; i++) {
       const reserve = reserveContent[i];
-      console.log(`📤 submitReserveContent: Submitting item ${i + 1}/${reserveContent.length}: "${reserve.text.substring(0, 50)}..."`);
       
       try {
         const docId = await submitTake(reserve, currentUser.uid, true); // true = isAIGenerated
-        console.log(`✅ submitReserveContent: Item ${i + 1} submitted successfully with ID: ${docId}`);
         
         // Add document ID to the content
         submittedContent.push({
@@ -310,7 +279,6 @@ class ReserveContentManager {
         });
       } catch (error) {
         const errorMsg = `Submission ${i + 1} failed: ${error instanceof Error ? error.message.substring(0, 50) : 'unknown error'}`;
-        console.log(`❌ submitReserveContent: ${errorMsg}`);
         errors++;
         // Don't include failed submissions in result
       }
@@ -320,7 +288,6 @@ class ReserveContentManager {
       throw new Error(`Failed to submit any reserve content: ${errors} errors occurred`);
     }
     
-    console.log(`📤 Submitted ${submittedContent.length}/${reserveContent.length} takes to Firebase`);
     return submittedContent;
   }
 
@@ -345,13 +312,11 @@ class ReserveContentManager {
 
   // Manual trigger to force replenishment for specific categories (for testing)
   public async forceReplenishCategory(category: string): Promise<void> {
-    console.log(`🔧 Force replenishing ${category} reserves...`);
     await this.backgroundReplenish(category);
   }
   
   // Manual trigger to force replenishment for priority categories (for testing)
   public async forceReplenishPriority(): Promise<void> {
-    console.log('🔧 Force replenishing priority categories...');
     const priorityCategories = ['food', 'technology', 'life', 'work', 'entertainment'];
     for (const category of priorityCategories) {
       await this.backgroundReplenish(category);
@@ -369,9 +334,7 @@ export const getSmoothContent = async (
   count: number = 10,
   naturalDelayMs: number = 0 // Removed delay - was causing issues on device
 ): Promise<TakeSubmission[]> => {
-  console.log(`🔥 SMOOTH CONTENT - Starting getSmoothContent for ${category}, count: ${count}`);
   
   // AI generation system disabled for MVP launch
-  console.log(`🚫 AI reserve system disabled - returning empty array for ${category}`);
   return [];
 };

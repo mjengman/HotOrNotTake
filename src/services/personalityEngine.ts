@@ -373,7 +373,6 @@ ADDITIONAL CONTEXT:
 ${personalityInstruction}`
     );
     
-    console.log(`🎭 Personality Mode: ${personalityContext.specificReference || personalityContext.archetype}`);
   }
 
   return enhancedPrompt;
@@ -381,7 +380,6 @@ ${personalityInstruction}`
 
 // Debug function to test the personality system
 export const testPersonalitySystem = (category: string = 'food', iterations: number = 25) => {
-  console.log(`🧪 Testing personality system for ${category} (${iterations} iterations):`);
   
   const results = {
     standard: 0,
@@ -398,35 +396,23 @@ export const testPersonalitySystem = (category: string = 'food', iterations: num
     } else if (context.specificReference) {
       results.personality++;
       results.specificReference++;
-      console.log(`  ${i + 1}. 🎯 Specific Reference: ${context.specificReference}`);
     } else if (context.archetype) {
       results.personality++;
       results.archetypes[context.archetype] = (results.archetypes[context.archetype] || 0) + 1;
-      console.log(`  ${i + 1}. 🎭 Archetype: ${PERSONALITY_ARCHETYPES[context.archetype as keyof typeof PERSONALITY_ARCHETYPES]?.name || context.archetype}`);
     }
   }
 
-  console.log('🎲 Results:', results);
-  console.log(`📊 Personality activation rate: ${(results.personality / iterations * 100).toFixed(1)}%`);
-  console.log(`🎯 Specific references: ${results.specificReference} (${(results.specificReference / iterations * 100).toFixed(1)}%)`);
   
   if (Object.keys(results.archetypes).length > 0) {
-    console.log(`🎭 Archetype distribution:`);
     Object.entries(results.archetypes).forEach(([archetype, count]) => {
       const name = PERSONALITY_ARCHETYPES[archetype as keyof typeof PERSONALITY_ARCHETYPES]?.name || archetype;
-      console.log(`   • ${name}: ${count} times`);
     });
   }
 };
 
 // List all available personalities
 export const listAllPersonalities = (): void => {
-  console.log('🎭 Available Personality Archetypes:');
-  console.log(`Total: ${Object.keys(PERSONALITY_ARCHETYPES).length} personalities\n`);
   
   Object.entries(PERSONALITY_ARCHETYPES).forEach(([, personality], index) => {
-    console.log(`${index + 1}. ${personality.name}`);
-    console.log(`   Description: ${personality.description}`);
-    console.log(`   Key phrases: ${personality.phrases.slice(0, 3).join(', ')}...\n`);
   });
 };

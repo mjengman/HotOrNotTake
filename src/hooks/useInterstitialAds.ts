@@ -89,9 +89,6 @@ export const useInterstitialAds = () => {
     show();
     setCardCount(0); // reset card counter after showing ad
     setAdsShown(prev => prev + 1); // increment ads shown for scaling
-    const nextThreshold = getCurrentThreshold();
-    const tier = nextThreshold <= TIER1_CAP ? "Regular" : "Power User";
-    console.log(`📺 Ad shown (${adsShown + 1} total, ${tier}). Next ad after ${nextThreshold} swipes`);
   };
 
   // Note: Removed auto-show useEffect to prevent mid-animation interruptions
@@ -102,7 +99,6 @@ export const useInterstitialAds = () => {
     // Check if enough session time has passed before showing any ads
     const sessionTime = Date.now() - sessionStartRef.current;
     if (sessionTime < MIN_SESSION_TIME_BEFORE_FIRST_AD) {
-      console.log(`Session too young for ads: ${Math.ceil((MIN_SESSION_TIME_BEFORE_FIRST_AD - sessionTime) / 1000)}s remaining`);
       return;
     }
 
@@ -138,13 +134,11 @@ export const useInterstitialAds = () => {
       } else {
         // Cooldown not met, mark that we owe an ad but don't reset counter
         oweAdRef.current = true;
-        console.log(`Ad cooldown active. Time remaining: ${Math.ceil((MIN_TIME_BETWEEN_ADS_MS - (Date.now() - lastAdTimeRef.current)) / 1000)}s`);
         // Don't reset card count - we still owe this ad
       }
     } else {
       // keep pipeline warm
       if (!isLoaded) load();
-      console.log(`Cards until next ad: ${currentThreshold - next} (threshold: ${currentThreshold})`);
     }
   };
 
@@ -152,7 +146,6 @@ export const useInterstitialAds = () => {
     // Check session time before showing end ad
     const sessionTime = Date.now() - sessionStartRef.current;
     if (sessionTime < MIN_SESSION_TIME_BEFORE_FIRST_AD) {
-      console.log('Session too short for end ad');
       return;
     }
 

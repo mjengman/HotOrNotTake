@@ -51,7 +51,6 @@ interface CustomSwipeableCardDeckProps {
   skipRequestToken?: number;
   identityTeaser?: { takeId: string; text: string } | null;
   onIdentityTeaserPress?: () => void;
-  onVisibleResultChange?: (takeId: string | null) => void;
 }
 
 // Safe flip for Android - no 3D to avoid compositor crashes
@@ -82,7 +81,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   skipRequestToken = 0,
   identityTeaser = null,
   onIdentityTeaserPress,
-  onVisibleResultChange,
 }) => {
   const responsive = useResponsive();
   const screenWidth = responsive.screen.width;
@@ -238,14 +236,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       : renderCurrent;
 
   useEffect(() => {
-    if (externalStatsCard) {
-      return;
-    }
-
-    onVisibleResultChange?.(isCardFlipped && statsTake ? statsTake.id : null);
-  }, [externalStatsCard, isCardFlipped, onVisibleResultChange, statsTake?.id]);
-
-  useEffect(() => {
     resultBaseSV.value = promotedBaseTake ? 1 : 0;
   }, [promotedBaseTake?.id, resultBaseSV]);
 
@@ -275,7 +265,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // If we run out of takes, clean up frozen state to prevent crashes
   useEffect(() => {
     if (!currentTake && !nextTake && useFrozen && !isCardFlipped) {
-      console.log('🚨 No more takes - cleaning up frozen state');
       // Direct state update - safe in effects
       setUseFrozen(false);
       frozenCurrent.current = null;
@@ -368,6 +357,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Flip the card to reveal stats
   const flipCard = (vote: 'hot' | 'not') => {
     if (!renderCurrent) return; // Safety check
+
+    isAnimating.value = true;
+    animatingSV.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+    scale.value = 1;
     
     setLastVote(vote);
     setIsCardFlipped(true);
@@ -397,7 +392,6 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     const voteToSubmit = { id: renderCurrent.id, vote };
     
     // Set animating flag and bounce micro-scale then flip
-    animatingSV.value = 1;
     scale.value = withSpring(0.96, {}, () => {
       'worklet';
       flipSV.value = withTiming(1, { duration: motion.duration.cardFlip, easing: Easing.out(Easing.cubic) }, (finished) => {
@@ -407,8 +401,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           runOnJS(onVote)(voteToSubmit.id, voteToSubmit.vote);
           // Auto-advance stats card only when Results Autoplay is enabled.
           runOnJS(jsSetAutoDismiss)();
-          animatingSV.value = 0; // Clear animation flag
         }
+        isAnimating.value = false;
+        animatingSV.value = 0; // Clear animation flag
       });
       scale.value = withSpring(1);
     });
@@ -716,8 +711,21 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
       if (shouldSwipeRight && id && !flippedSV.value) {
         // Front side: Bounce back and flip to reveal
+        isAnimating.value = true;
+        animatingSV.value = 1;
         runOnJS(vibrate)(motion.haptic.vote);
-        translateX.value = withSpring(0);
+        translateX.value = withTiming(0, {
+          duration: 80,
+          easing: Easing.out(Easing.quad),
+        }, (finished) => {
+          'worklet';
+          if (finished) {
+            runOnJS(flipCard)('hot');
+          } else {
+            isAnimating.value = false;
+            animatingSV.value = 0;
+          }
+        });
         translateY.value = withTiming(-VOTE_COMMIT_ARC_Y, {
           duration: motion.duration.cardNudge,
           easing: Easing.out(Easing.quad),
@@ -725,15 +733,27 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           'worklet';
           translateY.value = withSpring(0);
         });
-        scale.value = withSpring(1);
-        runOnJS(flipCard)('hot');
+        scale.value = withTiming(1, { duration: 80, easing: Easing.out(Easing.quad) });
         return;
       }
 
       if (shouldSwipeLeft && id && !flippedSV.value) {
         // Front side: Bounce back and flip to reveal
+        isAnimating.value = true;
+        animatingSV.value = 1;
         runOnJS(vibrate)(motion.haptic.vote);
-        translateX.value = withSpring(0);
+        translateX.value = withTiming(0, {
+          duration: 80,
+          easing: Easing.out(Easing.quad),
+        }, (finished) => {
+          'worklet';
+          if (finished) {
+            runOnJS(flipCard)('not');
+          } else {
+            isAnimating.value = false;
+            animatingSV.value = 0;
+          }
+        });
         translateY.value = withTiming(VOTE_COMMIT_ARC_Y, {
           duration: motion.duration.cardNudge,
           easing: Easing.out(Easing.quad),
@@ -741,8 +761,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           'worklet';
           translateY.value = withSpring(0);
         });
-        scale.value = withSpring(1);
-        runOnJS(flipCard)('not');
+        scale.value = withTiming(1, { duration: 80, easing: Easing.out(Easing.quad) });
         return;
       }
 

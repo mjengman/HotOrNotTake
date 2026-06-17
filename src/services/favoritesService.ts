@@ -12,7 +12,6 @@ export const addToFavorites = async (userId: string, takeId: string): Promise<vo
     await setDoc(favoriteRef, {
       favoritedAt: new Date(),
     });
-    console.log(`Added take ${takeId} to favorites for user ${userId}`);
   } catch (error) {
     console.error('Error adding to favorites:', error);
     throw error;
@@ -23,7 +22,6 @@ export const removeFromFavorites = async (userId: string, takeId: string): Promi
   try {
     const favoriteRef = doc(db, `users/${userId}/favorites`, takeId);
     await deleteDoc(favoriteRef);
-    console.log(`Removed take ${takeId} from favorites for user ${userId}`);
   } catch (error) {
     console.error('Error removing from favorites:', error);
     throw error;
@@ -45,7 +43,6 @@ export const getUserFavorites = async (userId: string): Promise<FavoriteItem[]> 
       });
     });
     
-    console.log(`Retrieved ${favorites.length} favorites for user ${userId}`);
     return favorites;
   } catch (error) {
     console.error('Error getting user favorites:', error);

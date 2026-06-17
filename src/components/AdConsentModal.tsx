@@ -41,7 +41,6 @@ export const AdConsentModal: React.FC<AdConsentModalProps> = ({ isDarkMode }) =>
     try {
       await AsyncStorage.setItem(CONSENT_KEY, 'accepted');
       setShowModal(false);
-      console.log('📝 User accepted personalized ads');
     } catch (error) {
       console.error('Error saving consent:', error);
     }
@@ -51,7 +50,6 @@ export const AdConsentModal: React.FC<AdConsentModalProps> = ({ isDarkMode }) =>
     try {
       await AsyncStorage.setItem(CONSENT_KEY, 'limited');
       setShowModal(false);
-      console.log('📝 User accepted limited ads only');
     } catch (error) {
       console.error('Error saving consent:', error);
     }

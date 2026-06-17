@@ -54,6 +54,7 @@ type IdentityTeaser = { takeId: string; text: string };
 type SessionVoteHistoryEntry = { take: Take; vote: 'hot' | 'not' };
 
 const SESSION_VOTE_HISTORY_LIMIT = 10;
+const POST_RESULT_SYNC_DELAY_MS = 120;
 
 const formatCompactCount = (count: number) => {
   if (count >= 1000000) {
@@ -116,7 +117,6 @@ export const HomeScreen: React.FC = () => {
   const [showVotingStyleModal, setShowVotingStyleModal] = useState(false);
   const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: Take, vote: 'hot' | 'not' | null} | null>(null);
   const [sessionVoteHistory, setSessionVoteHistory] = useState<SessionVoteHistoryEntry[]>([]);
-  const [visibleInternalResultTakeId, setVisibleInternalResultTakeId] = useState<string | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
@@ -132,6 +132,7 @@ export const HomeScreen: React.FC = () => {
   const changeVoteTakeIdsRef = useRef<Set<string>>(new Set());
   const changeVoteDeletePromisesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const leaderboardPrefetchStartedRef = useRef(false);
+  const leaderboardPrefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const identityTeaserShownRef = useRef(false);
   const lastIdentityTeaserRef = useRef<string | null>(null);
   const { user, loading: authLoading, signIn } = useAuth();
@@ -152,12 +153,11 @@ export const HomeScreen: React.FC = () => {
 
   // Create responsive styles
   const styles = useMemo(() => createStyles(responsive, insets), [responsive, insets]);
-  const visibleResultTakeId = selectedTakeForStats?.take?.id || visibleInternalResultTakeId;
-  const visibleHistoryIndex = visibleResultTakeId
-    ? sessionVoteHistory.findIndex(entry => entry.take.id === visibleResultTakeId)
+  const selectedHistoryIndex = selectedTakeForStats
+    ? sessionVoteHistory.findIndex(entry => entry.take.id === selectedTakeForStats.take.id)
     : -1;
   const canRewind = sessionVoteHistory.length > 0 &&
-    (visibleHistoryIndex === -1 || visibleHistoryIndex < sessionVoteHistory.length - 1);
+    (selectedHistoryIndex === -1 || selectedHistoryIndex < sessionVoteHistory.length - 1);
 
   const streakInstructionText = useMemo(() => {
     if (stats.votingStreak <= 0) {
@@ -299,12 +299,13 @@ export const HomeScreen: React.FC = () => {
     refreshCommunityStats();
   }, [selectedCategory]);
 
-  React.useEffect(() => {
-    if (!user || authLoading || takesLoading || leaderboardPrefetchStartedRef.current) {
+  const scheduleLeaderboardPrefetch = React.useCallback(() => {
+    if (!user || authLoading || leaderboardPrefetchStartedRef.current || leaderboardPrefetchTimeoutRef.current) {
       return;
     }
 
-    const timeout = setTimeout(() => {
+    leaderboardPrefetchTimeoutRef.current = setTimeout(() => {
+      leaderboardPrefetchTimeoutRef.current = null;
       if (leaderboardPrefetchStartedRef.current) {
         return;
       }
@@ -313,10 +314,17 @@ export const HomeScreen: React.FC = () => {
       prefetchLeaderboardCache().catch(error => {
         console.warn('Unable to prefetch leaderboards:', error);
       });
-    }, 1800);
+    }, 3500);
+  }, [authLoading, user]);
 
-    return () => clearTimeout(timeout);
-  }, [authLoading, takesLoading, user]);
+  React.useEffect(() => {
+    return () => {
+      if (leaderboardPrefetchTimeoutRef.current) {
+        clearTimeout(leaderboardPrefetchTimeoutRef.current);
+        leaderboardPrefetchTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Handle back button/gesture to close modals in proper order
   useEffect(() => {
@@ -519,12 +527,14 @@ export const HomeScreen: React.FC = () => {
   }, [authLoading, enqueueToast, stats.dailyChallenge, statsLoading, user]);
 
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
+    let optimisticallyAddedToHistory = false;
     try {
       setIdentityTeaser(null);
       // Find the take that was voted on
       const votedTake = takes.find(take => take.id === takeId);
       const isVoteChange = changeVoteTakeIdsRef.current.has(takeId);
       const pendingVoteDelete = changeVoteDeletePromisesRef.current.get(takeId);
+      let updatedTakeForHistory: typeof votedTake = undefined;
 
       if (pendingVoteDelete) {
         const deleteSucceeded = await pendingVoteDelete;
@@ -533,12 +543,34 @@ export const HomeScreen: React.FC = () => {
         }
       }
 
+      // Keep rewind responsive as soon as the result card appears. Roll it back
+      // below if the vote write fails.
+      if (votedTake) {
+        const updatedHotVotes = vote === 'hot' ? votedTake.hotVotes + 1 : votedTake.hotVotes;
+        const updatedNotVotes = vote === 'not' ? votedTake.notVotes + 1 : votedTake.notVotes;
+        updatedTakeForHistory = {
+          ...votedTake,
+          hotVotes: updatedHotVotes,
+          notVotes: updatedNotVotes,
+          totalVotes: updatedHotVotes + updatedNotVotes,
+        };
+        setSessionVoteHistory(prev => [
+          { take: updatedTakeForHistory!, vote },
+          ...prev.filter(entry => entry.take.id !== updatedTakeForHistory!.id),
+        ].slice(0, SESSION_VOTE_HISTORY_LIMIT));
+        optimisticallyAddedToHistory = true;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, POST_RESULT_SYNC_DELAY_MS));
+
       const streakUpdate = await submitVote(takeId, vote, {
         countDailyEngagement: !isVoteChange,
       });
       changeVoteTakeIdsRef.current.delete(takeId);
+
       // Track completed card for ad service (called after vote is cast)
       onCardComplete();
+      scheduleLeaderboardPrefetch();
       if (streakUpdate?.didUpdateToday) {
         applyEngagementUpdate(streakUpdate);
         showStreakToast(streakUpdate);
@@ -560,27 +592,13 @@ export const HomeScreen: React.FC = () => {
       // Also refresh community stats
       await refreshCommunityStats();
 
-      // Keep a small in-session rewind stack with the user's vote baked in.
-      if (votedTake) {
-        const updatedHotVotes = vote === 'hot' ? votedTake.hotVotes + 1 : votedTake.hotVotes;
-        const updatedNotVotes = vote === 'not' ? votedTake.notVotes + 1 : votedTake.notVotes;
-        const updatedTake = {
-          ...votedTake,
-          hotVotes: updatedHotVotes,
-          notVotes: updatedNotVotes,
-          totalVotes: updatedHotVotes + updatedNotVotes,
-        };
-        setSessionVoteHistory(prev => [
-          { take: updatedTake, vote },
-          ...prev.filter(entry => entry.take.id !== updatedTake.id),
-        ].slice(0, SESSION_VOTE_HISTORY_LIMIT));
-
+      if (updatedTakeForHistory) {
         const totalVotesAfterVote = Math.max(
           stats.totalVotes + (isVoteChange ? 0 : 1),
           votingProfileState.profile.totalVotes + (isVoteChange ? 0 : 1)
         );
         if (!isVoteChange && !identityTeaserShownRef.current) {
-          const voteMomentContext = getVoteMomentContext(updatedTake, vote);
+          const voteMomentContext = getVoteMomentContext(updatedTakeForHistory, vote);
           const teaser = buildVotingStyleTeaser(
             {
               ...votingProfileState.profile,
@@ -602,6 +620,9 @@ export const HomeScreen: React.FC = () => {
     } catch (error) {
       console.error('Error submitting vote:', error);
       changeVoteTakeIdsRef.current.delete(takeId);
+      if (optimisticallyAddedToHistory) {
+        setSessionVoteHistory(prev => prev.filter(entry => entry.take.id !== takeId));
+      }
       // Could show a toast notification here
     }
   };
@@ -611,6 +632,7 @@ export const HomeScreen: React.FC = () => {
       await skipTake(takeId);
       // Track completed card for ad service (called after skip)
       onCardComplete();
+      scheduleLeaderboardPrefetch();
       // Refresh stats in case there are other metrics tracked
       await refreshStats();
     } catch (error) {
@@ -630,7 +652,6 @@ export const HomeScreen: React.FC = () => {
         failOnCancel: false,
       });
     } catch (error) {
-      console.log('Invite sharing failed:', error);
     }
   }, []);
 
@@ -726,7 +747,6 @@ export const HomeScreen: React.FC = () => {
     if (!user) return;
 
     try {
-      console.log('🗳️ Vote now clicked! Dismissing stats and preparing take for voting');
 
       // Add the take to the front of the deck for voting first
       prependTake(take);
@@ -742,8 +762,8 @@ export const HomeScreen: React.FC = () => {
   const handleShowLastVote = () => {
     if (!canRewind) return;
 
-    const currentIndex = visibleResultTakeId
-      ? sessionVoteHistory.findIndex(entry => entry.take.id === visibleResultTakeId)
+    const currentIndex = selectedTakeForStats
+      ? sessionVoteHistory.findIndex(entry => entry.take.id === selectedTakeForStats.take.id)
       : -1;
     const nextIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
     const historyEntry = sessionVoteHistory[nextIndex];
@@ -842,7 +862,6 @@ export const HomeScreen: React.FC = () => {
             skipRequestToken={skipRequestToken}
             identityTeaser={identityTeaser}
             onIdentityTeaserPress={openVotingStyle}
-            onVisibleResultChange={setVisibleInternalResultTakeId}
           />
         )}
       </View>

@@ -33,7 +33,6 @@ export const useAIContentSeeding = (config: Partial<AIContentSeedingConfig> = {}
       if (submitted > 0) {
         setLastSeedTime(new Date());
         setSeedCount(prev => prev + submitted);
-        console.log(`🌱 Auto-seeded ${submitted} AI takes`);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown seeding error';

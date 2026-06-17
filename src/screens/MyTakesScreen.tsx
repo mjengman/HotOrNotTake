@@ -71,7 +71,6 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
   // Refresh when refreshTrigger changes (new take submitted)
   useEffect(() => {
     if (refreshTrigger && user) {
-      console.log(`📱 My Takes: Refreshing due to new submission (trigger: ${refreshTrigger})`);
       loadUserTakes();
     }
   }, [refreshTrigger, user]);

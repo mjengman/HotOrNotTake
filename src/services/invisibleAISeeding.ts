@@ -41,7 +41,6 @@ const categoryNeedsSeeding = (category: string): boolean => {
   if (!isReady) {
     const remainingMs = cooldownPeriod - (now - lastSeeded);
     const remainingMin = Math.ceil(remainingMs / (60 * 1000));
-    console.log(`⏳ Category "${category}" on cooldown for ${remainingMin} more minutes`);
   }
   
   return isReady;
@@ -69,12 +68,10 @@ const markCategorySeeded = (category: string, generatedCount: number): void => {
 const generateTakesForCategory = async (category: string, count: number): Promise<number> => {
   const currentUser = auth.currentUser;
   if (!currentUser) {
-    console.log(`No authenticated user - skipping AI seeding for ${category}`);
     return 0;
   }
 
   try {
-    console.log(`🤖 Generating ${count} AI takes for category: ${category}`);
     
     // Generate multiple takes for this specific category
     const aiTakes = [];
@@ -100,7 +97,6 @@ const generateTakesForCategory = async (category: string, count: number): Promis
         const submission = convertAITakeToSubmission(aiTake);
         await submitTake(submission, currentUser.uid, true); // true = isAIGenerated
         submitted++;
-        console.log(`✅ Seeded ${category}: "${aiTake.text.substring(0, 50)}..."`);
       } catch (error) {
         console.error(`Failed to submit AI take for ${category}:`, error);
       }
@@ -122,7 +118,6 @@ export const checkAndSeedCategories = async (): Promise<void> => {
     return; // Wait for authentication
   }
 
-  console.log('🔍 Checking user-specific category content levels...');
   
   // Import user-aware content checking
   const { getUserAvailableTakesByCategory } = await import('./userAvailableContent');
@@ -140,14 +135,11 @@ export const checkAndSeedCategories = async (): Promise<void> => {
       // Only generate if user has fewer than 5 unseen takes in this category
       if (availableForUser < MINIMUM_TAKES_PER_CATEGORY) {
         const needed = Math.min(5, TARGET_TAKES_PER_CATEGORY - availableForUser); // Generate max 5 at a time
-        console.log(`📉 User has only ${availableForUser} unseen "${category}" takes, seeding ${needed} more`);
         
         const seeded = await generateTakesForCategory(category, needed);
         if (seeded > 0) {
-          console.log(`🌱 Successfully seeded ${seeded} takes for "${category}"`);
         }
       } else {
-        console.log(`✅ User has ${availableForUser} unseen "${category}" takes (sufficient)`);
       }
 
       // Small delay between category checks to avoid overwhelming the system
@@ -168,7 +160,6 @@ export const startInvisibleAISeeding = (): void => {
     return; // Already running
   }
 
-  console.log('🤖 Starting invisible AI content seeding...');
 
   // Initial check after a delay to let the app initialize
   setTimeout(() => {
@@ -185,7 +176,6 @@ export const stopInvisibleAISeeding = (): void => {
   if (monitoringInterval) {
     clearInterval(monitoringInterval);
     monitoringInterval = null;
-    console.log('🛑 Stopped invisible AI content seeding');
   }
 };
 
@@ -210,12 +200,10 @@ export const triggerCategoryCheck = async (): Promise<void> => {
 export const generateTakesForSingleCategory = async (category: string, count: number = 20): Promise<number> => {
   const currentUser = auth.currentUser;
   if (!currentUser) {
-    console.log('No authenticated user - cannot generate content');
     return 0;
   }
 
   try {
-    console.log(`🎯 Generating ${count} takes for category: ${category}`);
     
     const aiTakes = [];
     const { generateAITake } = await import('./aiContentService');
@@ -242,13 +230,11 @@ export const generateTakesForSingleCategory = async (category: string, count: nu
         const submission = convertAITakeToSubmission(aiTake);
         await submitTake(submission, currentUser.uid, true); // true = isAIGenerated
         submitted++;
-        console.log(`✅ Generated: "${aiTake.text.substring(0, 50)}..."`);
       } catch (error) {
         console.error('Failed to submit AI take:', error);
       }
     }
 
-    console.log(`🎉 Successfully generated ${submitted}/${count} takes for ${category}`);
     return submitted;
 
   } catch (error) {

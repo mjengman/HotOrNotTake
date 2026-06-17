@@ -40,7 +40,6 @@ import { enableNetwork, disableNetwork } from 'firebase/firestore';
 export const enableOfflineSupport = async () => {
   try {
     // This will enable offline persistence automatically
-    console.log('Firebase offline support enabled');
   } catch (error) {
     console.warn('Failed to enable offline support:', error);
   }
