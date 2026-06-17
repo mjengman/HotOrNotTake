@@ -871,8 +871,8 @@ export const HomeScreen: React.FC = () => {
               styles.coolFooterButton,
               !canRewind && styles.disabledControl,
               isDarkMode
-                ? { backgroundColor: theme.surface, borderColor: 'rgba(116, 185, 255, 0.28)' }
-                : { backgroundColor: '#F0F0F1', borderColor: 'rgba(116, 185, 255, 0.36)' }
+                ? { backgroundColor: theme.surface, borderColor: 'rgba(116, 185, 255, 0.82)', shadowColor: '#74B9FF' }
+                : { backgroundColor: '#F0F0F1', borderColor: 'rgba(116, 185, 255, 0.72)', shadowColor: '#74B9FF' }
             ]}
             onPress={handleShowLastVote}
             disabled={!canRewind}
@@ -1380,7 +1380,9 @@ const createStyles = (responsive: any, insets: any) => {
     shadowRadius: 6.5,
   },
   coolFooterButton: {
-    borderWidth: 1.25,
+    borderWidth: 1.75,
+    shadowOpacity: 0.22,
+    shadowRadius: 5.5,
   },
   disabledControl: {
     opacity: 0.45,
