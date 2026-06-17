@@ -32,6 +32,8 @@ interface TakeCardProps {
   onVoteNow?: (take: Take) => void;
   identityTeaser?: string | null;
   onIdentityTeaserPress?: () => void;
+  firstVoteHint?: string | null;
+  onFirstVoteHintDismiss?: () => void;
 }
 
 const getReactionToneColor = (tone: ResultReactionTone, theme: Colors) => {
@@ -68,6 +70,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   onVoteNow,
   identityTeaser = null,
   onIdentityTeaserPress,
+  firstVoteHint = null,
+  onFirstVoteHintDismiss,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
   const responsive = useResponsive();
@@ -482,6 +486,37 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               )}
             </View>
 
+            {firstVoteHint && (
+              <TouchableOpacity
+                style={[
+                  styles.firstVoteHint,
+                  {
+                    backgroundColor: reactionColor + '14',
+                    borderColor: reactionColor + '30',
+                  },
+                ]}
+                onPress={onFirstVoteHintDismiss}
+                activeOpacity={0.74}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss first vote results hint"
+              >
+                <Text
+                  style={[
+                    styles.firstVoteHintText,
+                    {
+                      color: theme.textSecondary,
+                      fontSize: responsive.fontSize.small,
+                    },
+                  ]}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.82}
+                >
+                  {firstVoteHint}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {identityTeaser && (
               <TouchableOpacity
                 style={[
@@ -806,6 +841,20 @@ const styles = StyleSheet.create({
   identityTeaserText: {
     textAlign: 'center',
     fontWeight: '800',
+    lineHeight: 20,
+  },
+  firstVoteHint: {
+    alignSelf: 'center',
+    maxWidth: '96%',
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.xs,
+    marginTop: dimensions.spacing.xs,
+  },
+  firstVoteHintText: {
+    textAlign: 'center',
+    fontWeight: '700',
     lineHeight: 20,
   },
   voteStats: {

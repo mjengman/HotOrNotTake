@@ -722,6 +722,7 @@ export const updateUserEngagementAfterVote = async (
     );
 
     return {
+      totalVotes,
       currentStreak,
       longestVotingStreak,
       totalStreakDays,

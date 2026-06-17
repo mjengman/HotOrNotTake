@@ -14,6 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
+import { OnboardingCard } from '../components/OnboardingCard';
 import { CategoryDropdown } from '../components/CategoryDropdown';
 import { AdBanner } from '../components/AdBanner';
 import { AdConsentModal } from '../components/AdConsentModal';
@@ -47,6 +48,9 @@ import RNShare from 'react-native-share';
 
 const THEME_PREFERENCE_KEY = 'themePreference';
 const RESULTS_AUTOPLAY_PREFERENCE_KEY = 'resultsAutoplayPreference';
+const ONBOARDING_COMPLETED_KEY = 'onboarding_completed';
+const LEGACY_FIRST_LAUNCH_KEY = 'hasLaunchedBefore';
+const FIRST_VOTE_HINT_SHOWN_KEY = 'first_vote_hint_shown';
 const DAILY_CHALLENGE_NUDGE_PREFIX = 'dailyChallengeNudgeShown';
 const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
 type EngagementToast = { title: string; subtitle: string };
@@ -117,7 +121,9 @@ export const HomeScreen: React.FC = () => {
   const [showVotingStyleModal, setShowVotingStyleModal] = useState(false);
   const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: Take, vote: 'hot' | 'not' | null} | null>(null);
   const [sessionVoteHistory, setSessionVoteHistory] = useState<SessionVoteHistoryEntry[]>([]);
-  const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [showOnboardingCard, setShowOnboardingCard] = useState(false);
+  const [firstVoteHintTakeId, setFirstVoteHintTakeId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
   const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
@@ -135,6 +141,8 @@ export const HomeScreen: React.FC = () => {
   const leaderboardPrefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const identityTeaserShownRef = useRef(false);
   const lastIdentityTeaserRef = useRef<string | null>(null);
+  const onboardingCompletingRef = useRef(false);
+  const firstVoteHintMarkedRef = useRef(false);
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
     category: selectedCategory
@@ -223,27 +231,60 @@ export const HomeScreen: React.FC = () => {
     loadResultsAutoplayPreference();
   }, []);
 
-  // Check if this is the first launch
+  // Show the lightweight onboarding card only for truly new local installs.
   useEffect(() => {
-    const checkFirstLaunch = async () => {
+    let mounted = true;
+
+    const loadOnboardingState = async () => {
       try {
-        const hasLaunchedBefore = await AsyncStorage.getItem('hasLaunchedBefore');
-        if (!hasLaunchedBefore) {
-          // First launch - show instructions and mark as launched
-          setIsFirstLaunch(true);
-          setShowInstructionsModal(true);
-          await AsyncStorage.setItem('hasLaunchedBefore', 'true');
-        } else {
-          // Not first launch
-          setIsFirstLaunch(false);
+        const [completed, legacyLaunch] = await Promise.all([
+          AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY),
+          AsyncStorage.getItem(LEGACY_FIRST_LAUNCH_KEY),
+        ]);
+
+        if (!mounted) {
+          return;
+        }
+
+        const alreadyKnowsApp = completed === 'true' || legacyLaunch === 'true';
+        setShowOnboardingCard(!alreadyKnowsApp);
+        setOnboardingChecked(true);
+
+        if (alreadyKnowsApp && completed !== 'true') {
+          AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true').catch(error => {
+            console.warn('Unable to migrate onboarding flag:', error);
+          });
         }
       } catch (error) {
-        console.error('Error checking first launch:', error);
-        setIsFirstLaunch(false); // Default to not showing instructions on error
+        console.warn('Unable to load onboarding state:', error);
+        if (mounted) {
+          setShowOnboardingCard(false);
+          setOnboardingChecked(true);
+        }
       }
     };
 
-    checkFirstLaunch();
+    loadOnboardingState();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const completeOnboarding = React.useCallback(() => {
+    if (onboardingCompletingRef.current) {
+      return;
+    }
+
+    onboardingCompletingRef.current = true;
+    setShowOnboardingCard(false);
+
+    Promise.all([
+      AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true'),
+      AsyncStorage.setItem(LEGACY_FIRST_LAUNCH_KEY, 'true'),
+    ]).catch(error => {
+      console.warn('Unable to save onboarding completion:', error);
+    });
   }, []);
 
   // Auto sign-in on first load
@@ -526,6 +567,38 @@ export const HomeScreen: React.FC = () => {
     };
   }, [authLoading, enqueueToast, stats.dailyChallenge, statsLoading, user]);
 
+  const showFirstVoteHint = React.useCallback(async (takeId: string) => {
+    if (firstVoteHintMarkedRef.current) {
+      return;
+    }
+
+    try {
+      const alreadyShown = await AsyncStorage.getItem(FIRST_VOTE_HINT_SHOWN_KEY);
+      if (alreadyShown === 'true') {
+        firstVoteHintMarkedRef.current = true;
+        return;
+      }
+
+      firstVoteHintMarkedRef.current = true;
+      await AsyncStorage.setItem(FIRST_VOTE_HINT_SHOWN_KEY, 'true');
+      setFirstVoteHintTakeId(takeId);
+    } catch (error) {
+      console.warn('Unable to save first vote hint flag:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!firstVoteHintTakeId) {
+      return undefined;
+    }
+
+    const timeout = setTimeout(() => {
+      setFirstVoteHintTakeId(null);
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [firstVoteHintTakeId]);
+
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     let optimisticallyAddedToHistory = false;
     try {
@@ -567,6 +640,10 @@ export const HomeScreen: React.FC = () => {
         countDailyEngagement: !isVoteChange,
       });
       changeVoteTakeIdsRef.current.delete(takeId);
+
+      if (!isVoteChange && streakUpdate?.totalVotes === 1) {
+        showFirstVoteHint(takeId);
+      }
 
       // Track completed card for ad service (called after vote is cast)
       onCardComplete();
@@ -822,7 +899,14 @@ export const HomeScreen: React.FC = () => {
 
       {/* Flexible Middle Section - Card fills available space */}
       <View style={styles.flexibleMiddle}>
-        {takesLoading || authLoading ? (
+        {!onboardingChecked ? (
+          <LoadingSkeleton isDarkMode={isDarkMode} />
+        ) : showOnboardingCard ? (
+          <OnboardingCard
+            isDarkMode={isDarkMode}
+            onComplete={completeOnboarding}
+          />
+        ) : takesLoading || authLoading ? (
           <LoadingSkeleton isDarkMode={isDarkMode} />
         ) : takesError ? (
           <View style={styles.loadingContainer}>
@@ -862,6 +946,8 @@ export const HomeScreen: React.FC = () => {
             skipRequestToken={skipRequestToken}
             identityTeaser={identityTeaser}
             onIdentityTeaserPress={openVotingStyle}
+            firstVoteHintTakeId={firstVoteHintTakeId}
+            onFirstVoteHintDismiss={() => setFirstVoteHintTakeId(null)}
           />
         )}
       </View>

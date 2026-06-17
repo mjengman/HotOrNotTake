@@ -58,6 +58,7 @@ export interface UserStats {
 }
 
 export interface StreakUpdateResult {
+  totalVotes?: number;
   currentStreak: number;
   longestVotingStreak: number;
   totalStreakDays: number;
