@@ -139,7 +139,7 @@ export const HomeScreen: React.FC = () => {
     category: selectedCategory
   });
   const { stats, loading: statsLoading, refreshStats, applyEngagementUpdate } = useUserStats();
-  const votingProfileState = useVotingProfile(user?.uid, stats.totalVotes);
+  const votingProfileState = useVotingProfile(user?.uid, stats.totalVotes, showVotingStyleModal);
 
   // Use the hook-based interstitial ads
   const { onCardComplete, onSessionEnd } = useInterstitialAds();
@@ -619,7 +619,7 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  const handleInviteFriends = async () => {
+  const handleInviteFriends = React.useCallback(async () => {
     try {
       const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
       const inviteMessage = `Try Hot or Not Takes - Vote on spicy hot takes! 🔥 ${SMART_LINK}`;
@@ -632,9 +632,9 @@ export const HomeScreen: React.FC = () => {
     } catch (error) {
       console.log('Invite sharing failed:', error);
     }
-  };
+  }, []);
 
-  const toggleTheme = () => {
+  const toggleTheme = React.useCallback(() => {
     setIsDarkMode(prev => {
       const nextIsDarkMode = !prev;
       AsyncStorage.setItem(
@@ -645,9 +645,9 @@ export const HomeScreen: React.FC = () => {
       });
       return nextIsDarkMode;
     });
-  };
+  }, []);
 
-  const toggleResultsAutoplay = () => {
+  const toggleResultsAutoplay = React.useCallback(() => {
     setResultsAutoplay(prev => {
       const nextResultsAutoplay = !prev;
       AsyncStorage.setItem(
@@ -658,7 +658,15 @@ export const HomeScreen: React.FC = () => {
       });
       return nextResultsAutoplay;
     });
-  };
+  }, []);
+
+  const openMyTakes = React.useCallback(() => setShowMyTakesModal(true), []);
+  const openLeaderboard = React.useCallback(() => setShowLeaderboardModal(true), []);
+  const openRecentVotes = React.useCallback(() => setShowRecentVotesModal(true), []);
+  const openFavorites = React.useCallback(() => setShowFavoritesModal(true), []);
+  const openInstructions = React.useCallback(() => setShowInstructionsModal(true), []);
+  const openSafety = React.useCallback(() => setShowSafetyModal(true), []);
+  const openVotingStyle = React.useCallback(() => setShowVotingStyleModal(true), []);
 
   const handleCategoryChange = (newCategory: string) => {
     // Trigger ad on category change (session end)
@@ -757,14 +765,14 @@ export const HomeScreen: React.FC = () => {
         <View style={styles.headerRow}>
           <BurgerMenu
             isDarkMode={isDarkMode}
-            onMyTakes={() => setShowMyTakesModal(true)}
-            onLeaderboard={() => setShowLeaderboardModal(true)}
-            onRecentVotes={() => setShowRecentVotesModal(true)}
-            onFavorites={() => setShowFavoritesModal(true)}
-            onInstructions={() => setShowInstructionsModal(true)}
+            onMyTakes={openMyTakes}
+            onLeaderboard={openLeaderboard}
+            onRecentVotes={openRecentVotes}
+            onFavorites={openFavorites}
+            onInstructions={openInstructions}
             onInviteFriends={handleInviteFriends}
-            onSafety={() => setShowSafetyModal(true)}
-            onVotingStyle={() => setShowVotingStyleModal(true)}
+            onSafety={openSafety}
+            onVotingStyle={openVotingStyle}
             onToggleTheme={toggleTheme}
             resultsAutoplay={resultsAutoplay}
             onToggleResultsAutoplay={toggleResultsAutoplay}
@@ -833,7 +841,7 @@ export const HomeScreen: React.FC = () => {
             autoAdvanceResults={resultsAutoplay}
             skipRequestToken={skipRequestToken}
             identityTeaser={identityTeaser}
-            onIdentityTeaserPress={() => setShowVotingStyleModal(true)}
+            onIdentityTeaserPress={openVotingStyle}
             onVisibleResultChange={setVisibleInternalResultTakeId}
           />
         )}
@@ -855,7 +863,7 @@ export const HomeScreen: React.FC = () => {
                 shadowColor: theme.accent,
               },
             ]}
-            onPress={() => setShowVotingStyleModal(true)}
+            onPress={openVotingStyle}
             scaleValue={0.9}
             hapticIntensity={motion.haptic.selection}
             accessibilityRole="button"

@@ -28,7 +28,7 @@ interface BurgerMenuProps {
   onToggleResultsAutoplay: () => void;
 }
 
-export const BurgerMenu: React.FC<BurgerMenuProps> = ({
+const BurgerMenuComponent: React.FC<BurgerMenuProps> = ({
   isDarkMode,
   onMyTakes,
   onLeaderboard,
@@ -240,6 +240,8 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
     </>
   );
 };
+
+export const BurgerMenu = React.memo(BurgerMenuComponent);
 
 const styles = StyleSheet.create({
   burgerButton: {

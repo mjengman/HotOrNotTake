@@ -408,7 +408,8 @@ export const buildVotingStyleTeaser = (
 
 export const useVotingProfile = (
   userId?: string | null,
-  reportedTotalVotes?: number
+  reportedTotalVotes?: number,
+  enabled = true
 ): UseVotingProfileResult => {
   const [votes, setVotes] = useState<TakeVote[]>([]);
   const [takesById, setTakesById] = useState<Record<string, Take>>({});
@@ -419,6 +420,11 @@ export const useVotingProfile = (
     if (!userId) {
       setVotes([]);
       setTakesById({});
+      setLoading(false);
+      return;
+    }
+
+    if (!enabled) {
       setLoading(false);
       return;
     }
@@ -448,7 +454,7 @@ export const useVotingProfile = (
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [enabled, userId]);
 
   useEffect(() => {
     loadProfile();

@@ -339,6 +339,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }, 1200);
     setAutoDismissTimeout(timeout);
   };
+  const completeSkip = React.useCallback((takeId: string) => {
+    onSkip(takeId);
+    jsSetVote(null);
+    setUseFrozen(false);
+  }, [onSkip]);
   const finishCardDismiss = React.useCallback(() => {
     const shouldEnd = endAfterDismissRef.current;
     endAfterDismissRef.current = false;
@@ -542,6 +547,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     if (!currentTake || isAnimating.value || externalStatsCard) return;
 
     setCurrentVote('skip');
+    const skippedTakeId = currentTake.id;
     
     // 🧊 FREEZE: Capture current state immediately when skip is triggered
     if (renderCurrent) {
@@ -555,14 +561,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         frozenNext.current = null;
         endAfterDismissRef.current = true;
       }
-      // MUST set frozen BEFORE calling onSkip to prevent end screen flash
+      // MUST set frozen before the animation to prevent end screen flash.
+      // The actual skip write waits until the card finishes leaving.
       setUseFrozen(true);
-      
-      // Use requestAnimationFrame to ensure state updates are flushed
-      requestAnimationFrame(() => {
-        // Submit skip after freeze state is committed
-        onSkip(renderCurrent.id);
-      });
     }
     
     isAnimating.value = true;
@@ -584,8 +585,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           translateX.value = 0;
           translateY.value = 0;
           scale.value = 1;
-          runOnJS(jsSetVote)(null);
-          runOnJS(setUseFrozen)(false); // 🔓 UNFREEZE
+          runOnJS(completeSkip)(skippedTakeId);
           animatingSV.value = 0;
           isAnimating.value = false;
         });

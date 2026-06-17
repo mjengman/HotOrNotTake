@@ -75,6 +75,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const visualShareRef = useRef<ViewShot>(null);
+  const shouldEnableResultActions = isFlipped && showStats;
   const initialResultCountProgress = isFlipped && holdResultCountAtZero && !animateResults ? 0 : 1;
   const resultCountAnim = useRef(new Animated.Value(initialResultCountProgress)).current;
   const [resultCountProgress, setResultCountProgress] = useState(initialResultCountProgress);
@@ -218,19 +219,22 @@ export const TakeCard: React.FC<TakeCardProps> = ({
 
   // Check if this take is favorited
   useEffect(() => {
+    if (!shouldEnableResultActions || !user) {
+      setIsFavorited(false);
+      return;
+    }
+
     const checkFavoriteStatus = async () => {
-      if (user) {
-        try {
-          const favorited = await isInFavorites(user.uid, take.id);
-          setIsFavorited(favorited);
-        } catch (error) {
-          console.error('Error checking favorite status:', error);
-        }
+      try {
+        const favorited = await isInFavorites(user.uid, take.id);
+        setIsFavorited(favorited);
+      } catch (error) {
+        console.error('Error checking favorite status:', error);
       }
     };
 
     checkFavoriteStatus();
-  }, [user, take.id]);
+  }, [shouldEnableResultActions, user, take.id]);
 
   const handleShare = async () => {
     try {
@@ -713,19 +717,20 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         )}
       </View>
 
-      {/* Off-screen VisualShareCard for image generation */}
-      <View style={styles.offScreenContainer}>
-        <ViewShot
-          ref={visualShareRef}
-          options={{ format: "png", quality: 0.9 }}
-        >
-          <VisualShareCard
-            take={take}
-            userVote={userVote}
-            isDarkMode={isDarkMode}
-          />
-        </ViewShot>
-      </View>
+      {shouldEnableResultActions && (
+        <View style={styles.offScreenContainer}>
+          <ViewShot
+            ref={visualShareRef}
+            options={{ format: "png", quality: 0.9 }}
+          >
+            <VisualShareCard
+              take={take}
+              userVote={userVote}
+              isDarkMode={isDarkMode}
+            />
+          </ViewShot>
+        </View>
+      )}
     </View>
   );
 };
