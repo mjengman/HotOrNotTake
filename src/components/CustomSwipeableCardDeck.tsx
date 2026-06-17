@@ -49,6 +49,8 @@ interface CustomSwipeableCardDeckProps {
   communityTotalVotes?: number;
   autoAdvanceResults?: boolean;
   skipRequestToken?: number;
+  identityTeaser?: { takeId: string; text: string } | null;
+  onIdentityTeaserPress?: () => void;
 }
 
 // Safe flip for Android - no 3D to avoid compositor crashes
@@ -77,6 +79,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   communityTotalVotes = 0,
   autoAdvanceResults = false,
   skipRequestToken = 0,
+  identityTeaser = null,
+  onIdentityTeaserPress,
 }) => {
   const responsive = useResponsive();
   const screenWidth = responsive.screen.width;
@@ -1157,6 +1161,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
                 holdResultCountAtZero={!externalStatsCard}
                 onChangeVote={externalStatsCard ? handleChangeVote : undefined}
                 onVoteNow={onVoteNow}
+                identityTeaser={
+                  !externalStatsCard && identityTeaser?.takeId === statsTake.id
+                    ? identityTeaser.text
+                    : null
+                }
+                onIdentityTeaserPress={onIdentityTeaserPress}
               />
             </Animated.View>
           )}

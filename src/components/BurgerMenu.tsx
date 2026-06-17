@@ -20,7 +20,9 @@ interface BurgerMenuProps {
   onRecentVotes: () => void;
   onFavorites: () => void;
   onInstructions: () => void;
+  onInviteFriends: () => void;
   onSafety: () => void;
+  onVotingStyle: () => void;
   onToggleTheme: () => void;
   resultsAutoplay: boolean;
   onToggleResultsAutoplay: () => void;
@@ -33,7 +35,9 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   onRecentVotes,
   onFavorites,
   onInstructions,
+  onInviteFriends,
   onSafety,
+  onVotingStyle,
   onToggleTheme,
   resultsAutoplay,
   onToggleResultsAutoplay,
@@ -65,6 +69,11 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
       onPress: () => handleMenuItemPress(onInstructions),
     },
     {
+      label: 'Invite Friends',
+      icon: '💌',
+      onPress: () => handleMenuItemPress(onInviteFriends),
+    },
+    {
       label: 'Leaderboard',
       icon: '🏆',
       onPress: () => handleMenuItemPress(onLeaderboard),
@@ -78,6 +87,11 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
       label: 'My Takes',
       icon: '📝',
       onPress: () => handleMenuItemPress(onMyTakes),
+    },
+    {
+      label: 'My Voting Style',
+      icon: '🧭',
+      onPress: () => handleMenuItemPress(onVotingStyle),
     },
     {
       label: 'Results Autoplay',
@@ -100,12 +114,14 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
     isDarkMode,
     onFavorites,
     onInstructions,
+    onInviteFriends,
     onLeaderboard,
     onMyTakes,
     onRecentVotes,
     onSafety,
     onToggleResultsAutoplay,
     onToggleTheme,
+    onVotingStyle,
   ]);
 
   // Handle back button when burger menu is open

@@ -1,5 +1,6 @@
 import {
   collection,
+  documentId,
   doc,
   getDoc,
   getDocs,
@@ -268,8 +269,68 @@ export const getTakeById = async (takeId: string): Promise<Take | null> => {
 
     return convertFirestoreTake(takeSnapshot.id, data);
   } catch (error) {
-    console.error('Error fetching take by ID:', error);
+    if (!isPermissionDeniedError(error)) {
+      console.warn('Unable to fetch take by ID:', error);
+    }
     return null;
+  }
+};
+
+const chunkIds = (ids: string[], size: number) => {
+  const chunks: string[][] = [];
+
+  for (let index = 0; index < ids.length; index += size) {
+    chunks.push(ids.slice(index, index + size));
+  }
+
+  return chunks;
+};
+
+export const getTakesByIds = async (takeIds: string[]): Promise<Record<string, Take>> => {
+  const uniqueIds = Array.from(new Set(takeIds.filter(Boolean)));
+  if (uniqueIds.length === 0) {
+    return {};
+  }
+
+  try {
+    const hydratedTakes: Record<string, Take> = {};
+    const idChunks = chunkIds(uniqueIds, 10);
+
+    for (const idChunk of idChunks) {
+      const takesQuery = query(
+        collection(db, TAKES_COLLECTION),
+        where('isApproved', '==', true),
+        where(documentId(), 'in', idChunk)
+      );
+      const snapshot = await getDocs(takesQuery);
+
+      snapshot.docs.forEach((takeDoc) => {
+        const data = takeDoc.data();
+        if (data.isApproved !== true && data.status !== 'approved') {
+          return;
+        }
+
+        hydratedTakes[takeDoc.id] = convertFirestoreTake(takeDoc.id, data);
+      });
+    }
+
+    return hydratedTakes;
+  } catch (error) {
+    console.warn('Batch take hydration unavailable, falling back to single reads:', error);
+
+    const fallbackResults = await Promise.all(
+      uniqueIds.map(async (takeId) => {
+        const take = await getTakeById(takeId);
+        return take ? [takeId, take] as const : null;
+      })
+    );
+
+    return fallbackResults.reduce<Record<string, Take>>((acc, item) => {
+      if (item) {
+        acc[item[0]] = item[1];
+      }
+      return acc;
+    }, {});
   }
 };
 

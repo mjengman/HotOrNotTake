@@ -15,7 +15,7 @@ import {
   getUserVotesPage,
   VoteHistoryCursor,
 } from '../services/voteService';
-import { getTakeById } from '../services/takeService';
+import { getTakesByIds } from '../services/takeService';
 import { Take, TakeVote } from '../types/Take';
 import { colors, dimensions, motion } from '../constants';
 
@@ -52,12 +52,11 @@ export const RecentVotesScreen: React.FC<RecentVotesScreenProps> = ({
   }, [voteHistory.length]);
 
   const hydrateVotesWithTakes = useCallback(async (votes: TakeVote[]): Promise<VoteHistoryItem[]> => {
-    return Promise.all(
-      votes.map(async (vote) => {
-        const take = await getTakeById(vote.takeId);
-        return take ? { ...vote, take } : vote;
-      })
-    );
+    const takesById = await getTakesByIds(votes.map(vote => vote.takeId));
+    return votes.map((vote) => {
+      const take = takesById[vote.takeId];
+      return take ? { ...vote, take } : vote;
+    });
   }, []);
 
   const loadFallbackPage = useCallback(async (

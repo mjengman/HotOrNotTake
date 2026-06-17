@@ -100,10 +100,10 @@ export const VisualShareCard: React.FC<VisualShareCardProps> = ({
       {/* Footer CTA */}
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
         <Text style={[styles.ctaTitle, { color: theme.primary }]}>
-          Join the debate
+          What's YOUR take?
         </Text>
-        <Text style={[styles.ctaSubtitle, { color: theme.textSecondary }]}>
-          Download the app!
+        <Text style={[styles.ctaUrl, { color: theme.textSecondary }]}>
+          hot-or-not-takes.web.app/download
         </Text>
       </View>
     </View>
@@ -225,8 +225,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 4,
   },
-  ctaSubtitle: {
-    fontSize: 16,
-    fontWeight: '500',
+  ctaUrl: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 6,
+    opacity: 0.86,
   },
 });

@@ -30,6 +30,8 @@ interface TakeCardProps {
   holdResultCountAtZero?: boolean;
   onChangeVote?: (take: Take, currentVote?: 'hot' | 'not' | null) => void;
   onVoteNow?: (take: Take) => void;
+  identityTeaser?: string | null;
+  onIdentityTeaserPress?: () => void;
 }
 
 const getReactionToneColor = (tone: ResultReactionTone, theme: Colors) => {
@@ -64,6 +66,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   holdResultCountAtZero = false,
   onChangeVote,
   onVoteNow,
+  identityTeaser = null,
+  onIdentityTeaserPress,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
   const responsive = useResponsive();
@@ -231,6 +235,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const handleShare = async () => {
     try {
       const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
+      const shareCta = `What's YOUR take?\n${SMART_LINK}`;
+      const fallbackShareMessage = `${shareVerdict}\n\n"${take.text}"\n\nCommunity split:\n🔥 ${hotPercentage}% HOT\n❄️ ${notPercentage}% NOT\n\n👥 ${totalVotes.toLocaleString()} total votes\n\n${userVote ? `I voted ${userVote.toUpperCase()}. ` : ''}${shareCta}`;
 
       // Try visual sharing first
       if (visualShareRef.current?.capture) {
@@ -243,9 +249,10 @@ export const TakeCard: React.FC<TakeCardProps> = ({
           if (!imageUri) throw new Error('Capture failed / imageUri missing');
           console.log('✅ Visual share card generated:', imageUri);
 
-          // Share ONLY the image - no text, no links
           await RNShare.open({
+            title: 'Hot or Not Takes',
             url: imageUri,
+            message: shareCta,
             failOnCancel: false,
           });
 
@@ -256,11 +263,9 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         }
       }
 
-      const shareMessage = `${shareVerdict}\n\n"${take.text}"\n\nCommunity split:\n🔥 ${hotPercentage}% HOT\n❄️ ${notPercentage}% NOT\n\n👥 ${totalVotes.toLocaleString()} total votes\n\n${userVote ? `I voted ${userVote.toUpperCase()}. ` : ''}What's your take?\n\nJoin the debate: ${SMART_LINK}`;
-
       await RNShare.open({
         title: 'Hot or Not Takes',
-        message: shareMessage,
+        message: fallbackShareMessage,
         failOnCancel: false,
       });
 
@@ -477,6 +482,38 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 </Text>
               )}
             </View>
+
+            {identityTeaser && (
+              <TouchableOpacity
+                style={[
+                  styles.identityTeaser,
+                  {
+                    backgroundColor: reactionColor + '18',
+                    borderColor: reactionColor + '35',
+                  },
+                ]}
+                onPress={onIdentityTeaserPress}
+                disabled={!onIdentityTeaserPress}
+                activeOpacity={0.74}
+                accessibilityRole="button"
+                accessibilityLabel="Open your voting style"
+              >
+                <Text
+                  style={[
+                    styles.identityTeaserText,
+                    {
+                      color: reactionColor,
+                      fontSize: responsive.fontSize.small,
+                    },
+                  ]}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.82}
+                >
+                  🧭 {identityTeaser}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             <View style={[styles.resultGroupSpacer, resultSpacerStyle]} />
 
@@ -757,6 +794,19 @@ const styles = StyleSheet.create({
   resultFooter: {
     flex: 1,
     width: '100%',
+  },
+  identityTeaser: {
+    alignSelf: 'center',
+    maxWidth: '96%',
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.xs,
+  },
+  identityTeaserText: {
+    textAlign: 'center',
+    fontWeight: '800',
+    lineHeight: 20,
   },
   voteStats: {
     flexDirection: 'row',

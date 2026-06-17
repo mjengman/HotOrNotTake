@@ -28,14 +28,21 @@ import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecentVotesScreen } from './RecentVotesScreen';
 import { MyFavoritesScreen } from './MyFavoritesScreen';
 import { SafetyStandardsScreen } from './SafetyStandardsScreen';
-import { useAuth, useFirebaseTakes, useUserStats } from '../hooks';
+import { VotingStyleScreen } from './VotingStyleScreen';
+import {
+  buildVotingStyleTeaser,
+  useAuth,
+  useFirebaseTakes,
+  useUserStats,
+  useVotingProfile,
+} from '../hooks';
 import { useResponsive } from '../hooks/useResponsive';
 import { deleteVote, getUserVoteForTake } from '../services/voteService';
 import { getCommunityStats } from '../services/userService';
 import { prefetchLeaderboardCache } from '../services/leaderboardCacheService';
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 import { colors, motion } from '../constants';
-import { StreakUpdateResult } from '../types';
+import { StreakUpdateResult, Take } from '../types';
 import RNShare from 'react-native-share';
 
 const THEME_PREFERENCE_KEY = 'themePreference';
@@ -43,6 +50,7 @@ const RESULTS_AUTOPLAY_PREFERENCE_KEY = 'resultsAutoplayPreference';
 const DAILY_CHALLENGE_NUDGE_PREFIX = 'dailyChallengeNudgeShown';
 const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
 type EngagementToast = { title: string; subtitle: string };
+type IdentityTeaser = { takeId: string; text: string };
 
 const formatCompactCount = (count: number) => {
   if (count >= 1000000) {
@@ -79,6 +87,19 @@ const getChallengeProgressCopy = (challenge: {
   };
 };
 
+const getVoteMomentContext = (take: Take, vote: 'hot' | 'not') => {
+  const hotPercentage = take.totalVotes > 0
+    ? Math.round((take.hotVotes / take.totalVotes) * 100)
+    : 50;
+  const notPercentage = 100 - hotPercentage;
+  const userAgreementPercentage = vote === 'hot' ? hotPercentage : notPercentage;
+
+  return {
+    isContrarianMoment: userAgreementPercentage <= 30,
+    isCloseCall: Math.abs(hotPercentage - notPercentage) <= 15,
+  };
+};
+
 export const HomeScreen: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [resultsAutoplay, setResultsAutoplay] = useState(false);
@@ -89,6 +110,7 @@ export const HomeScreen: React.FC = () => {
   const [showSafetyModal, setShowSafetyModal] = useState(false);
   const [showRecentVotesModal, setShowRecentVotesModal] = useState(false);
   const [showFavoritesModal, setShowFavoritesModal] = useState(false);
+  const [showVotingStyleModal, setShowVotingStyleModal] = useState(false);
   const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: any, vote: 'hot' | 'not' | null} | null>(null);
   const [lastVotedTake, setLastVotedTake] = useState<any | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null); // null = loading
@@ -97,6 +119,7 @@ export const HomeScreen: React.FC = () => {
   const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
   const [communityTotalVotes, setCommunityTotalVotes] = useState<number>(0);
   const [streakToast, setStreakToast] = useState<EngagementToast | null>(null);
+  const [identityTeaser, setIdentityTeaser] = useState<IdentityTeaser | null>(null);
   const [skipRequestToken, setSkipRequestToken] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const streakToastAnim = useRef(new Animated.Value(0)).current;
@@ -105,21 +128,24 @@ export const HomeScreen: React.FC = () => {
   const changeVoteTakeIdsRef = useRef<Set<string>>(new Set());
   const changeVoteDeletePromisesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const leaderboardPrefetchStartedRef = useRef(false);
+  const identityTeaserShownRef = useRef(false);
+  const lastIdentityTeaserRef = useRef<string | null>(null);
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
     category: selectedCategory
   });
   const { stats, loading: statsLoading, refreshStats, applyEngagementUpdate } = useUserStats();
-  
+  const votingProfileState = useVotingProfile(user?.uid, stats.totalVotes);
+
   // Use the hook-based interstitial ads
   const { onCardComplete, onSessionEnd } = useInterstitialAds();
-  
+
   const theme = isDarkMode ? colors.dark : colors.light;
-  
+
   // Get responsive dimensions for this device profile
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
-  
+
   // Create responsive styles
   const styles = useMemo(() => createStyles(responsive, insets), [responsive, insets]);
 
@@ -251,10 +277,10 @@ export const HomeScreen: React.FC = () => {
 
     loadCachedCommunityStats();
     refreshCommunityStats();
-    
+
     // Refresh every 60 seconds if the app is active
     const interval = setInterval(refreshCommunityStats, 60000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -298,6 +324,10 @@ export const HomeScreen: React.FC = () => {
         setShowFavoritesModal(false);
         return true;
       }
+      if (showVotingStyleModal) {
+        setShowVotingStyleModal(false);
+        return true;
+      }
       if (showLeaderboardModal) {
         setShowLeaderboardModal(false);
         return true;
@@ -324,7 +354,7 @@ export const HomeScreen: React.FC = () => {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [showSubmitModal, showRecentVotesModal, showFavoritesModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, showSafetyModal, selectedTakeForStats]);
+  }, [showSubmitModal, showRecentVotesModal, showFavoritesModal, showVotingStyleModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, showSafetyModal, selectedTakeForStats]);
 
   // Rotate instruction text with a quiet fade so the footer feels alive without flicker.
   useEffect(() => {
@@ -337,7 +367,7 @@ export const HomeScreen: React.FC = () => {
       }).start(() => {
         // Change text while faded out
         setCurrentInstructionIndex((prev) => (prev + 1) % instructionTexts.length);
-        
+
         // Fade back in
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -480,6 +510,7 @@ export const HomeScreen: React.FC = () => {
 
   const handleVote = async (takeId: string, vote: 'hot' | 'not') => {
     try {
+      setIdentityTeaser(null);
       // Find the take that was voted on
       const votedTake = takes.find(take => take.id === takeId);
       const isVoteChange = changeVoteTakeIdsRef.current.has(takeId);
@@ -491,7 +522,7 @@ export const HomeScreen: React.FC = () => {
           throw new Error('Previous vote is still being updated');
         }
       }
-      
+
       const streakUpdate = await submitVote(takeId, vote, {
         countDailyEngagement: !isVoteChange,
       });
@@ -518,7 +549,7 @@ export const HomeScreen: React.FC = () => {
       await refreshStats();
       // Also refresh community stats
       await refreshCommunityStats();
-      
+
       // Set lastVotedTake with updated vote counts after vote submission
       if (votedTake) {
         const updatedHotVotes = vote === 'hot' ? votedTake.hotVotes + 1 : votedTake.hotVotes;
@@ -530,6 +561,30 @@ export const HomeScreen: React.FC = () => {
           totalVotes: updatedHotVotes + updatedNotVotes,
         };
         setLastVotedTake(updatedTake);
+
+        const totalVotesAfterVote = Math.max(
+          stats.totalVotes + (isVoteChange ? 0 : 1),
+          votingProfileState.profile.totalVotes + (isVoteChange ? 0 : 1)
+        );
+        if (!isVoteChange && !identityTeaserShownRef.current) {
+          const voteMomentContext = getVoteMomentContext(updatedTake, vote);
+          const teaser = buildVotingStyleTeaser(
+            {
+              ...votingProfileState.profile,
+              totalVotes: totalVotesAfterVote,
+            },
+            {
+              totalVotesAfterVote,
+              ...voteMomentContext,
+            }
+          );
+
+          if (teaser && teaser !== lastIdentityTeaserRef.current) {
+            lastIdentityTeaserRef.current = teaser;
+            identityTeaserShownRef.current = true;
+            setIdentityTeaser({ takeId, text: teaser });
+          }
+        }
       }
     } catch (error) {
       console.error('Error submitting vote:', error);
@@ -555,7 +610,7 @@ export const HomeScreen: React.FC = () => {
     try {
       const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
       const inviteMessage = `Try Hot or Not Takes - Vote on spicy hot takes! 🔥 ${SMART_LINK}`;
-      
+
       await RNShare.open({
         title: 'Invite Friends to Hot or Not Takes',
         message: inviteMessage,
@@ -647,16 +702,16 @@ export const HomeScreen: React.FC = () => {
 
   const handleVoteNow = async (take: any) => {
     if (!user) return;
-    
+
     try {
       console.log('🗳️ Vote now clicked! Dismissing stats and preparing take for voting');
-      
+
       // Add the take to the front of the deck for voting first
       prependTake(take);
-      
+
       // Then close stats modal to reveal the new voteable card
       setSelectedTakeForStats(null);
-      
+
     } catch (error) {
       console.error('Error preparing take for voting:', error);
     }
@@ -664,7 +719,7 @@ export const HomeScreen: React.FC = () => {
 
   const handleShowLastVote = async () => {
     if (!lastVotedTake || !user) return;
-    
+
     try {
       // Get the user's vote for this take
       const userVoteRecord = await getUserVoteForTake(lastVotedTake.id, user.uid);
@@ -679,11 +734,11 @@ export const HomeScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <StatusBar 
+      <StatusBar
         barStyle={isDarkMode ? 'light-content' : 'dark-content'}
         backgroundColor={theme.background}
       />
-      
+
       {/* Fixed Header Section */}
       <View style={styles.fixedHeader}>
         <View style={styles.headerRow}>
@@ -694,16 +749,18 @@ export const HomeScreen: React.FC = () => {
             onRecentVotes={() => setShowRecentVotesModal(true)}
             onFavorites={() => setShowFavoritesModal(true)}
             onInstructions={() => setShowInstructionsModal(true)}
+            onInviteFriends={handleInviteFriends}
             onSafety={() => setShowSafetyModal(true)}
+            onVotingStyle={() => setShowVotingStyleModal(true)}
             onToggleTheme={toggleTheme}
             resultsAutoplay={resultsAutoplay}
             onToggleResultsAutoplay={toggleResultsAutoplay}
           />
         </View>
-        
+
         <View style={styles.titleContainer}>
-          <Image 
-            source={isDarkMode 
+          <Image
+            source={isDarkMode
               ? require('../assets/images/title-banner-dark-mode.png')
               : require('../assets/images/title-banner-light-mode.png')
             }
@@ -711,7 +768,7 @@ export const HomeScreen: React.FC = () => {
             resizeMode="contain"
           />
         </View>
-        
+
         {/* Category Dropdown - part of fixed header */}
         <View style={styles.categoryContainer}>
           <CategoryDropdown
@@ -762,24 +819,47 @@ export const HomeScreen: React.FC = () => {
             communityTotalVotes={communityTotalVotes}
             autoAdvanceResults={resultsAutoplay}
             skipRequestToken={skipRequestToken}
+            identityTeaser={identityTeaser}
+            onIdentityTeaserPress={() => setShowVotingStyleModal(true)}
           />
         )}
       </View>
 
       {/* Fixed Bottom Section */}
       <View style={styles.fixedFooter}>
-        {/* Bottom Buttons Row - moved closer to instructions */}
+        {/* Bottom Buttons Row */}
         <View style={styles.bottomButtonsRow}>
-          {/* Last Vote Button */}
-          <AnimatedPressable 
+          {/* Voting Style Button */}
+          <AnimatedPressable
             style={[
               styles.bottomButton,
-              styles.recentVotesButton,
+              styles.ringedFooterButton,
+              styles.strongRingedFooterButton,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.accent,
+                shadowColor: theme.accent,
+              },
+            ]}
+            onPress={() => setShowVotingStyleModal(true)}
+            scaleValue={0.9}
+            hapticIntensity={motion.haptic.selection}
+            accessibilityRole="button"
+            accessibilityLabel="Open my voting style"
+          >
+            <Text style={styles.buttonIcon}>🧭</Text>
+          </AnimatedPressable>
+
+          {/* Last Vote Button */}
+          <AnimatedPressable
+            style={[
+              styles.bottomButton,
+              styles.coolFooterButton,
               !lastVotedTake && styles.disabledControl,
-              isDarkMode 
-                ? { backgroundColor: theme.surface, borderWidth: 0 } 
-                : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }
-            ]} 
+              isDarkMode
+                ? { backgroundColor: theme.surface, borderColor: 'rgba(116, 185, 255, 0.28)' }
+                : { backgroundColor: '#F0F0F1', borderColor: 'rgba(116, 185, 255, 0.36)' }
+            ]}
             onPress={handleShowLastVote}
             disabled={!lastVotedTake}
             scaleValue={0.9}
@@ -791,14 +871,15 @@ export const HomeScreen: React.FC = () => {
           </AnimatedPressable>
 
           {/* Skip Button */}
-          <AnimatedPressable 
+          <AnimatedPressable
             style={[
               styles.bottomButton,
+              styles.ringedFooterButton,
               !takes[0] && styles.disabledControl,
-              isDarkMode 
-                ? { backgroundColor: theme.surface, borderWidth: 0 } 
-                : { backgroundColor: '#F0F0F1', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' }
-            ]} 
+              isDarkMode
+                ? { backgroundColor: theme.surface, borderColor: theme.accent + 'CC', shadowColor: theme.accent }
+                : { backgroundColor: '#F0F0F1', borderColor: theme.accent + 'AA', shadowColor: theme.accent }
+            ]}
             onPress={() => {
               if (takes[0]) {
                 setSkipRequestToken(prev => prev + 1);
@@ -811,6 +892,27 @@ export const HomeScreen: React.FC = () => {
             accessibilityLabel="Skip this take"
           >
             <Text style={[styles.buttonIcon, isDarkMode ? { color: theme.text } : { color: '#333' }]}>⏭️</Text>
+          </AnimatedPressable>
+
+          {/* Submit Button */}
+          <AnimatedPressable
+            style={[
+              styles.bottomButton,
+              styles.ringedFooterButton,
+              styles.strongRingedFooterButton,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.primary,
+                shadowColor: theme.primary,
+              },
+            ]}
+            onPress={() => setShowSubmitModal(true)}
+            scaleValue={0.9}
+            hapticIntensity={motion.haptic.selection}
+            accessibilityRole="button"
+            accessibilityLabel="Submit a hot take"
+          >
+            <Text style={styles.buttonIcon}>✏️</Text>
           </AnimatedPressable>
         </View>
 
@@ -875,12 +977,12 @@ export const HomeScreen: React.FC = () => {
         </View>
 
         <View style={styles.instructions}>
-          <Animated.Text 
+          <Animated.Text
             style={[
-              styles.instructionText, 
-              { 
+              styles.instructionText,
+              {
                 color: theme.textSecondary,
-                opacity: fadeAnim 
+                opacity: fadeAnim
               }
             ]}
             numberOfLines={1}
@@ -890,7 +992,7 @@ export const HomeScreen: React.FC = () => {
             {instructionTexts[currentInstructionIndex]}
           </Animated.Text>
         </View>
-        
+
         <View style={styles.adSpace}>
           <AdBanner />
         </View>
@@ -1049,6 +1151,20 @@ export const HomeScreen: React.FC = () => {
         </FullScreenOverlay>
       )}
 
+      {/* My Voting Style Modal - Conditional Rendering */}
+      {showVotingStyleModal && (
+        <FullScreenOverlay zIndex={1750}>
+          <VotingStyleScreen
+            onClose={() => setShowVotingStyleModal(false)}
+            isDarkMode={isDarkMode}
+            profile={votingProfileState.profile}
+            loading={votingProfileState.loading}
+            error={votingProfileState.error}
+            onRefresh={votingProfileState.refreshProfile}
+          />
+        </FullScreenOverlay>
+      )}
+
       {/* Safety Standards Modal - Conditional Rendering */}
       {showSafetyModal && (
         <FullScreenOverlay zIndex={1800}>
@@ -1058,30 +1174,6 @@ export const HomeScreen: React.FC = () => {
           />
         </FullScreenOverlay>
       )}
-
-      {/* Invite Friends FAB */}
-      <AnimatedPressable
-        style={[styles.inviteFabButton, { backgroundColor: theme.accent }]}
-        onPress={handleInviteFriends}
-        scaleValue={0.9}
-        hapticIntensity={motion.haptic.selection}
-        accessibilityRole="button"
-        accessibilityLabel="Invite friends"
-      >
-        <Text style={styles.buttonIcon}>💌</Text>
-      </AnimatedPressable>
-
-      {/* Floating Action Button for Submit */}
-      <AnimatedPressable
-        style={[styles.fabButton, { backgroundColor: theme.primary }]}
-        onPress={() => setShowSubmitModal(true)}
-        scaleValue={0.9}
-        hapticIntensity={motion.haptic.selection}
-        accessibilityRole="button"
-        accessibilityLabel="Submit a hot take"
-      >
-        <Text style={styles.buttonIcon}>✏️</Text>
-      </AnimatedPressable>
 
       {/* Instructions Modal */}
       <InstructionsModal
@@ -1231,10 +1323,13 @@ const createStyles = (responsive: any, insets: any) => {
   },
   bottomButtonsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: responsive.spacing.xs, // Reduce spacing to move closer to instructions
-    gap: 20,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 360,
+    marginBottom: responsive.spacing.sm,
+    gap: responsive.spacing.sm,
   },
   voteCounterRow: {
     flexDirection: 'row',
@@ -1249,6 +1344,7 @@ const createStyles = (responsive: any, insets: any) => {
     borderRadius: roundControlSize / 2,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1.25,
     // Add shadow/elevation
     elevation: 4,
     shadowColor: '#000',
@@ -1259,14 +1355,24 @@ const createStyles = (responsive: any, insets: any) => {
     shadowOpacity: 0.15,
     shadowRadius: 3.84,
   },
+  ringedFooterButton: {
+    borderWidth: 1.75,
+    shadowOpacity: 0.24,
+    shadowRadius: 5.5,
+  },
+  strongRingedFooterButton: {
+    borderWidth: 2.25,
+    shadowOpacity: 0.3,
+    shadowRadius: 6.5,
+  },
+  coolFooterButton: {
+    borderWidth: 1.25,
+  },
   disabledControl: {
     opacity: 0.45,
   },
-  recentVotesButton: {
-    marginRight: 10,
-  },
   buttonIcon: {
-    fontSize: responsive.fontSize.large,
+    fontSize: responsive.fontSize.large + 1,
     fontWeight: 'bold',
   },
   voteCounter: {
@@ -1360,44 +1466,6 @@ const createStyles = (responsive: any, insets: any) => {
     fontSize: responsive.fontSize.small,
     textAlign: 'center',
     fontStyle: 'italic',
-  },
-  fabButton: {
-    position: 'absolute',
-    bottom: footerFabBottom,
-    right: responsive.spacing.lg,
-    width: roundControlSize,
-    height: roundControlSize,
-    borderRadius: roundControlSize / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    zIndex: 10, // Higher than footer (200)
-  },
-  inviteFabButton: {
-    position: 'absolute',
-    bottom: footerFabBottom,
-    left: responsive.spacing.lg,
-    width: roundControlSize,
-    height: roundControlSize,
-    borderRadius: roundControlSize / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    zIndex: 10, // Higher than footer (200)
   },
   fabText: {
     fontSize: responsive.fontSize.xlarge,
