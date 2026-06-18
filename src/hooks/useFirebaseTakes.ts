@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Take, TakeSubmission } from '../types/Take';
 import {
@@ -770,7 +771,11 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       
       // Auto-load more if getting low
       if (!viewingMySkips && feed.length < 10 && hasMore) {
-        loadMore(20).catch(console.error);
+        setTimeout(() => {
+          InteractionManager.runAfterInteractions(() => {
+            loadMore(20).catch(console.error);
+          });
+        }, 800);
       }
       
       return streakUpdate;
@@ -829,7 +834,11 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       
       // Auto-load more if getting low
       if (!viewingMySkips && feed.length < 10 && hasMore) {
-        loadMore(20).catch(console.error);
+        setTimeout(() => {
+          InteractionManager.runAfterInteractions(() => {
+            loadMore(20).catch(console.error);
+          });
+        }, 800);
       }
       
     } catch (err) {

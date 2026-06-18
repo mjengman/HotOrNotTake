@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  InteractionManager,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -152,6 +153,7 @@ export const HomeScreen: React.FC = () => {
   const changeVoteDeletePromisesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const leaderboardPrefetchStartedRef = useRef(false);
   const leaderboardPrefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notificationSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationPermissionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const identityTeaserShownRef = useRef(false);
   const lastIdentityTeaserRef = useRef<string | null>(null);
@@ -225,9 +227,19 @@ export const HomeScreen: React.FC = () => {
       return;
     }
 
-    syncDailyReminderNotifications(user.uid, nextStats).catch(error => {
-      console.warn('Unable to sync notification reminders:', error);
-    });
+    if (notificationSyncTimeoutRef.current) {
+      clearTimeout(notificationSyncTimeoutRef.current);
+    }
+
+    notificationSyncTimeoutRef.current = setTimeout(() => {
+      notificationSyncTimeoutRef.current = null;
+
+      InteractionManager.runAfterInteractions(() => {
+        syncDailyReminderNotifications(user.uid, nextStats).catch(error => {
+          console.warn('Unable to sync notification reminders:', error);
+        });
+      });
+    }, 1800);
   }, [authLoading, statsHydrated, statsLoading, user?.uid]);
 
   const requestNotificationsForCompletedQuest = React.useCallback(() => {
@@ -430,10 +442,12 @@ export const HomeScreen: React.FC = () => {
       }
 
       leaderboardPrefetchStartedRef.current = true;
-      prefetchLeaderboardCache().catch(error => {
-        console.warn('Unable to prefetch leaderboards:', error);
+      InteractionManager.runAfterInteractions(() => {
+        prefetchLeaderboardCache().catch(error => {
+          console.warn('Unable to prefetch leaderboards:', error);
+        });
       });
-    }, 3500);
+    }, 8500);
   }, [authLoading, user]);
 
   React.useEffect(() => {
@@ -441,6 +455,10 @@ export const HomeScreen: React.FC = () => {
       if (leaderboardPrefetchTimeoutRef.current) {
         clearTimeout(leaderboardPrefetchTimeoutRef.current);
         leaderboardPrefetchTimeoutRef.current = null;
+      }
+      if (notificationSyncTimeoutRef.current) {
+        clearTimeout(notificationSyncTimeoutRef.current);
+        notificationSyncTimeoutRef.current = null;
       }
       if (notificationPermissionTimeoutRef.current) {
         clearTimeout(notificationPermissionTimeoutRef.current);
@@ -766,10 +784,15 @@ export const HomeScreen: React.FC = () => {
         statsRef.current = nextStats;
         syncNotificationReminders(nextStats);
       }
-      // Reconcile with Firestore after the local footer update lands.
-      await refreshStats();
-      // Also refresh community stats
-      await refreshCommunityStats();
+      // Reconcile secondary stats after interactions so gameplay stays snappy.
+      setTimeout(() => {
+        InteractionManager.runAfterInteractions(() => {
+          refreshStats().catch(error => {
+            console.warn('Unable to refresh user stats after vote:', error);
+          });
+          refreshCommunityStats();
+        });
+      }, 650);
 
       if (updatedTakeForHistory) {
         const totalVotesAfterVote = Math.max(
@@ -812,8 +835,14 @@ export const HomeScreen: React.FC = () => {
       // Track completed card for ad service (called after skip)
       onCardComplete();
       scheduleLeaderboardPrefetch();
-      // Refresh stats in case there are other metrics tracked
-      await refreshStats();
+      // Refresh stats later so skip animation is never waiting on Firestore.
+      setTimeout(() => {
+        InteractionManager.runAfterInteractions(() => {
+          refreshStats().catch(error => {
+            console.warn('Unable to refresh user stats after skip:', error);
+          });
+        });
+      }, 650);
     } catch (error) {
       console.error('Error skipping take:', error);
       // Could show a toast notification here

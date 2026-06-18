@@ -148,6 +148,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const flippedSV = useSharedValue(0);
   const animatingSV = useSharedValue(0);
   const resultBaseSV = useSharedValue(0);
+  const gestureVoteSV = useSharedValue(0);
   
   // Safety gate for gestures - prevent interaction when no current card
   const hasCurrentSV = useSharedValue(0);
@@ -607,8 +608,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   const gestureHandler = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
     onStart: () => {
       if (isAnimating.value || !hasCurrentSV.value) return; // ignore new gestures mid-flight or no card
+      gestureVoteSV.value = 0;
       scale.value = withSpring(0.95);
-      runOnJS(vibrate)(motion.haptic.selection);
     },
     onActive: (event) => {
       if (isAnimating.value || !hasCurrentSV.value) return;
@@ -625,35 +626,32 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         const shouldSwipeDown = event.translationY > swipeDownThreshold;
         const shouldSwipeUp = event.translationY < -swipeUpThreshold;
         
-        // Update vote indicator
+        let nextVoteSignal = 0;
         if (shouldSwipeRight) {
-          runOnJS(jsSetVote)('hot');
+          nextVoteSignal = 1;
         } else if (shouldSwipeLeft) {
-          runOnJS(jsSetVote)('not');
+          nextVoteSignal = -1;
         } else if (shouldSwipeDown || shouldSwipeUp) {
-          runOnJS(jsSetVote)('skip');
-        } else {
-          runOnJS(jsSetVote)(null); // Clear vote when not at threshold
+          nextVoteSignal = 2;
         }
-        
-        // Horizontal swipe feedback
-        if ((shouldSwipeRight || shouldSwipeLeft) && Math.abs(event.translationX) > swipeThreshold && Math.abs(event.translationX) < swipeThreshold + 20) {
-          runOnJS(vibrate)(motion.haptic.medium);
-        }
-        
-        // Down swipe feedback
-        if (shouldSwipeDown && Math.abs(event.translationY) > swipeDownThreshold && Math.abs(event.translationY) < swipeDownThreshold + 30) {
-          runOnJS(vibrate)(motion.haptic.selection);
-        }
-        
-        // Up swipe feedback
-        if (shouldSwipeUp && Math.abs(event.translationY) > swipeUpThreshold && Math.abs(event.translationY) < swipeUpThreshold + 30) {
-          runOnJS(vibrate)(motion.haptic.selection);
+
+        if (gestureVoteSV.value !== nextVoteSignal) {
+          gestureVoteSV.value = nextVoteSignal;
+          if (nextVoteSignal === 1) {
+            runOnJS(jsSetVote)('hot');
+          } else if (nextVoteSignal === -1) {
+            runOnJS(jsSetVote)('not');
+          } else if (nextVoteSignal === 2) {
+            runOnJS(jsSetVote)('skip');
+          } else {
+            runOnJS(jsSetVote)(null);
+          }
         }
       }
     },
     onEnd: (event) => {
       if (isAnimating.value || !hasCurrentSV.value) return;
+      gestureVoteSV.value = 0;
       
       // If card is flipped (showing stats), a deliberate swipe continues to next.
       // Plain taps should remain available to the stats card controls.
