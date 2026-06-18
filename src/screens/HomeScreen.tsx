@@ -8,12 +8,15 @@ import {
   Image,
   BackHandler,
   Animated,
+  Easing,
   AppState,
   Platform,
   TouchableOpacity,
   Modal,
   TextInput,
   InteractionManager,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,8 +70,23 @@ const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
 type EngagementToast = { title: string; subtitle: string };
 type IdentityTeaser = { takeId: string; text: string };
 type SessionVoteHistoryEntry = { take: Take; vote: 'hot' | 'not' };
+type FooterControlButtonProps = {
+  children: React.ReactNode;
+  onPress: () => void;
+  disabled?: boolean;
+  ringColor: string;
+  strong?: boolean;
+  isDarkMode: boolean;
+  accessibilityLabel: string;
+  baseStyle: StyleProp<ViewStyle>;
+  ringedStyle: StyleProp<ViewStyle>;
+  strongRingedStyle: StyleProp<ViewStyle>;
+  disabledStyle: StyleProp<ViewStyle>;
+  style?: StyleProp<ViewStyle>;
+};
 
 const SESSION_VOTE_HISTORY_LIMIT = 10;
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 const formatCompactCount = (count: number) => {
   if (count >= 1000000) {
@@ -80,6 +98,164 @@ const formatCompactCount = (count: number) => {
   }
 
   return count.toLocaleString();
+};
+
+const getFooterControlFillColor = (ringColor: string) => {
+  if (ringColor.startsWith('rgba(')) {
+    return ringColor.replace(/,\s*[\d.]+\)$/, ', 0.36)');
+  }
+
+  if (ringColor.startsWith('rgb(')) {
+    return ringColor.replace('rgb(', 'rgba(').replace(/\)$/, ', 0.36)');
+  }
+
+  if (/^#[0-9a-f]{8}$/i.test(ringColor)) {
+    return `${ringColor.slice(0, 7)}5C`;
+  }
+
+  if (/^#[0-9a-f]{6}$/i.test(ringColor)) {
+    return `${ringColor}5C`;
+  }
+
+  return ringColor;
+};
+
+const FooterControlButton: React.FC<FooterControlButtonProps> = ({
+  children,
+  onPress,
+  disabled = false,
+  ringColor,
+  strong = false,
+  isDarkMode,
+  accessibilityLabel,
+  baseStyle,
+  ringedStyle,
+  strongRingedStyle,
+  disabledStyle,
+  style,
+}) => {
+  const fillAnim = useRef(new Animated.Value(0)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const pressAnim = useRef(new Animated.Value(1)).current;
+  const opacityAnim = useRef(new Animated.Value(1)).current;
+  const surfaceColor = isDarkMode ? colors.dark.surface : '#F0F0F1';
+
+  const flashFill = React.useCallback(() => {
+    fillAnim.stopAnimation();
+    fillAnim.setValue(1);
+    Animated.timing(fillAnim, {
+      toValue: 0,
+      duration: 170,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [fillAnim]);
+
+  const shake = React.useCallback(() => {
+    shakeAnim.stopAnimation();
+    shakeAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 1, duration: 45, useNativeDriver: false }),
+      Animated.timing(shakeAnim, { toValue: -1, duration: 65, useNativeDriver: false }),
+      Animated.timing(shakeAnim, { toValue: 1, duration: 65, useNativeDriver: false }),
+      Animated.timing(shakeAnim, { toValue: -0.65, duration: 55, useNativeDriver: false }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 55, useNativeDriver: false }),
+    ]).start();
+  }, [shakeAnim]);
+
+  const handlePressIn = React.useCallback(() => {
+    if (disabled) {
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(pressAnim, {
+        toValue: 0.9,
+        duration: 90,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0.82,
+        duration: 90,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [disabled, opacityAnim, pressAnim]);
+
+  const handlePressOut = React.useCallback(() => {
+    if (disabled) {
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(pressAnim, {
+        toValue: 1,
+        duration: 130,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 130,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [disabled, opacityAnim, pressAnim]);
+
+  const handlePress = React.useCallback(() => {
+    if (disabled) {
+      shake();
+      return;
+    }
+
+    flashFill();
+    onPress();
+  }, [disabled, flashFill, onPress, shake]);
+
+  const animatedStyle = {
+    backgroundColor: fillAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [surfaceColor, getFooterControlFillColor(ringColor)],
+    }),
+    opacity: opacityAnim,
+    transform: [
+      { scale: pressAnim },
+      {
+        translateX: shakeAnim.interpolate({
+          inputRange: [-1, 1],
+          outputRange: [-6, 6],
+        }),
+      },
+    ],
+  } as any;
+
+  return (
+    <AnimatedTouchableOpacity
+      style={[
+        baseStyle,
+        ringedStyle,
+        strong && strongRingedStyle,
+        disabled && disabledStyle,
+        {
+          borderColor: ringColor,
+          shadowColor: ringColor,
+        },
+        animatedStyle,
+        style,
+      ]}
+      onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={1}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+    >
+      {children}
+    </AnimatedTouchableOpacity>
+  );
 };
 
 const getChallengeProgressCopy = (challenge: {
@@ -1182,90 +1358,69 @@ export const HomeScreen: React.FC = () => {
         {/* Bottom Buttons Row */}
         <View style={styles.bottomButtonsRow}>
           {/* Voting Style Button */}
-          <AnimatedPressable
-            style={[
-              styles.bottomButton,
-              styles.ringedFooterButton,
-              styles.strongRingedFooterButton,
-              {
-                backgroundColor: theme.surface,
-                borderColor: theme.accent,
-                shadowColor: theme.accent,
-              },
-            ]}
+          <FooterControlButton
             onPress={openVotingStyle}
-            scaleValue={0.9}
-            hapticIntensity={motion.haptic.selection}
-            accessibilityRole="button"
+            ringColor={theme.accent}
+            strong
+            isDarkMode={isDarkMode}
             accessibilityLabel="Open my voting style"
+            baseStyle={styles.bottomButton}
+            ringedStyle={styles.ringedFooterButton}
+            strongRingedStyle={styles.strongRingedFooterButton}
+            disabledStyle={styles.disabledControl}
           >
             <Text style={styles.buttonIcon}>🧭</Text>
-          </AnimatedPressable>
+          </FooterControlButton>
 
           {/* Last Vote Button */}
-          <AnimatedPressable
-            style={[
-              styles.bottomButton,
-              styles.coolFooterButton,
-              !canRewind && styles.disabledControl,
-              isDarkMode
-                ? { backgroundColor: theme.surface, borderColor: 'rgba(116, 185, 255, 0.82)', shadowColor: '#74B9FF' }
-                : { backgroundColor: '#F0F0F1', borderColor: 'rgba(116, 185, 255, 0.72)', shadowColor: '#74B9FF' }
-            ]}
+          <FooterControlButton
             onPress={handleShowLastVote}
             disabled={!canRewind}
-            scaleValue={0.9}
-            hapticIntensity={motion.haptic.light}
-            accessibilityRole="button"
+            ringColor={isDarkMode ? 'rgba(116, 185, 255, 0.82)' : 'rgba(116, 185, 255, 0.72)'}
+            isDarkMode={isDarkMode}
+            style={styles.coolFooterButton}
             accessibilityLabel="Show previous result"
+            baseStyle={styles.bottomButton}
+            ringedStyle={styles.ringedFooterButton}
+            strongRingedStyle={styles.strongRingedFooterButton}
+            disabledStyle={styles.disabledControl}
           >
             <Text style={[styles.buttonIcon, isDarkMode && { color: theme.text }]}>↩️</Text>
-          </AnimatedPressable>
+          </FooterControlButton>
 
           {/* Skip Button */}
-          <AnimatedPressable
-            style={[
-              styles.bottomButton,
-              styles.ringedFooterButton,
-              !takes[0] && styles.disabledControl,
-              isDarkMode
-                ? { backgroundColor: theme.surface, borderColor: theme.accent + 'CC', shadowColor: theme.accent }
-                : { backgroundColor: '#F0F0F1', borderColor: theme.accent + 'AA', shadowColor: theme.accent }
-            ]}
+          <FooterControlButton
             onPress={() => {
               if (takes[0]) {
                 setSkipRequestToken(prev => prev + 1);
               }
             }}
             disabled={!takes[0]}
-            scaleValue={0.9}
-            hapticIntensity={motion.haptic.selection}
-            accessibilityRole="button"
+            ringColor={isDarkMode ? theme.accent + 'CC' : theme.accent + 'AA'}
+            isDarkMode={isDarkMode}
             accessibilityLabel="Skip this take"
+            baseStyle={styles.bottomButton}
+            ringedStyle={styles.ringedFooterButton}
+            strongRingedStyle={styles.strongRingedFooterButton}
+            disabledStyle={styles.disabledControl}
           >
             <Text style={[styles.buttonIcon, isDarkMode ? { color: theme.text } : { color: '#333' }]}>⏭️</Text>
-          </AnimatedPressable>
+          </FooterControlButton>
 
           {/* Submit Button */}
-          <AnimatedPressable
-            style={[
-              styles.bottomButton,
-              styles.ringedFooterButton,
-              styles.strongRingedFooterButton,
-              {
-                backgroundColor: theme.surface,
-                borderColor: theme.primary,
-                shadowColor: theme.primary,
-              },
-            ]}
+          <FooterControlButton
             onPress={() => setShowSubmitModal(true)}
-            scaleValue={0.9}
-            hapticIntensity={motion.haptic.selection}
-            accessibilityRole="button"
+            ringColor={theme.primary}
+            strong
+            isDarkMode={isDarkMode}
             accessibilityLabel="Submit a hot take"
+            baseStyle={styles.bottomButton}
+            ringedStyle={styles.ringedFooterButton}
+            strongRingedStyle={styles.strongRingedFooterButton}
+            disabledStyle={styles.disabledControl}
           >
             <Text style={styles.buttonIcon}>✏️</Text>
-          </AnimatedPressable>
+          </FooterControlButton>
         </View>
 
         {/* Vote Counter Row - showing personal and community totals */}
