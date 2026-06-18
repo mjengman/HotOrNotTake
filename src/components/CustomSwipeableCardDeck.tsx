@@ -1193,7 +1193,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
                 isFlipped={true}
                 animateResults={resultsRevealActive}
                 holdResultCountAtZero={!externalStatsCard}
-                onChangeVote={externalStatsCard ? handleChangeVote : undefined}
+                onChangeVote={onChangeVote ? handleChangeVote : undefined}
                 onVoteNow={onVoteNow}
                 identityTeaser={
                   !externalStatsCard && identityTeaser?.takeId === statsTake.id
