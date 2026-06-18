@@ -36,7 +36,10 @@
       "channel": "production",
       "autoIncrement": true,
       "ios": {
-        "image": "macos-sequoia-15.6-xcode-26.0"
+        "image": "macos-sequoia-15.6-xcode-26.0",
+        "cache": {
+          "disabled": true
+        }
       },
       "env": {
         "EAS_BUILD": "true",
