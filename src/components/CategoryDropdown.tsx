@@ -6,29 +6,30 @@ import {
   StyleSheet,
   Modal,
   ScrollView,
-  Dimensions,
   BackHandler,
 } from 'react-native';
-import { colors, dimensions } from '../constants';
-
-const { width } = Dimensions.get('window');
+import { colors, dimensions, motion } from '../constants';
+import { AnimatedPressable } from './transitions/AnimatedPressable';
 
 const CATEGORIES = [
   { value: 'all', label: '🎲 All Categories', emoji: '🎲' },
-  { value: 'food', label: '🍕 Food', emoji: '🍕' },
-  { value: 'work', label: '💼 Work', emoji: '💼' },
-  { value: 'pets', label: '🐕 Pets', emoji: '🐕' },
-  { value: 'technology', label: '📱 Technology', emoji: '📱' },
-  { value: 'life', label: '🌟 Life', emoji: '🌟' },
   { value: 'entertainment', label: '🎬 Entertainment', emoji: '🎬' },
   { value: 'environment', label: '🌱 Environment', emoji: '🌱' },
-  { value: 'wellness', label: '💪 Wellness', emoji: '💪' },
-  { value: 'society', label: '🏛️ Society', emoji: '🏛️' },
+  { value: 'food', label: '🍕 Food', emoji: '🍕' },
+  { value: 'life', label: '🌟 Life', emoji: '🌟' },
+  { value: 'pets', label: '🐕 Pets', emoji: '🐕' },
   { value: 'politics', label: '🗳️ Politics', emoji: '🗳️' },
-  { value: 'sports', label: '⚽ Sports', emoji: '⚽' },
-  { value: 'travel', label: '✈️ Travel', emoji: '✈️' },
   { value: 'relationships', label: '💕 Relationships', emoji: '💕' },
+  { value: 'society', label: '🏛️ Society', emoji: '🏛️' },
+  { value: 'sports', label: '⚽ Sports', emoji: '⚽' },
+  { value: 'technology', label: '📱 Technology', emoji: '📱' },
+  { value: 'travel', label: '✈️ Travel', emoji: '✈️' },
+  { value: 'wellness', label: '💪 Wellness', emoji: '💪' },
+  { value: 'work', label: '💼 Work', emoji: '💼' },
 ];
+
+const EMOJI_PREFIX_PATTERN = /^🎲 |^🍕 |^💼 |^🐕 |^📱 |^🌟 |^🎬 |^🌱 |^💪 |^🏛️ |^🗳️ |^⚽ |^✈️ |^💕 /;
+const getCategoryName = (label: string) => label.replace(EMOJI_PREFIX_PATTERN, '');
 
 interface CategoryDropdownProps {
   selectedCategory: string;
@@ -69,13 +70,16 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
+      <AnimatedPressable
         style={[styles.dropdown, { 
           backgroundColor: isDarkMode ? theme.surface : '#F0F0F1',
           borderColor: theme.border,
         }]}
         onPress={() => setIsOpen(true)}
-        activeOpacity={0.8}
+        scaleValue={0.98}
+        hapticIntensity={motion.haptic.light}
+        accessibilityRole="button"
+        accessibilityLabel={`Selected category: ${getCategoryName(selectedCategoryData.label)}`}
       >
         <Text 
           style={[styles.dropdownText, { color: theme.text }]}
@@ -83,10 +87,10 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
           adjustsFontSizeToFit
           minimumFontScale={0.85}
         >
-          {selectedCategoryData.emoji} {selectedCategoryData.label.replace(/^🎲 |^🍕 |^💼 |^🐕 |^📱 |^🌟 |^🎬 |^🌱 |^💪 |^🏛️ |^🗳️ |^⚽ |^✈️ |^💕 /, '')}
+          {selectedCategoryData.emoji} {getCategoryName(selectedCategoryData.label)}
         </Text>
         <Text style={[styles.dropdownArrow, { color: theme.textSecondary }]}>▼</Text>
-      </TouchableOpacity>
+      </AnimatedPressable>
 
       <Modal
         visible={isOpen}
@@ -132,7 +136,7 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
                     { color: theme.text },
                     selectedCategory === category.value && { fontWeight: 'bold' }
                   ]}>
-                    {category.label.replace(/^🎲 |^🍕 |^💼 |^🐕 |^📱 |^🌟 |^🎬 |^🌱 |^💪 |^🏛️ |^🗳️ |^⚽ |^✈️ |^💕 /, '')}
+                    {getCategoryName(category.label)}
                   </Text>
                   {selectedCategory === category.value && (
                     <Text style={[styles.checkmark, { color: theme.primary }]}>✓</Text>
@@ -207,7 +211,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   closeButton: {
-    padding: dimensions.spacing.xs,
+    minWidth: motion.touchTarget.minimum,
+    minHeight: motion.touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   closeButtonText: {
     fontSize: dimensions.fontSize.large,
@@ -222,6 +229,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
     borderBottomWidth: 0.5,
+    minHeight: motion.touchTarget.comfortable,
   },
   categoryEmoji: {
     fontSize: dimensions.fontSize.large,

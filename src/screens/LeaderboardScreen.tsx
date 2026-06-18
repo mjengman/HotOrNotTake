@@ -8,7 +8,9 @@ import {
   RefreshControl,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import { colors, dimensions } from '../constants';
+import { colors, dimensions, motion } from '../constants';
+import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
+import { LeaderboardSkeleton } from '../components/loading/LeaderboardSkeleton';
 import { Take } from '../types';
 import {
   getHottestTakesByCategory,
@@ -39,6 +41,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const [hottestTakes, setHottestTakes] = useState<Record<string, Take[]>>({});
   const [nottestTakes, setNottestTakes] = useState<Record<string, Take[]>>({});
   const [skippedTakes, setSkippedTakes] = useState<Record<string, { take: Take; skipCount: number }[]>>({});
+  const [skippedLoadFailed, setSkippedLoadFailed] = useState(false);
   
   // Hidden dev feature - tap counter for database stats
   const [hottestTapCount, setHottestTapCount] = useState(0);
@@ -57,15 +60,32 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const loadLeaderboards = async () => {
     try {
       setLoading(true);
-      const [hottest, nottest, skipped] = await Promise.all([
+      const [hottestResult, nottestResult, skippedResult] = await Promise.allSettled([
         getHottestTakesByCategory(),
         getNottestTakesByCategory(),
         getMostSkippedTakesByCategory(),
       ]);
-      
-      setHottestTakes(hottest);
-      setNottestTakes(nottest);
-      setSkippedTakes(skipped);
+
+      if (hottestResult.status === 'fulfilled') {
+        setHottestTakes(hottestResult.value);
+      } else {
+        console.error('Error loading hottest leaderboard:', hottestResult.reason);
+      }
+
+      if (nottestResult.status === 'fulfilled') {
+        setNottestTakes(nottestResult.value);
+      } else {
+        console.error('Error loading nottest leaderboard:', nottestResult.reason);
+      }
+
+      if (skippedResult.status === 'fulfilled') {
+        setSkippedTakes(skippedResult.value);
+        setSkippedLoadFailed(false);
+      } else {
+        console.warn('Skipped leaderboard unavailable:', skippedResult.reason);
+        setSkippedTakes({});
+        setSkippedLoadFailed(true);
+      }
     } catch (error) {
       console.error('Error loading leaderboards:', error);
     } finally {
@@ -74,15 +94,11 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   };
 
   const onRefresh = async () => {
-    console.log(`🔄 Pull-to-refresh triggered! isAtTop: ${isAtTop}`);
-    
     // Only refresh if we're at the top
     if (!isAtTop) {
-      console.log(`❌ Refresh blocked - not at top`);
       return;
     }
     
-    console.log(`✅ Refresh allowed - loading leaderboards...`);
     setRefreshing(true);
     await loadLeaderboards();
     setRefreshing(false);
@@ -95,7 +111,6 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     
     // Only update if the state actually changed to avoid unnecessary re-renders
     if (newIsAtTop !== isAtTop) {
-      console.log(`📜 Scroll position: ${contentOffset.y.toFixed(1)}px, isAtTop: ${newIsAtTop}, RefreshControl: ${newIsAtTop ? 'ENABLED' : 'DISABLED'}`);
       setIsAtTop(newIsAtTop);
     }
   };
@@ -240,12 +255,16 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.closeButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
           onPress={onClose}
+          scaleValue={0.9}
+          hapticIntensity={motion.haptic.light}
+          accessibilityRole="button"
+          accessibilityLabel="Close leaderboards"
         >
           <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
         
         <Text style={[styles.title, { color: theme.text }]}>
           🏆 Leaderboards
@@ -257,7 +276,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       {/* Tabs */}
       <View style={styles.tabsContainer}>
         {tabs.map((tab) => (
-          <TouchableOpacity
+          <AnimatedPressable
             key={tab.key}
             style={[
               styles.tab,
@@ -270,6 +289,10 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
               tab.key === 'skipped' ? handleSkippedTabPress :
               () => setActiveTab(tab.key)
             }
+            scaleValue={0.97}
+            hapticIntensity={motion.haptic.light}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === tab.key }}
           >
             <Text style={styles.tabIcon}>{tab.icon}</Text>
             <Text
@@ -285,7 +308,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             >
               {tab.label}
             </Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         ))}
       </View>
 
@@ -304,10 +327,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         scrollEnabled={scrollEnabled}
       >
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={[styles.loadingText, { color: theme.text }]}>
-              Loading leaderboards...
-            </Text>
+          <View style={styles.contentContainer}>
+            <LeaderboardSkeleton isDarkMode={isDarkMode} />
           </View>
         ) : (
           <View style={styles.contentContainer}>
@@ -354,7 +375,11 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 <Text style={[styles.emptyDescription, { color: theme.textSecondary }]}>
                   {activeTab === 'hottest' && 'No takes have received hot votes yet.'}
                   {activeTab === 'nottest' && 'No takes have received not votes yet.'}
-                  {activeTab === 'skipped' && 'No takes have been skipped yet.'}
+                  {activeTab === 'skipped' && (
+                    skippedLoadFailed
+                      ? 'Skipped rankings are unavailable right now.'
+                      : 'No takes have been skipped yet.'
+                  )}
                 </Text>
               </View>
             ) : (
@@ -381,9 +406,9 @@ const styles = StyleSheet.create({
     paddingVertical: dimensions.spacing.md,
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: motion.touchTarget.minimum,
+    height: motion.touchTarget.minimum,
+    borderRadius: motion.touchTarget.minimum / 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -396,7 +421,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   placeholder: {
-    width: 36,
+    width: motion.touchTarget.minimum,
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -410,6 +435,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: dimensions.spacing.md,
+    minHeight: motion.touchTarget.minimum,
     borderRadius: 12,
     gap: dimensions.spacing.xs,
   },
@@ -498,16 +524,6 @@ const styles = StyleSheet.create({
   statsText: {
     fontSize: dimensions.fontSize.small,
     fontWeight: 'bold',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: dimensions.spacing.xxl,
-  },
-  loadingText: {
-    fontSize: dimensions.fontSize.large,
-    fontWeight: '500',
   },
   emptyContainer: {
     flex: 1,

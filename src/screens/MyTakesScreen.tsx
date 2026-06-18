@@ -12,7 +12,8 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { useAuth } from '../hooks';
 import { useResponsive } from '../hooks/useResponsive';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, dimensions } from '../constants';
+import { colors, dimensions, motion } from '../constants';
+import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { Take } from '../types';
 import { getUserSubmittedTakes, deleteTake } from '../services/takeService';
 
@@ -154,13 +155,16 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
             {take.submittedAt.toLocaleDateString()}
           </Text>
         </View>
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.deleteButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
           onPress={() => handleDeleteTake(take)}
-          activeOpacity={0.7}
+          scaleValue={0.92}
+          hapticIntensity={motion.haptic.selection}
+          accessibilityRole="button"
+          accessibilityLabel="Delete take"
         >
           <Text style={styles.deleteButtonText}>🗑️</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       {/* Tappable Content Area - only for approved takes */}
@@ -251,12 +255,16 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.closeButton, { backgroundColor: isDarkMode ? theme.surface : '#F0F0F1' }]}
           onPress={onClose}
+          scaleValue={0.9}
+          hapticIntensity={motion.haptic.light}
+          accessibilityRole="button"
+          accessibilityLabel="Close my takes"
         >
           <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
         
         <Text style={[styles.title, { color: theme.text }]}>
           My Takes
@@ -321,19 +329,26 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
       </ScrollView>
 
       {/* Floating Action Button */}
-      <TouchableOpacity
+      <AnimatedPressable
         style={[styles.fabButton, { backgroundColor: theme.primary }]}
         onPress={onOpenSubmit}
-        activeOpacity={0.8}
+        scaleValue={0.9}
+        hapticIntensity={motion.haptic.selection}
+        accessibilityRole="button"
+        accessibilityLabel="Submit another hot take"
       >
         <Text style={styles.fabText}>✏️</Text>
-      </TouchableOpacity>
+      </AnimatedPressable>
     </SafeAreaView>
   );
 };
 
 // Create responsive styles function
-const createStyles = (responsive: any, insets: any) => StyleSheet.create({
+const createStyles = (responsive: any, insets: any) => {
+  const controlSize = Math.max(motion.touchTarget.comfortable, responsive.iconSize.xlarge);
+  const fabBottom = Math.max(144, responsive.spacing.xxl * 3 + insets.bottom);
+
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -345,9 +360,9 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     paddingVertical: dimensions.spacing.md,
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: motion.touchTarget.minimum,
+    height: motion.touchTarget.minimum,
+    borderRadius: motion.touchTarget.minimum / 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -360,7 +375,7 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     fontWeight: 'bold',
   },
   placeholder: {
-    width: 36,
+    width: motion.touchTarget.minimum,
   },
   summaryContainer: {
     marginHorizontal: dimensions.spacing.lg,
@@ -428,9 +443,9 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     fontWeight: '500',
   },
   deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: motion.touchTarget.minimum,
+    height: motion.touchTarget.minimum,
+    borderRadius: motion.touchTarget.minimum / 2,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 3,
@@ -530,11 +545,11 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
   },
   fabButton: {
     position: 'absolute',
-    bottom: 160, // Keep original correct position
+    bottom: fabBottom,
     right: responsive.spacing.lg,
-    width: 45, // Match invite button size
-    height: 45, // Match invite button size
-    borderRadius: 40, // Match invite button border radius
+    width: controlSize,
+    height: controlSize,
+    borderRadius: controlSize / 2,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4, // Match invite button elevation
@@ -550,4 +565,5 @@ const createStyles = (responsive: any, insets: any) => StyleSheet.create({
     fontSize: responsive.fontSize.large,
     fontWeight: 'bold',
   },
-});
+  });
+};

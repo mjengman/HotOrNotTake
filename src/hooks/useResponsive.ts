@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Dimensions } from 'react-native';
-import { useSafeAreaInsets, EdgeInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BASE_DIMENSIONS } from '../constants/dimensions';
 import {
   getSmallestWidth,
@@ -96,18 +96,6 @@ export const useResponsive = (): ResponsiveDimensions => {
   const profile = getDeviceProfile(sw);
   const multipliers = getMultipliers(profile);
   const heightAdjustments = getHeightAdjustments(sh);
-  
-  // Log telemetry once per boot for debugging
-  useEffect(() => {
-    console.log('📱 Device Profile Telemetry:', {
-      sw,
-      sh,
-      profile,
-      screenSize: `${dimensions.width}x${dimensions.height}`,
-      // Add device model if expo-device is available
-      // deviceModel: Device?.modelName,
-    });
-  }, []); // Only on mount
   
   // Memoize scaled dimensions to avoid recalculation on every render
   const scaledDimensions = useMemo((): ResponsiveDimensions => {
@@ -225,6 +213,7 @@ export const useResponsive = (): ResponsiveDimensions => {
  */
 export const useResponsiveValue = () => {
   const responsive = useResponsive();
+  const insets = useSafeAreaInsets();
   
   return {
     ...responsive,
@@ -233,7 +222,7 @@ export const useResponsiveValue = () => {
     scaleFont: (size: number) => scaleTypography(size, responsive.profile),
     scaleSpace: (size: number) => scaleSpacing(size, responsive.profile),
     scaleIcon: (size: number) => scaleIcon(size, responsive.profile),
-    scaleHeader: (size: number) => scaleHeader(size, responsive.profile, responsive.screen.availableWidth, useSafeAreaInsets()),
+    scaleHeader: (size: number) => scaleHeader(size, responsive.profile, responsive.screen.availableWidth, insets),
     scaleContent: (size: number) => scaleContent(size, responsive.profile, responsive.screen.availableWidth),
   };
 };

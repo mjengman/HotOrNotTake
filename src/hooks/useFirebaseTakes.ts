@@ -15,14 +15,16 @@ import {
 import { 
   incrementUserSubmissionCount,
   incrementUserVoteCount,
+  updateUserVotingStreak,
 } from '../services/userService';
 import { useAuth } from './useAuth';
+import { StreakUpdateResult } from '../types/User';
 
 interface UseFirebaseTakesResult {
   takes: Take[];
   loading: boolean;
   error: string | null;
-  submitVote: (takeId: string, vote: 'hot' | 'not') => Promise<void>;
+  submitVote: (takeId: string, vote: 'hot' | 'not') => Promise<StreakUpdateResult | null>;
   skipTake: (takeId: string) => Promise<void>;
   submitNewTake: (takeData: TakeSubmission) => Promise<void>;
   getUserVoteForTake: (takeId: string) => Promise<'hot' | 'not' | null>;
@@ -43,7 +45,8 @@ const categoryStateCache = new Map<string, {
 }>();
 
 export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFirebaseTakesResult => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const userId = user?.uid;
   const { category = 'all' } = options;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +58,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const inFlightVotesRef = useRef<Set<string>>(new Set());
   const generationInFlightRef = useRef(false);
   const generationTriggeredForRef = useRef<string | null>(null);
+  const initialLoadRequestRef = useRef(0);
 
   // Stable category variety algorithm - freezes prefix to prevent reshuffling
   const ensureCategoryVariety = useCallback((takesArray: Take[], freezePrefixCount: number = 0): Take[] => {
@@ -108,34 +112,23 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     return result;
   }, [category]);
 
-  // Filtering logic is now inlined in effects to prevent circular dependencies
-
-  // Load user's interaction history (only voted, not skipped)
-  useEffect(() => {
-    const loadUserInteractions = async () => {
-      if (!user) {
-        setInteractedTakeIds([]);
-        return;
-      }
-
-      try {
-        // Only get voted takes, not skipped ones
-        // This allows users to see skipped takes again
-        const { voted } = await getUserVotedAndSkippedTakeIds(user.uid);
-        setInteractedTakeIds(voted);
-        console.log(`📊 User has voted on ${voted.length} takes`);
-      } catch (err) {
-        console.error('Error loading user interactions:', err);
-        // Don't set error for this, just continue with empty array
-        setInteractedTakeIds([]);
-      }
-    };
-
-    loadUserInteractions();
-  }, [user]);
-
   // Reset feed when category or user changes and load initial content
   useEffect(() => {
+    const requestId = ++initialLoadRequestRef.current;
+    let isActive = true;
+    const isCurrentRequest = () => isActive && initialLoadRequestRef.current === requestId;
+
+    if (authLoading || !userId) {
+      setFeed([]);
+      setHasMore(true);
+      setError(null);
+      setLoading(true);
+      setInteractedTakeIds([]);
+      return () => {
+        isActive = false;
+      };
+    }
+
     const initializeFeed = async () => {
       setFeed([]);
       setHasMore(true);
@@ -144,14 +137,13 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setLoading(true);
 
       try {
-        // Wait for fresh interacted IDs if user exists
-        let freshInteractedIds = new Set<string>();
-        if (user) {
-          const { voted } = await getUserVotedAndSkippedTakeIds(user.uid);
-          freshInteractedIds = new Set(voted);
-          setInteractedTakeIds(voted); // Sync state
-          console.log(`🔄 Refreshed user interactions: ${voted.length} voted takes`);
+        const { voted } = await getUserVotedAndSkippedTakeIds(userId);
+        if (!isCurrentRequest()) {
+          return;
         }
+        const freshInteractedIds = new Set(voted);
+        setInteractedTakeIds(voted);
+        console.log(`🔄 Refreshed user interactions: ${voted.length} voted takes`);
 
         const { items, gotAny } = await fetchMoreTakesFilled({
           category,
@@ -159,6 +151,9 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           pageSize: 50,
           interactedIds: freshInteractedIds,
         });
+        if (!isCurrentRequest()) {
+          return;
+        }
         
         // Double-check filtering: ensure no voted takes made it through
         const doubleFiltered = items.filter(take => {
@@ -175,18 +170,24 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         setHasMore(gotAny && ordered.length > 0);
         console.log(`✅ Initial feed loaded: ${doubleFiltered.length} takes (filtered from ${items.length}), hasMore: ${gotAny}`);
       } catch (err) {
+        if (!isCurrentRequest()) {
+          return;
+        }
         setError(err instanceof Error ? err.message : 'Failed to load takes');
         console.error('Error initializing feed:', err);
       } finally {
-        setLoading(false);
+        if (isCurrentRequest()) {
+          setLoading(false);
+        }
       }
     };
 
-    // Initialize when we have user data (or confirmed no user)
-    if (user !== undefined) {
-      initializeFeed();
-    }
-  }, [category, user, ensureCategoryVariety]);
+    initializeFeed();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authLoading, category, userId, ensureCategoryVariety]);
 
   // Load more takes function
   const loadMore = useCallback(async (
@@ -194,7 +195,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     force: boolean = false,
     background: boolean = false
   ) => {
-    if ((!force && !hasMore) || loading) return;
+    if (!userId || (!force && !hasMore) || loading) return;
 
     try {
       if (!background) {
@@ -241,17 +242,17 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         setLoading(false);
       }
     }
-  }, [category, feed, hasMore, loading, interactedTakeIds, ensureCategoryVariety]);
+  }, [category, feed, hasMore, loading, interactedTakeIds, ensureCategoryVariety, userId]);
 
   // Return feed directly - variety is applied once during load, not on every render
   const takes = feed;
 
   useEffect(() => {
-    if (!user || loading) {
+    if (!userId || loading) {
       return;
     }
 
-    const generationKey = `${user.uid}:${category}`;
+    const generationKey = `${userId}:${category}`;
     if (takes.length > 3) {
       if (generationTriggeredForRef.current === generationKey) {
         generationTriggeredForRef.current = null;
@@ -284,21 +285,21 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       .finally(() => {
         generationInFlightRef.current = false;
       });
-  }, [category, loadMore, loading, takes.length, user]);
+  }, [category, loadMore, loading, takes.length, userId]);
 
   // Submit a vote
   const handleSubmitVote = useCallback(async (
     takeId: string,
     vote: 'hot' | 'not'
-  ): Promise<void> => {
-    if (!user) {
+  ): Promise<StreakUpdateResult | null> => {
+    if (!userId) {
       throw new Error('User must be signed in to vote');
     }
 
     // Atomic guard against concurrent duplicate submits
     if (inFlightVotesRef.current.has(takeId)) {
       console.log('⚠️ Vote already in progress for take:', takeId);
-      return; // Silent return, don't throw
+      return null; // Silent return, don't throw
     }
 
     try {
@@ -308,7 +309,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         // Silently return instead of throwing to prevent crashes
         // Remove from feed if somehow still there
         setFeed(prev => prev.filter(take => take.id !== takeId));
-        return;
+        return null;
       }
 
       // Mark as in-flight
@@ -327,10 +328,17 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       });
       
       // Submit the vote to Firebase
-      await submitVote(takeId, user.uid, vote);
+      await submitVote(takeId, userId, vote);
       
       // Update user's vote count
-      await incrementUserVoteCount(user.uid);
+      await incrementUserVoteCount(userId);
+
+      let streakUpdate: StreakUpdateResult | null = null;
+      try {
+        streakUpdate = await updateUserVotingStreak(userId);
+      } catch (streakError) {
+        console.warn('Voting streak update failed:', streakError);
+      }
       
       // Auto-load more if getting low
       if (feed.length < 10 && hasMore) {
@@ -338,20 +346,22 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       }
       
       console.log(`🗳️ Voted ${vote} on take ${takeId}`);
+      return streakUpdate;
     } catch (err) {
       // Rollback on error
       setInteractedTakeIds(prev => prev.filter(id => id !== takeId));
       console.error('Vote error, but handled gracefully:', err);
       // Don't throw - just log to prevent crashes
+      return null;
     } finally {
       // Always clear in-flight flag
       inFlightVotesRef.current.delete(takeId);
     }
-  }, [user, feed.length, hasMore, loadMore]);
+  }, [userId, feed.length, hasMore, loadMore, interactedTakeIds]);
 
   // Skip a take
   const handleSkipTake = useCallback(async (takeId: string): Promise<void> => {
-    if (!user) {
+    if (!userId) {
       throw new Error('User must be signed in to skip takes');
     }
 
@@ -360,7 +370,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setFeed(prev => prev.filter(take => take.id !== takeId));
       
       // Record the skip in Firebase
-      await skipTake(takeId, user.uid);
+      await skipTake(takeId, userId);
       
       // Auto-load more if getting low
       if (feed.length < 10 && hasMore) {
@@ -372,22 +382,22 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       console.error('❌ Skip failed in hook:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to skip take');
     }
-  }, [user, feed.length, hasMore, loadMore]);
+  }, [userId, feed.length, hasMore, loadMore]);
 
   // Submit a new take
   const handleSubmitNewTake = useCallback(async (
     takeData: TakeSubmission
   ): Promise<void> => {
-    if (!user) {
+    if (!userId) {
       throw new Error('User must be signed in to submit takes');
     }
 
     try {
       // Submit the take through the server moderation function
-      const takeId = await submitTake(takeData, user.uid);
+      const takeId = await submitTake(takeData, userId);
       
       // Update user's submission count
-      await incrementUserSubmissionCount(user.uid, takeId);
+      await incrementUserSubmissionCount(userId, takeId);
       
       // Approved takes are live immediately; moderation failures are queued
       // as pending and remain visible only to the submitting user.
@@ -404,27 +414,35 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         throw new Error(errorMessage);
       }
     }
-  }, [user]);
+  }, [userId]);
 
   // Get user's vote for a specific take
   const handleGetUserVoteForTake = useCallback(async (
     takeId: string
   ): Promise<'hot' | 'not' | null> => {
-    if (!user) {
+    if (!userId) {
       return null;
     }
 
     try {
-      const vote = await getUserVoteForTake(takeId, user.uid);
+      const vote = await getUserVoteForTake(takeId, userId);
       return vote?.vote || null;
     } catch (err) {
       console.error('Error getting user vote:', err);
       return null;
     }
-  }, [user]);
+  }, [userId]);
 
   // Refresh takes manually
   const refreshTakes = useCallback(async (): Promise<void> => {
+    if (!userId) {
+      setFeed([]);
+      setHasMore(true);
+      setLoading(true);
+      setError(null);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -454,7 +472,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     } finally {
       setLoading(false);
     }
-  }, [category, interactedTakeIds]);
+  }, [category, interactedTakeIds, ensureCategoryVariety, userId]);
 
   // Prepend a take to the front of the deck (used for vote changes)
   const prependTake = useCallback((take: Take) => {

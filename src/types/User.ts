@@ -7,6 +7,9 @@ export interface User {
   joinedAt: Date;
   submittedTakes: string[]; // Array of take IDs
   votingStreak: number;
+  longestVotingStreak: number;
+  totalStreakDays: number;
+  lastStreakDate?: string;
   lastActiveAt: Date;
 }
 
@@ -16,8 +19,21 @@ export interface UserStats {
   notVotesGiven: number;
   takesSubmitted: number;
   votingStreak: number;
+  longestVotingStreak: number;
+  totalStreakDays: number;
+  lastStreakDate?: string;
+  streakUpdatedToday: boolean;
   favoriteCategories: string[];
   joinedAt: Date;
+}
+
+export interface StreakUpdateResult {
+  currentStreak: number;
+  longestVotingStreak: number;
+  totalStreakDays: number;
+  lastStreakDate: string;
+  didUpdateToday: boolean;
+  milestoneReached?: number;
 }
 
 // Firestore data transfer object for user
@@ -28,5 +44,8 @@ export interface UserFirestore {
   joinedAt: Date;
   submittedTakes: string[];
   votingStreak: number;
+  longestVotingStreak: number;
+  totalStreakDays: number;
+  lastStreakDate?: string;
   lastActiveAt: Date;
 }

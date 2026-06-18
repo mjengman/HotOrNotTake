@@ -313,7 +313,13 @@ const normalizeGeneratedTake = (value: unknown): string | null => {
     .replace(/^hot take:\s*/i, '')
     .trim();
 
-  return withoutPrefix.length ? withoutPrefix : null;
+  const plainPunctuation = withoutPrefix
+    .replace(/\s*;\s*([a-z])/g, (_match, letter: string) => `. ${letter.toUpperCase()}`)
+    .replace(/\s*;\s*/g, '. ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return plainPunctuation.length ? plainPunctuation : null;
 };
 
 const parseGeneratedTakes = (data: OpenAIChatCompletionResponse): string[] => {
@@ -371,7 +377,7 @@ const generateTakeCandidates = async (category: Category): Promise<string[]> => 
         {
           role: 'system',
           content:
-            'You write short, human-sounding debate prompts for a swipe voting app. Return only JSON that matches the schema.',
+            'You write short, human-sounding debate prompts for a swipe voting app. Use plain, spoken punctuation and never use semicolons. Return only JSON that matches the schema.',
         },
         {
           role: 'user',
@@ -379,7 +385,7 @@ const generateTakeCandidates = async (category: Category): Promise<string[]> => 
             `Generate ${GENERATED_TAKE_COUNT} fresh hot-or-not takes for the "${category}" category. ` +
             `Category scope: ${categoryGenerationGuidance[category]} ` +
             'Each take must be opinionated, specific, debatable, and feel like something a real person would post. ' +
-            'Use casual, direct phrasing with simple punctuation; avoid semicolons unless they are truly necessary. ' +
+            'Use casual, direct phrasing with simple punctuation. Do not use semicolons at all; prefer short sentences, commas, or dashes. ' +
             'Avoid generic filler, slurs, explicit sexual content, threats, medical advice, legal advice, hashtags, links, questions, and "hot take" prefixes. ' +
             `Keep every take between ${MIN_TAKE_LENGTH} and ${MAX_TAKE_LENGTH} characters.`,
         },

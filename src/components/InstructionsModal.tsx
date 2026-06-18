@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
-  Dimensions,
   SafeAreaView,
   BackHandler,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-// Gesture handling removed for simplicity - using button navigation only
-import { ScrollView } from 'react-native';
 import { colors } from '../constants';
 
 interface InstructionsModalProps {
@@ -20,42 +21,23 @@ interface InstructionsModalProps {
   isDarkMode?: boolean;
 }
 
-// Swipe functionality removed - using button navigation only
-
 export const InstructionsModal: React.FC<InstructionsModalProps> = ({
   visible,
   onClose,
   isDarkMode = false,
 }) => {
   const [currentPage, setCurrentPage] = useState(0);
+  const pagerRef = useRef<ScrollView | null>(null);
+  const { width: screenWidth } = useWindowDimensions();
   const theme = isDarkMode ? colors.dark : colors.light;
 
   // Reset to first page when modal closes
   useEffect(() => {
     if (!visible) {
       setCurrentPage(0);
+      pagerRef.current?.scrollTo({ x: 0, animated: false });
     }
   }, [visible]);
-
-  // Handle back button when instructions modal is open
-  useEffect(() => {
-    if (!visible) return;
-
-    const backAction = () => {
-      if (currentPage > 0) {
-        // Go back to previous page
-        setCurrentPage(currentPage - 1);
-        return true; // Prevent default back behavior
-      } else {
-        // On first page, close the modal
-        onClose();
-        return true; // Prevent default back behavior
-      }
-    };
-
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-    return () => backHandler.remove();
-  }, [visible, currentPage, onClose]);
 
   const pages = [
     {
@@ -258,9 +240,45 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
     },
   ];
 
+  const goToPage = useCallback((page: number) => {
+    const nextPage = Math.max(0, Math.min(page, pages.length - 1));
+    setCurrentPage(nextPage);
+    pagerRef.current?.scrollTo({
+      x: nextPage * screenWidth,
+      animated: true,
+    });
+  }, [pages.length, screenWidth]);
+
+  useEffect(() => {
+    if (visible) {
+      pagerRef.current?.scrollTo({
+        x: currentPage * screenWidth,
+        animated: false,
+      });
+    }
+  }, [screenWidth, visible]);
+
+  // Handle back button when instructions modal is open
+  useEffect(() => {
+    if (!visible) return;
+
+    const backAction = () => {
+      if (currentPage > 0) {
+        goToPage(currentPage - 1);
+        return true; // Prevent default back behavior
+      }
+
+      onClose();
+      return true; // Prevent default back behavior
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [visible, currentPage, goToPage, onClose]);
+
   const handleNext = () => {
     if (currentPage < pages.length - 1) {
-      setCurrentPage(currentPage + 1);
+      goToPage(currentPage + 1);
     } else {
       onClose();
     }
@@ -268,11 +286,14 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
 
   const handlePrevious = () => {
     if (currentPage > 0) {
-      setCurrentPage(currentPage - 1);
+      goToPage(currentPage - 1);
     }
   };
 
-  // Gesture handling removed - using simple button navigation
+  const handlePageSettled = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const page = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
+    setCurrentPage(Math.max(0, Math.min(page, pages.length - 1)));
+  };
 
   return (
     <Modal
@@ -285,22 +306,39 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
           <View style={styles.header} />
 
           <ScrollView 
-            contentContainerStyle={styles.content}
-            showsVerticalScrollIndicator={false}
+            ref={pagerRef}
+            horizontal
+            pagingEnabled
+            directionalLockEnabled
+            decelerationRate="fast"
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handlePageSettled}
+            scrollEventThrottle={16}
+            style={styles.pager}
           >
+            {pages.map((page) => (
+              <ScrollView
+                key={page.title}
+                nestedScrollEnabled
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+                style={{ width: screenWidth }}
+              >
                 <LinearGradient
                   colors={['#FF6B6B', '#FF8B8B']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.titleContainer}
                 >
-                  <Text style={styles.pageTitle}>{pages[currentPage].title}</Text>
+                  <Text style={styles.pageTitle}>{page.title}</Text>
                 </LinearGradient>
 
                 <View style={styles.pageContent}>
-                  {pages[currentPage].content}
+                  {page.content}
                 </View>
               </ScrollView>
+            ))}
+          </ScrollView>
 
         <View style={styles.footer}>
           <View style={styles.pagination}>
@@ -354,6 +392,9 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingVertical: 10,
+  },
+  pager: {
+    flex: 1,
   },
   content: {
     paddingHorizontal: 20,

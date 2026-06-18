@@ -6,7 +6,18 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "development",
+        "EAS_BUILD": "true",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyB0mxVn3UsaErbWb1FIRuXJaTQpnPwpZRM",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "hot-or-not-takes.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "hot-or-not-takes",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "hot-or-not-takes.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "615228361693",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:615228361693:web:05191a6be696b69aaf0434",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-SPRTL4318L"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -22,6 +33,7 @@
       }
     },
     "production": {
+      "channel": "production",
       "autoIncrement": true,
       "ios": {
         "image": "macos-sequoia-15.6-xcode-26.0"

@@ -8,7 +8,7 @@ Hot or Not Takes is live in production on both mobile stores.
 
 - Google Play package: `com.anonymous.HotOrNotTakes`
 - Apple bundle identifier: `com.hotornottakes.app`
-- Current app version in Expo config: `1.0.6`
+- Current app version in Expo config: `1.0.7`
 - Firebase project: `hot-or-not-takes`
 - EAS project ID: `7d390f1c-4d9b-4414-a359-2d8fd3f3ed43`
 
@@ -24,6 +24,8 @@ Do not rename the Android package. Google Play continuity depends on `com.anonym
 - EAS Build and EAS Updates
 
 The repo has checked-in `ios/` and `android/` folders. Because this is not a pure CNG project, native config in `app.config.js` does not automatically update existing native projects. When changing native app identity, ads IDs, permissions, splash/icon, updates, or build settings, verify the matching native files too.
+
+As of the 1.0.7 Android policy-fix release, the checked-in iOS native project still has `MARKETING_VERSION = 1.0.6`; EAS iOS builds use the native version because `ios/` is checked in. Update the native iOS version deliberately when the next App Store marketing version should change.
 
 ## App Shape
 

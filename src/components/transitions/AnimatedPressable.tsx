@@ -9,8 +9,8 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  runOnJS,
 } from 'react-native-reanimated';
+import { motion } from '../../constants';
 
 interface AnimatedPressableProps extends TouchableOpacityProps {
   children: React.ReactNode;
@@ -32,8 +32,8 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
   onPressOut,
   scaleValue = 0.95,
   hapticFeedback = true,
-  hapticIntensity = 10,
-  springConfig = { damping: 15, stiffness: 300 },
+  hapticIntensity = motion.haptic.selection,
+  springConfig = motion.spring.press,
   style,
   disabled = false,
   ...props
@@ -44,10 +44,10 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
   const handlePressIn = (event: any) => {
     if (!disabled) {
       scale.value = withSpring(scaleValue, springConfig);
-      opacity.value = withTiming(0.8, { duration: 100 });
+      opacity.value = withTiming(0.82, { duration: motion.duration.pressIn });
       
       if (hapticFeedback) {
-        runOnJS(Vibration.vibrate)(hapticIntensity);
+        Vibration.vibrate(hapticIntensity);
       }
     }
     
@@ -57,7 +57,7 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
   const handlePressOut = (event: any) => {
     if (!disabled) {
       scale.value = withSpring(1, springConfig);
-      opacity.value = withTiming(1, { duration: 150 });
+      opacity.value = withTiming(1, { duration: motion.duration.pressOut });
     }
     
     onPressOut?.(event);
@@ -65,10 +65,7 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
 
   const handlePress = (event: any) => {
     if (!disabled && onPress) {
-      // Add a slight delay to ensure the animation is visible
-      setTimeout(() => {
-        onPress(event);
-      }, 50);
+      onPress(event);
     }
   };
 

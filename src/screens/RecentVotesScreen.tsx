@@ -9,13 +9,12 @@ import {
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
-import { TakeCard } from '../components/TakeCard';
 import { useAuth } from '../hooks/useAuth';
 import { getUserVotes } from '../services/voteService';
 import { doc, getDoc, collection } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Take, TakeVote } from '../types/Take';
-import { colors, dimensions } from '../constants';
+import { colors, dimensions, motion } from '../constants';
 
 type RecentVoteWithTake = TakeVote & { take?: Take };
 
@@ -131,7 +130,9 @@ export const RecentVotesScreen: React.FC<RecentVotesScreenProps> = ({
           style={[styles.closeButton, { backgroundColor: theme.surface }]}
           onPress={onClose}
           scaleValue={0.9}
-          hapticIntensity={8}
+          hapticIntensity={motion.haptic.light}
+          accessibilityRole="button"
+          accessibilityLabel="Close recent votes"
         >
           <Text style={[styles.closeButtonText, { color: theme.text }]}>✕</Text>
         </AnimatedPressable>
@@ -230,16 +231,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E0E0E0',
   },
   spacer: {
-    width: 36, // Same width as close button to center the title
+    width: motion.touchTarget.minimum,
   },
   title: {
     fontSize: dimensions.fontSize.xlarge,
     fontWeight: 'bold',
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: motion.touchTarget.minimum,
+    height: motion.touchTarget.minimum,
+    borderRadius: motion.touchTarget.minimum / 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -294,6 +295,7 @@ const styles = StyleSheet.create({
     padding: dimensions.spacing.md,
     borderRadius: 12,
     borderWidth: 1,
+    minHeight: 96,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,

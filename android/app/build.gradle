@@ -3,6 +3,7 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def isDevelopmentBuild = System.getenv("APP_VARIANT") == "development" || System.getenv("EAS_BUILD_PROFILE") == "development"
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -90,10 +91,16 @@ android {
     namespace 'com.anonymous.HotOrNotTakes'
     defaultConfig {
         applicationId 'com.anonymous.HotOrNotTakes'
+        if (isDevelopmentBuild) {
+            applicationId 'com.anonymous.HotOrNotTakes.dev'
+        }
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.5"
+        versionCode 34
+        versionName "1.0.7"
+        manifestPlaceholders = [
+            appLabel: isDevelopmentBuild ? 'Hot or Not Takes Dev' : 'Hot or Not Takes'
+        ]
     }
     signingConfigs {
         debug {

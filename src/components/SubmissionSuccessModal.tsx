@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   Modal,
-  TouchableOpacity,
   Animated,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '../constants';
+import { colors, motion } from '../constants';
+import { AnimatedPressable } from './transitions/AnimatedPressable';
 
 interface SubmissionSuccessModalProps {
   visible: boolean;
@@ -18,14 +18,13 @@ interface SubmissionSuccessModalProps {
   isDarkMode?: boolean;
 }
 
-const { width: screenWidth } = Dimensions.get('window');
-
 export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
   visible,
   onSubmitAnother,
   onDone,
   isDarkMode = false,
 }) => {
+  const { width } = useWindowDimensions();
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -87,6 +86,7 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
           style={[
             styles.modalContainer,
             {
+              width: Math.min(width * 0.9, 400),
               transform: [{ scale: scaleAnim }],
               opacity: fadeAnim,
             }
@@ -109,11 +109,11 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
             </Animated.View>
 
             {/* Title */}
-            <Text style={styles.title}>TAKE SUBMITTED!</Text>
+            <Text style={styles.title}>TAKE RECEIVED!</Text>
             
             {/* Subtitle */}
             <Text style={styles.subtitle}>
-              Your hot take is being moderated.
+              We're checking it now.
             </Text>
 
             {/* Stats Preview */}
@@ -133,15 +133,16 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
 
             {/* Motivational Text */}
             <Text style={styles.motivationalText}>
-              Approved takes appear in the voting queue automatically.
+              If approved, it joins the voting queue automatically.
             </Text>
 
             {/* Action Buttons */}
             <View style={styles.buttonContainer}>
-              <TouchableOpacity
+              <AnimatedPressable
                 style={[styles.button, styles.secondaryButton]}
                 onPress={onSubmitAnother}
-                activeOpacity={0.8}
+                scaleValue={0.97}
+                hapticIntensity={motion.haptic.light}
               >
                 <Text 
                   style={styles.secondaryButtonText}
@@ -151,15 +152,16 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
                 >
                   More To Say? 🚀
                 </Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
               
-              <TouchableOpacity
+              <AnimatedPressable
                 style={[styles.button, styles.primaryButton]}
                 onPress={onDone}
-                activeOpacity={0.8}
+                scaleValue={0.97}
+                hapticIntensity={motion.haptic.light}
               >
                 <Text style={styles.primaryButtonText}>Done</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             </View>
           </LinearGradient>
         </Animated.View>
@@ -176,7 +178,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContainer: {
-    width: screenWidth * 0.9,
     maxWidth: 400,
     borderRadius: 20,
     overflow: 'hidden',
@@ -265,6 +266,7 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     paddingVertical: 14,
+    minHeight: motion.touchTarget.minimum,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',

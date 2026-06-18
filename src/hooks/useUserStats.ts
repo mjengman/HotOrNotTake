@@ -18,6 +18,9 @@ export const useUserStats = (): UseUserStatsResult => {
     notVotesGiven: 0,
     takesSubmitted: 0,
     votingStreak: 0,
+    longestVotingStreak: 0,
+    totalStreakDays: 0,
+    streakUpdatedToday: false,
     favoriteCategories: [],
     joinedAt: new Date(),
   });
@@ -33,6 +36,9 @@ export const useUserStats = (): UseUserStatsResult => {
         notVotesGiven: 0,
         takesSubmitted: 0,
         votingStreak: 0,
+        longestVotingStreak: 0,
+        totalStreakDays: 0,
+        streakUpdatedToday: false,
         favoriteCategories: [],
         joinedAt: new Date(),
       });

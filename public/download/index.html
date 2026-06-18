@@ -68,6 +68,21 @@
   .loading {
     animation: pulse 1.5s ease-in-out infinite;
   }
+  .legal {
+    margin-top: 24px;
+    font-size: 13px;
+  }
+  .legal a {
+    color: white;
+    text-decoration: underline;
+  }
+  #fallback .legal a {
+    display: inline;
+    padding: 0;
+    margin: 0;
+    color: #555;
+    font-weight: 600;
+  }
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
@@ -85,6 +100,7 @@
   <p><a href="https://apps.apple.com/us/app/hot-or-not-takes/id6751363365" class="ios-link">📱 App Store</a></p>
   <p><a href="https://play.google.com/store/apps/details?id=com.anonymous.HotOrNotTakes" class="android-link">🤖 Google Play</a></p>
 </div>
+<p class="legal"><a href="/child-safety/">Child Safety Standards</a></p>
 <script>
   (function () {
     const ua = (navigator.userAgent||"").toLowerCase();
