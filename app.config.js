@@ -42,16 +42,6 @@ export default () => ({
     plugins: [
       "expo-build-properties",
       [
-        "expo-notifications",
-        {
-          icon: "./assets/notification-icon.png",
-          color: "#FF4757",
-          mode: isDevelopmentBuild ? "development" : "production",
-          defaultChannel: "gameplay-reminders",
-          enableBackgroundRemoteNotifications: false
-        }
-      ],
-      [
         "react-native-google-mobile-ads",
         {
           androidAppId: "ca-app-pub-1745058833253836~8031915483",

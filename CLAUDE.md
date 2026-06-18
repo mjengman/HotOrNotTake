@@ -26,6 +26,8 @@ Do not rename the Android package. Google Play continuity depends on `com.anonym
 
 The repo has checked-in `ios/` and `android/` folders. Because this is not a pure CNG project, native config in `app.config.js` does not automatically update existing native projects. When changing native app identity, ads IDs, permissions, splash/icon, updates, or build settings, verify the matching native files too.
 
+Local notifications are intentionally local-only. The app uses `expo-notifications`, Android notification icon/color metadata is synced in `android/`, and iOS should not add an `aps-environment` entitlement unless the product explicitly moves to push notifications/APNs.
+
 As of the 1.0.8 local-notifications release prep, `app.config.js`, Android native `versionName`, and iOS native `CFBundleShortVersionString` have been synced to `1.0.8`. EAS remote app-version source currently owns the monotonically increasing Android `versionCode` and iOS build number; confirm `eas build:version:get --platform all --non-interactive` before production builds.
 
 ## App Shape
