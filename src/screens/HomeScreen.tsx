@@ -49,6 +49,7 @@ import { deleteVote, getUserVoteForTake } from '../services/voteService';
 import { adminRemoveTake } from '../services/takeService';
 import { buildOptimisticVoteEngagementUpdate, getCommunityStats } from '../services/userService';
 import { prefetchLeaderboardCache } from '../services/leaderboardCacheService';
+import { prefetchUserFavoritesCache } from '../services/favoritesService';
 import {
   requestNotificationsAfterQuestCompletion,
   scheduleStreakMilestoneNotification,
@@ -329,6 +330,8 @@ export const HomeScreen: React.FC = () => {
   const changeVoteDeletePromisesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const leaderboardPrefetchStartedRef = useRef(false);
   const leaderboardPrefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const favoritesPrefetchStartedRef = useRef(false);
+  const favoritesPrefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationPermissionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const identityTeaserShownRef = useRef(false);
@@ -642,11 +645,35 @@ export const HomeScreen: React.FC = () => {
     }, 8500);
   }, [authLoading, user]);
 
+  const scheduleFavoritesPrefetch = React.useCallback(() => {
+    if (!user || authLoading || favoritesPrefetchStartedRef.current || favoritesPrefetchTimeoutRef.current) {
+      return;
+    }
+
+    favoritesPrefetchTimeoutRef.current = setTimeout(() => {
+      favoritesPrefetchTimeoutRef.current = null;
+      if (favoritesPrefetchStartedRef.current) {
+        return;
+      }
+
+      favoritesPrefetchStartedRef.current = true;
+      InteractionManager.runAfterInteractions(() => {
+        prefetchUserFavoritesCache(user.uid).catch(error => {
+          console.warn('Unable to prefetch favorites:', error);
+        });
+      });
+    }, 11000);
+  }, [authLoading, user]);
+
   React.useEffect(() => {
     return () => {
       if (leaderboardPrefetchTimeoutRef.current) {
         clearTimeout(leaderboardPrefetchTimeoutRef.current);
         leaderboardPrefetchTimeoutRef.current = null;
+      }
+      if (favoritesPrefetchTimeoutRef.current) {
+        clearTimeout(favoritesPrefetchTimeoutRef.current);
+        favoritesPrefetchTimeoutRef.current = null;
       }
       if (notificationSyncTimeoutRef.current) {
         clearTimeout(notificationSyncTimeoutRef.current);
@@ -963,6 +990,7 @@ export const HomeScreen: React.FC = () => {
       // Track completed card for ad service (called after vote is cast)
       onCardComplete();
       scheduleLeaderboardPrefetch();
+      scheduleFavoritesPrefetch();
       if (streakUpdate?.didUpdateToday) {
         applyEngagementUpdate(streakUpdate);
         showStreakToast(streakUpdate);
@@ -1050,6 +1078,7 @@ export const HomeScreen: React.FC = () => {
       // Track completed card for ad service (called after skip)
       onCardComplete();
       scheduleLeaderboardPrefetch();
+      scheduleFavoritesPrefetch();
       // Refresh stats later so skip animation is never waiting on Firestore.
       setTimeout(() => {
         InteractionManager.runAfterInteractions(() => {

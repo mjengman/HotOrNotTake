@@ -10,10 +10,13 @@ import {
 import { ScrollView } from 'react-native-gesture-handler';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { useAuth } from '../hooks/useAuth';
-import { getUserFavorites, FavoriteItem } from '../services/favoritesService';
+import {
+  FavoriteWithTake,
+  getUserFavoritesCacheSnapshot,
+  getUserFavoritesWithTakes,
+  readUserFavoritesCache,
+} from '../services/favoritesService';
 import { getUserVoteForTake } from '../services/voteService';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
 import { Take } from '../types/Take';
 import { colors, dimensions, motion } from '../constants';
 
@@ -29,72 +32,74 @@ export const MyFavoritesScreen: React.FC<MyFavoritesScreenProps> = ({
   isDarkMode = false,
 }) => {
   const { user } = useAuth();
-  const [favorites, setFavorites] = useState<(FavoriteItem & { take?: Take })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const userId = user?.uid;
+  const initialCache = React.useMemo(
+    () => (userId ? getUserFavoritesCacheSnapshot(userId) : null),
+    [userId]
+  );
+  const [favorites, setFavorites] = useState<FavoriteWithTake[]>(initialCache?.favorites || []);
+  const [loading, setLoading] = useState(!initialCache);
   const [error, setError] = useState<string | null>(null);
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const theme = isDarkMode ? colors.dark : colors.light;
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadFavorites = async () => {
-      if (!user) {
-        setLoading(false);
+      if (!userId) {
+        if (isMounted) {
+          setFavorites([]);
+          setLoading(false);
+        }
         return;
       }
 
+      let cachedFavorites = initialCache?.favorites || null;
+
       try {
-        setLoading(true);
-        const favoriteItems = await getUserFavorites(user.uid);
-        
-        // Fetch the actual take data for each favorite
-        const favoritesWithTakes = await Promise.all(
-          favoriteItems.map(async (favorite) => {
-            try {
-              const takeDoc = await getDoc(doc(db, 'takes', favorite.takeId));
-              if (takeDoc.exists()) {
-                const takeData = takeDoc.data();
-                const take: Take = {
-                  id: takeDoc.id,
-                  text: takeData.text,
-                  category: takeData.category,
-                  hotVotes: takeData.hotVotes || 0,
-                  notVotes: takeData.notVotes || 0,
-                  totalVotes: takeData.totalVotes || 0,
-                  createdAt: takeData.createdAt?.toDate() || new Date(),
-                  userId: takeData.userId,
-                  isApproved: takeData.isApproved || false,
-                  status: takeData.status || 'approved',
-                  submittedAt: takeData.submittedAt?.toDate() || takeData.createdAt?.toDate() || new Date(),
-                  approvedAt: takeData.approvedAt?.toDate(),
-                  rejectedAt: takeData.rejectedAt?.toDate(),
-                  rejectionReason: takeData.rejectionReason,
-                  reportCount: takeData.reportCount || 0,
-                  isAIGenerated: takeData.isAIGenerated || false,
-                };
-                return { ...favorite, take };
-              }
-              return favorite; // Return favorite without take if take not found
-            } catch (error) {
-              console.error('Error fetching take:', error);
-              return favorite; // Return favorite without take on error
-            }
-          })
-        );
-        
-        setFavorites(favoritesWithTakes);
+        setError(null);
+
+        if (!cachedFavorites) {
+          const cached = await readUserFavoritesCache(userId);
+          cachedFavorites = cached?.favorites || null;
+
+          if (cachedFavorites && isMounted) {
+            setFavorites(cachedFavorites);
+            setLoading(false);
+          }
+        }
+
+        if (!cachedFavorites && isMounted) {
+          setLoading(true);
+        }
+
+        const freshFavorites = await getUserFavoritesWithTakes(userId);
+        if (isMounted) {
+          setFavorites(freshFavorites);
+          setError(null);
+        }
       } catch (err) {
-        console.error('Error loading favorites:', err);
-        setError('Failed to load favorites');
+        console.warn('Favorites refresh unavailable:', err);
+        if (isMounted && !cachedFavorites) {
+          setError('Failed to load favorites');
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadFavorites();
-  }, [user]);
 
-  const handleTakePress = async (favorite: FavoriteItem & { take?: Take }) => {
+    return () => {
+      isMounted = false;
+    };
+  }, [initialCache, userId]);
+
+  const handleTakePress = async (favorite: FavoriteWithTake) => {
     if (favorite.take && user) {
       try {
         // Look up the user's vote for this take
