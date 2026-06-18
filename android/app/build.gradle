@@ -96,8 +96,8 @@ android {
         }
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 34
-        versionName "1.0.7"
+        versionCode 36
+        versionName "1.0.8"
         manifestPlaceholders = [
             appLabel: isDevelopmentBuild ? 'Hot or Not Takes Dev' : 'Hot or Not Takes'
         ]

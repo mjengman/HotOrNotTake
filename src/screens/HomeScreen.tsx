@@ -8,6 +8,7 @@ import {
   Image,
   BackHandler,
   Animated,
+  AppState,
   Platform,
   TouchableOpacity,
   Modal,
@@ -44,6 +45,11 @@ import { deleteVote, getUserVoteForTake } from '../services/voteService';
 import { adminRemoveTake } from '../services/takeService';
 import { getCommunityStats } from '../services/userService';
 import { prefetchLeaderboardCache } from '../services/leaderboardCacheService';
+import {
+  requestNotificationsAfterQuestCompletion,
+  scheduleStreakMilestoneNotification,
+  syncDailyReminderNotifications,
+} from '../services/notificationService';
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 import { colors, motion } from '../constants';
 import { StreakUpdateResult, Take } from '../types';
@@ -146,6 +152,7 @@ export const HomeScreen: React.FC = () => {
   const changeVoteDeletePromisesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const leaderboardPrefetchStartedRef = useRef(false);
   const leaderboardPrefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notificationPermissionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const identityTeaserShownRef = useRef(false);
   const lastIdentityTeaserRef = useRef<string | null>(null);
   const onboardingCompletingRef = useRef(false);
@@ -154,8 +161,9 @@ export const HomeScreen: React.FC = () => {
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake, removeTakeLocally } = useFirebaseTakes({
     category: selectedCategory
   });
-  const { stats, loading: statsLoading, refreshStats, applyEngagementUpdate } = useUserStats();
+  const { stats, loading: statsLoading, hydrated: statsHydrated, refreshStats, applyEngagementUpdate } = useUserStats();
   const votingProfileState = useVotingProfile(user?.uid, stats.totalVotes, showVotingStyleModal);
+  const statsRef = useRef(stats);
 
   // Use the hook-based interstitial ads
   const { onCardComplete, onSessionEnd } = useInterstitialAds();
@@ -207,6 +215,69 @@ export const HomeScreen: React.FC = () => {
       community: `👥 ${formatCompactCount(communityTotalVotes)}`,
     };
   }, [communityTotalVotes, stats.dailyChallenge, stats.votingStreak]);
+
+  useEffect(() => {
+    statsRef.current = stats;
+  }, [stats]);
+
+  const syncNotificationReminders = React.useCallback((nextStats = statsRef.current) => {
+    if (!user?.uid || authLoading || statsLoading || !statsHydrated) {
+      return;
+    }
+
+    syncDailyReminderNotifications(user.uid, nextStats).catch(error => {
+      console.warn('Unable to sync notification reminders:', error);
+    });
+  }, [authLoading, statsHydrated, statsLoading, user?.uid]);
+
+  const requestNotificationsForCompletedQuest = React.useCallback(() => {
+    if (notificationPermissionTimeoutRef.current) {
+      return;
+    }
+
+    notificationPermissionTimeoutRef.current = setTimeout(async () => {
+      notificationPermissionTimeoutRef.current = null;
+
+      try {
+        const granted = await requestNotificationsAfterQuestCompletion();
+        if (granted) {
+          syncNotificationReminders(statsRef.current);
+        }
+      } catch (error) {
+        console.warn('Unable to request notification permissions:', error);
+      }
+    }, 1000);
+  }, [syncNotificationReminders]);
+
+  const notificationStatsKey = useMemo(() => {
+    const challenge = stats.dailyChallenge;
+    return [
+      challenge.date,
+      challenge.progress,
+      challenge.goal,
+      challenge.completed ? 'done' : 'open',
+      stats.votingStreak,
+      stats.streakUpdatedToday ? 'updated' : 'open',
+    ].join(':');
+  }, [stats.dailyChallenge, stats.streakUpdatedToday, stats.votingStreak]);
+
+  useEffect(() => {
+    syncNotificationReminders(stats);
+  }, [notificationStatsKey, syncNotificationReminders]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      return undefined;
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        syncNotificationReminders(statsRef.current);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [syncNotificationReminders, user?.uid]);
 
   useEffect(() => {
     const loadThemePreference = async () => {
@@ -370,6 +441,10 @@ export const HomeScreen: React.FC = () => {
       if (leaderboardPrefetchTimeoutRef.current) {
         clearTimeout(leaderboardPrefetchTimeoutRef.current);
         leaderboardPrefetchTimeoutRef.current = null;
+      }
+      if (notificationPermissionTimeoutRef.current) {
+        clearTimeout(notificationPermissionTimeoutRef.current);
+        notificationPermissionTimeoutRef.current = null;
       }
     };
   }, []);
@@ -540,7 +615,7 @@ export const HomeScreen: React.FC = () => {
   }, [communityTotalVotes, enqueueToast]);
 
   useEffect(() => {
-    if (!user || authLoading || statsLoading || stats.dailyChallenge.completed) {
+    if (!user || authLoading || statsLoading || !statsHydrated || stats.dailyChallenge.completed) {
       return;
     }
 
@@ -572,7 +647,7 @@ export const HomeScreen: React.FC = () => {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [authLoading, enqueueToast, stats.dailyChallenge, statsLoading, user]);
+  }, [authLoading, enqueueToast, stats.dailyChallenge, statsHydrated, statsLoading, user]);
 
   const showFirstVoteHint = React.useCallback(async (takeId: string) => {
     if (firstVoteHintMarkedRef.current) {
@@ -663,6 +738,7 @@ export const HomeScreen: React.FC = () => {
         if (!streakUpdate.didUpdateToday) {
           applyEngagementUpdate(streakUpdate);
         }
+        requestNotificationsForCompletedQuest();
         enqueueToast({
           title: '🎯 Challenge complete!',
           subtitle: `${streakUpdate.dailyChallenge?.title || "Today's quest"} is done. Come back tomorrow.`,
@@ -671,6 +747,25 @@ export const HomeScreen: React.FC = () => {
         applyEngagementUpdate(streakUpdate);
       }
       streakUpdate?.achievementToasts?.forEach(enqueueToast);
+      if (streakUpdate?.milestoneReached && user?.uid) {
+        scheduleStreakMilestoneNotification(user.uid, streakUpdate.milestoneReached).catch(error => {
+          console.warn('Unable to schedule streak milestone notification:', error);
+        });
+      }
+      if (streakUpdate) {
+        const nextStats = {
+          ...statsRef.current,
+          totalVotes: streakUpdate.totalVotes ?? statsRef.current.totalVotes,
+          votingStreak: streakUpdate.currentStreak,
+          longestVotingStreak: streakUpdate.longestVotingStreak,
+          totalStreakDays: streakUpdate.totalStreakDays,
+          lastStreakDate: streakUpdate.lastStreakDate,
+          streakUpdatedToday: true,
+          dailyChallenge: streakUpdate.dailyChallenge || statsRef.current.dailyChallenge,
+        };
+        statsRef.current = nextStats;
+        syncNotificationReminders(nextStats);
+      }
       // Reconcile with Firestore after the local footer update lands.
       await refreshStats();
       // Also refresh community stats

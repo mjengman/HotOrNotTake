@@ -7,6 +7,7 @@ import { useAuth } from './useAuth';
 interface UseUserStatsResult {
   stats: UserStats;
   loading: boolean;
+  hydrated: boolean;
   error: string | null;
   refreshStats: () => Promise<void>;
   applyEngagementUpdate: (update: StreakUpdateResult) => void;
@@ -105,26 +106,31 @@ export const useUserStats = (): UseUserStatsResult => {
   const { user } = useAuth();
   const [stats, setStats] = useState<UserStats>(getDefaultStats);
   const [loading, setLoading] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Load user stats
   const loadStats = useCallback(async () => {
     if (!user) {
       setStats(getDefaultStats());
+      setHydrated(false);
       return;
     }
 
     try {
       setLoading(true);
+      setHydrated(false);
       setError(null);
 
       const cachedStats = await readCachedStats(user.uid);
       if (cachedStats) {
         setStats(cachedStats);
+        setHydrated(true);
       }
 
       const userStats = await getUserStats(user.uid);
       setStats(userStats);
+      setHydrated(true);
       writeCachedStats(user.uid, userStats);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load stats');
@@ -135,6 +141,7 @@ export const useUserStats = (): UseUserStatsResult => {
   }, [user]);
 
   const applyEngagementUpdate = useCallback((update: StreakUpdateResult) => {
+    setHydrated(true);
     setStats(prevStats => {
       const nextStats: UserStats = {
         ...prevStats,
@@ -162,6 +169,7 @@ export const useUserStats = (): UseUserStatsResult => {
   return {
     stats,
     loading,
+    hydrated,
     error,
     refreshStats: loadStats,
     applyEngagementUpdate,

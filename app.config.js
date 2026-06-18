@@ -10,7 +10,7 @@ export default () => ({
   expo: {
     name: isDevelopmentBuild ? "Hot or Not Takes Dev" : "Hot or Not Takes",
     slug: "HotOrNotTakes",
-    version: "1.0.7",
+    version: "1.0.8",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
@@ -41,6 +41,16 @@ export default () => ({
     },
     plugins: [
       "expo-build-properties",
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/notification-icon.png",
+          color: "#FF4757",
+          mode: isDevelopmentBuild ? "development" : "production",
+          defaultChannel: "gameplay-reminders",
+          enableBackgroundRemoteNotifications: false
+        }
+      ],
       [
         "react-native-google-mobile-ads",
         {

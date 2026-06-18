@@ -6,6 +6,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { initAdsAndConsent } from './src/services/adsConsent';
 import { AdsConsentStatus } from 'react-native-google-mobile-ads';
 import { ConsentContext, ConsentCtx } from './src/contexts/ConsentContext';
+import { setupNotifications } from './src/services/notificationService';
 
 const LAUNCH_VEIL_MIN_MS = 950;
 const LAUNCH_VEIL_FADE_MS = 350;
@@ -22,6 +23,8 @@ export default function App() {
   });
 
   useEffect(() => {
+    setupNotifications();
+
     let mounted = true;
 
     const boot = async () => {

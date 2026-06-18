@@ -27,7 +27,7 @@ import {
 
 // Collection references
 const USERS_COLLECTION = 'users';
-const STREAK_MILESTONES = new Set([3, 7, 14, 30, 50, 100, 365]);
+const STREAK_MILESTONES = new Set([3, 7, 14, 30, 50, 60, 100, 365]);
 const DAILY_CHALLENGE_GOAL = 20;
 const DAILY_QUEST_CATEGORIES = [
   { value: 'entertainment', label: 'Entertainment' },
