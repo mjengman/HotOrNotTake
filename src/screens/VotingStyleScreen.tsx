@@ -1,6 +1,8 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   RefreshControl,
   SafeAreaView,
   StyleSheet,
@@ -11,6 +13,8 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { colors, dimensions, motion, type Colors } from '../constants';
 import { CategoryVotingProfile, VotingProfile, VotingProfileTone } from '../hooks/useVotingProfile';
+
+const VOTING_STYLE_COUNT_UP_DURATION = 650;
 
 interface VotingStyleScreenProps {
   onClose: () => void;
@@ -64,6 +68,72 @@ const getUnlockCopy = (totalVotes: number) => {
   }
 
   return null;
+};
+
+const CountUpText = ({
+  target,
+  style,
+  prefix = '',
+  suffix = '',
+  animate = true,
+  formatter,
+}: {
+  target: number;
+  style: object | object[];
+  prefix?: string;
+  suffix?: string;
+  animate?: boolean;
+  formatter?: (value: number) => string;
+}) => {
+  const countAnim = React.useRef(new Animated.Value(0)).current;
+  const displayValueRef = React.useRef(0);
+  const [displayValue, setDisplayValue] = React.useState(0);
+
+  React.useEffect(() => {
+    countAnim.stopAnimation();
+
+    if (!animate) {
+      countAnim.setValue(target);
+      displayValueRef.current = target;
+      setDisplayValue(target);
+      return undefined;
+    }
+
+    countAnim.setValue(0);
+    displayValueRef.current = 0;
+    setDisplayValue(0);
+
+    const listenerId = countAnim.addListener(({ value }) => {
+      const roundedValue = Math.round(value);
+      displayValueRef.current = roundedValue;
+      setDisplayValue(roundedValue);
+    });
+
+    Animated.timing(countAnim, {
+      toValue: target,
+      duration: VOTING_STYLE_COUNT_UP_DURATION,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) {
+        displayValueRef.current = target;
+        setDisplayValue(target);
+      }
+    });
+
+    return () => {
+      countAnim.removeListener(listenerId);
+      countAnim.stopAnimation();
+    };
+  }, [animate, countAnim, target]);
+
+  const formatValue = formatter || ((value: number) => value.toLocaleString());
+
+  return (
+    <Text style={style}>
+      {prefix}{formatValue(displayValue)}{suffix}
+    </Text>
+  );
 };
 
 const CategoryBreakdownRow = ({
@@ -179,6 +249,11 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
           <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
             Every HOT or NOT vote helps the app learn what kind of chaos you enjoy.
           </Text>
+          <View style={[styles.voteCounterPill, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <Text style={[styles.voteCounterText, { color: theme.textSecondary }]}>
+              🗳️ Your votes: {profile.totalVotes.toLocaleString()}
+            </Text>
+          </View>
           <View style={[styles.progressTrack, { backgroundColor: theme.border }]}>
             <View
               style={[
@@ -223,27 +298,39 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
             </>
           )}
 
+          <View style={[styles.voteCounterPill, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <Text style={[styles.voteCounterText, { color: theme.textSecondary }]}>
+              🗳️ Your votes: {profile.totalVotes.toLocaleString()}
+            </Text>
+          </View>
+
           <View style={styles.statGrid}>
             <View style={[styles.statTile, { backgroundColor: theme.background }]}>
-              <Text style={[styles.statValue, { color: theme.hot }]}>
-                {profile.hotPercentage}%
-              </Text>
+              <CountUpText
+                target={profile.hotPercentage}
+                suffix="%"
+                style={[styles.statValue, { color: theme.hot }]}
+              />
               <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
                 HOT
               </Text>
             </View>
             <View style={[styles.statTile, { backgroundColor: theme.background }]}>
-              <Text style={[styles.statValue, { color: theme.not }]}>
-                {profile.notPercentage}%
-              </Text>
+              <CountUpText
+                target={profile.notPercentage}
+                suffix="%"
+                style={[styles.statValue, { color: theme.not }]}
+              />
               <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
                 NOT
               </Text>
             </View>
             <View style={[styles.statTile, { backgroundColor: theme.background }]}>
-              <Text style={[styles.statValue, { color: toneColor }]}>
-                {profile.crowdAgreementRate}%
-              </Text>
+              <CountUpText
+                target={profile.crowdAgreementRate}
+                suffix="%"
+                style={[styles.statValue, { color: toneColor }]}
+              />
               <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
                 agrees with room
               </Text>
@@ -437,6 +524,18 @@ const styles = StyleSheet.create({
     lineHeight: 25,
     textAlign: 'center',
     fontWeight: '700',
+  },
+  voteCounterPill: {
+    alignSelf: 'center',
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.xs,
+  },
+  voteCounterText: {
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   statGrid: {
     flexDirection: 'row',

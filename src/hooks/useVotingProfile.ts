@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CATEGORY_OPTIONS, MY_SKIPS_CATEGORY } from '../constants/categories';
 import { getTakesByIds } from '../services/takeService';
 import { getUserVotes, getUserVotesPage } from '../services/voteService';
@@ -7,6 +8,8 @@ import { Take, TakeVote } from '../types/Take';
 const PROFILE_SAMPLE_SIZE = 100;
 const CLOSE_CALL_MARGIN = 15;
 const CATEGORY_DETAIL_MIN_VOTES = 3;
+const VOTING_PROFILE_CACHE_VERSION = 'v1';
+const VOTING_PROFILE_CACHE_PREFIX = `voting-profile-cache:${VOTING_PROFILE_CACHE_VERSION}`;
 
 export type TasteLabel =
   | 'Contrarian'
@@ -66,6 +69,35 @@ interface UseVotingProfileResult {
   error: string | null;
   refreshProfile: () => Promise<void>;
 }
+
+const getVotingProfileCacheKey = (userId: string) => `${VOTING_PROFILE_CACHE_PREFIX}:${userId}`;
+
+const readCachedVotingProfile = async (userId: string): Promise<VotingProfile | null> => {
+  try {
+    const raw = await AsyncStorage.getItem(getVotingProfileCacheKey(userId));
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    return {
+      ...emptyProfile,
+      ...parsed,
+      categories: Array.isArray(parsed.categories) ? parsed.categories : [],
+    };
+  } catch (error) {
+    console.warn('Unable to read voting profile cache:', error);
+    return null;
+  }
+};
+
+const writeCachedVotingProfile = async (userId: string, profile: VotingProfile) => {
+  try {
+    await AsyncStorage.setItem(getVotingProfileCacheKey(userId), JSON.stringify(profile));
+  } catch (error) {
+    console.warn('Unable to write voting profile cache:', error);
+  }
+};
 
 interface VotingStyleTeaserContext {
   totalVotesAfterVote: number;
@@ -413,14 +445,18 @@ export const useVotingProfile = (
 ): UseVotingProfileResult => {
   const [votes, setVotes] = useState<TakeVote[]>([]);
   const [takesById, setTakesById] = useState<Record<string, Take>>({});
+  const [cachedProfile, setCachedProfile] = useState<VotingProfile | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
     if (!userId) {
       setVotes([]);
       setTakesById({});
+      setCachedProfile(null);
       setLoading(false);
+      setHasLoadedOnce(false);
       return;
     }
 
@@ -432,6 +468,11 @@ export const useVotingProfile = (
     try {
       setLoading(true);
       setError(null);
+
+      const cached = await readCachedVotingProfile(userId);
+      if (cached) {
+        setCachedProfile(cached);
+      }
 
       let recentVotes: TakeVote[];
       try {
@@ -452,9 +493,17 @@ export const useVotingProfile = (
       console.error('Error loading voting profile:', profileError);
       setError('Your voting style is unavailable right now.');
     } finally {
+      setHasLoadedOnce(true);
       setLoading(false);
     }
   }, [enabled, userId]);
+
+  useEffect(() => {
+    setVotes([]);
+    setTakesById({});
+    setCachedProfile(null);
+    setHasLoadedOnce(false);
+  }, [userId]);
 
   useEffect(() => {
     loadProfile();
@@ -465,9 +514,22 @@ export const useVotingProfile = (
     [reportedTotalVotes, takesById, votes]
   );
 
+  useEffect(() => {
+    if (!userId || profile.sampledVotes === 0) {
+      return;
+    }
+
+    setCachedProfile(profile);
+    writeCachedVotingProfile(userId, profile);
+  }, [profile, userId]);
+
+  const displayedProfile = profile.sampledVotes > 0 ? profile : cachedProfile || profile;
+
+  const effectiveLoading = loading || Boolean(enabled && userId && !hasLoadedOnce && !cachedProfile);
+
   return {
-    profile,
-    loading,
+    profile: displayedProfile,
+    loading: effectiveLoading,
     error,
     refreshProfile: loadProfile,
   };
