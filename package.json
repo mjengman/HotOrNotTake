@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:functions": "npm --prefix functions run typecheck",
     "build:functions": "npm --prefix functions run build",
+    "audit:corpus": "tsx src/scripts/auditCorpus.ts",
+    "cleanup:ai-duplicates": "tsx src/scripts/cleanupAIDuplicates.ts",
     "generate": "node scripts/generateTakes-simple.js",
     "generate:all": "node scripts/generateTakes-simple.js all 10"
   },
@@ -40,6 +42,8 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
+    "firebase-admin": "^13.10.0",
+    "tsx": "^4.22.4",
     "typescript": "~5.8.3"
   },
   "private": true

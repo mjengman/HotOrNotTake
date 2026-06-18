@@ -34,6 +34,7 @@ interface TakeCardProps {
   onIdentityTeaserPress?: () => void;
   firstVoteHint?: string | null;
   onFirstVoteHintDismiss?: () => void;
+  onAdminRemoveRequest?: (take: Take) => void;
 }
 
 const getReactionToneColor = (tone: ResultReactionTone, theme: Colors) => {
@@ -72,6 +73,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   onIdentityTeaserPress,
   firstVoteHint = null,
   onFirstVoteHintDismiss,
+  onAdminRemoveRequest,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
   const responsive = useResponsive();
@@ -79,6 +81,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const visualShareRef = useRef<ViewShot>(null);
+  const categoryTapCountRef = useRef(0);
+  const categoryTapResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldEnableResultActions = isFlipped && showStats;
   const initialResultCountProgress = isFlipped && holdResultCountAtZero && !animateResults ? 0 : 1;
   const resultCountAnim = useRef(new Animated.Value(initialResultCountProgress)).current;
@@ -179,6 +183,46 @@ export const TakeCard: React.FC<TakeCardProps> = ({
     minHeight: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.md,
   };
   const percentageItemHeight = isCompactResultCard ? 58 : 74;
+
+  useEffect(() => {
+    categoryTapCountRef.current = 0;
+    if (categoryTapResetTimeoutRef.current) {
+      clearTimeout(categoryTapResetTimeoutRef.current);
+      categoryTapResetTimeoutRef.current = null;
+    }
+  }, [take.id]);
+
+  useEffect(() => () => {
+    if (categoryTapResetTimeoutRef.current) {
+      clearTimeout(categoryTapResetTimeoutRef.current);
+    }
+  }, []);
+
+  const handleCategoryBadgePress = () => {
+    if (!onAdminRemoveRequest || isFlipped) {
+      return;
+    }
+
+    categoryTapCountRef.current += 1;
+
+    if (categoryTapResetTimeoutRef.current) {
+      clearTimeout(categoryTapResetTimeoutRef.current);
+    }
+
+    categoryTapResetTimeoutRef.current = setTimeout(() => {
+      categoryTapCountRef.current = 0;
+      categoryTapResetTimeoutRef.current = null;
+    }, 5000);
+
+    if (categoryTapCountRef.current >= 10) {
+      categoryTapCountRef.current = 0;
+      if (categoryTapResetTimeoutRef.current) {
+        clearTimeout(categoryTapResetTimeoutRef.current);
+        categoryTapResetTimeoutRef.current = null;
+      }
+      onAdminRemoveRequest(take);
+    }
+  };
 
   useEffect(() => {
     if (!isFlipped) {
@@ -335,17 +379,37 @@ export const TakeCard: React.FC<TakeCardProps> = ({
         styles.header,
         { marginBottom: isFlipped ? responsive.spacing.sm : adaptiveSpacing.headerMargin }
       ]}>
-        <View style={[styles.categoryBadge, { backgroundColor: theme.accent + '20' }]}>
-          <Text style={[
-            styles.category,
-            {
-              color: theme.accent,
-              fontSize: responsive.fontSize.small
-            }
-          ]}>
-            {take.category?.toUpperCase() || 'GENERAL'}
-          </Text>
-        </View>
+        {onAdminRemoveRequest && !isFlipped ? (
+          <TouchableOpacity
+            style={[styles.categoryBadge, { backgroundColor: theme.accent + '20' }]}
+            onPress={handleCategoryBadgePress}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel={`${take.category || 'General'} category`}
+          >
+            <Text style={[
+              styles.category,
+              {
+                color: theme.accent,
+                fontSize: responsive.fontSize.small
+              }
+            ]}>
+              {take.category?.toUpperCase() || 'GENERAL'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.categoryBadge, { backgroundColor: theme.accent + '20' }]}>
+            <Text style={[
+              styles.category,
+              {
+                color: theme.accent,
+                fontSize: responsive.fontSize.small
+              }
+            ]}>
+              {take.category?.toUpperCase() || 'GENERAL'}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={[

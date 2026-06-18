@@ -8,6 +8,7 @@ import { HttpsError, onRequest } from 'firebase-functions/v2/https';
 initializeApp();
 
 const OPENAI_API_KEY = defineSecret('OPENAI_API_KEY');
+const ADMIN_DELETE_PIN = defineSecret('ADMIN_DELETE_PIN');
 const OPENAI_MODERATION_URL = 'https://api.openai.com/v1/moderations';
 const OPENAI_MODERATION_MODEL = 'omni-moderation-latest';
 const OPENAI_CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions';
@@ -16,6 +17,8 @@ const AI_SYSTEM_USER_ID = 'ai-system';
 const MIN_TAKE_LENGTH = 10;
 const MAX_TAKE_LENGTH = 150;
 const GENERATED_TAKE_COUNT = 8;
+const GENERATED_DUPLICATE_SIMILARITY_THRESHOLD = 0.75;
+const DUPLICATE_COMPARISON_LIMIT = 100;
 
 const VALID_CATEGORY_LIST = [
   'food',
@@ -47,6 +50,11 @@ interface SubmitTakeRequest {
 interface GenerateTakesRequest {
   category?: unknown;
   requestingUserId?: unknown;
+}
+
+interface AdminRemoveTakeRequest {
+  takeId?: unknown;
+  pin?: unknown;
 }
 
 interface OpenAIModerationResult {
@@ -178,6 +186,22 @@ const sanitizeGenerationCategory = (value: unknown): Category | 'all' => {
   }
 
   return category as Category;
+};
+
+const sanitizeTakeId = (value: unknown): string => {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'Take ID is required.');
+  }
+
+  return value.trim();
+};
+
+const sanitizeAdminPin = (value: unknown): string => {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'Admin PIN is required.');
+  }
+
+  return value.trim();
 };
 
 const checkLocalPolicy = (text: string): ModerationOutcome => {
@@ -331,6 +355,96 @@ const getTakeTextFingerprint = (text: string): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const normalizeTakeForSimilarity = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const getTokenSet = (normalizedText: string): Set<string> =>
+  new Set(normalizedText.split(' ').filter(Boolean));
+
+const getCharTrigrams = (normalizedText: string): Set<string> => {
+  if (normalizedText.length <= 3) {
+    return new Set([normalizedText]);
+  }
+
+  const trigrams = new Set<string>();
+  for (let index = 0; index <= normalizedText.length - 3; index += 1) {
+    trigrams.add(normalizedText.slice(index, index + 3));
+  }
+
+  return trigrams;
+};
+
+const jaccardSimilarity = <T>(first: Set<T>, second: Set<T>): number => {
+  if (first.size === 0 && second.size === 0) {
+    return 1;
+  }
+
+  let intersection = 0;
+  first.forEach((value) => {
+    if (second.has(value)) {
+      intersection += 1;
+    }
+  });
+
+  return intersection / (first.size + second.size - intersection);
+};
+
+const getTakeSimilarity = (firstText: string, secondText: string): number => {
+  const first = normalizeTakeForSimilarity(firstText);
+  const second = normalizeTakeForSimilarity(secondText);
+
+  if (!first || !second) {
+    return 0;
+  }
+
+  if (first === second) {
+    return 1;
+  }
+
+  const tokenScore = jaccardSimilarity(getTokenSet(first), getTokenSet(second));
+  const trigramScore = jaccardSimilarity(getCharTrigrams(first), getCharTrigrams(second));
+
+  return Math.max(tokenScore, trigramScore);
+};
+
+const getRecentApprovedTakeTextsByCategory = async (category: Category): Promise<string[]> => {
+  const snapshot = await db
+    .collection('takes')
+    .where('isApproved', '==', true)
+    .select('text', 'category')
+    .limit(1000)
+    .get();
+
+  return snapshot.docs
+    .filter((doc) => doc.get('category') === category)
+    .map((doc) => doc.get('text'))
+    .filter((text): text is string => typeof text === 'string' && text.trim().length > 0)
+    .slice(0, DUPLICATE_COMPARISON_LIMIT);
+};
+
+const findSimilarTake = (
+  text: string,
+  comparisonTexts: string[],
+  threshold = GENERATED_DUPLICATE_SIMILARITY_THRESHOLD
+): { text: string; score: number } | null => {
+  let bestMatch: { text: string; score: number } | null = null;
+
+  for (const comparisonText of comparisonTexts) {
+    const score = getTakeSimilarity(text, comparisonText);
+    if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
+      bestMatch = { text: comparisonText, score };
+    }
+  }
+
+  return bestMatch;
+};
+
 const parseGeneratedTakes = (data: OpenAIChatCompletionResponse): string[] => {
   const content = data.choices?.[0]?.message?.content;
   if (!content) {
@@ -431,41 +545,6 @@ const generateTakeCandidates = async (category: Category): Promise<string[]> => 
   return parseGeneratedTakes(data);
 };
 
-const takeTextExists = async (text: string): Promise<boolean> => {
-  const textFingerprint = getTakeTextFingerprint(text);
-  const [exactSnapshot, fingerprintSnapshot] = await Promise.all([
-    db
-      .collection('takes')
-      .where('text', '==', text)
-      .limit(1)
-      .get(),
-    db
-      .collection('takes')
-      .where('textFingerprint', '==', textFingerprint)
-      .limit(1)
-      .get(),
-  ]);
-
-  if (!exactSnapshot.empty || !fingerprintSnapshot.empty) {
-    return true;
-  }
-
-  // Older takes do not have textFingerprint yet, so scan a bounded slice to
-  // keep newly generated content from feeling repetitive before a backfill.
-  const legacySnapshot = await db
-    .collection('takes')
-    .where('isApproved', '==', true)
-    .select('text')
-    .limit(1000)
-    .get();
-
-  return legacySnapshot.docs.some((doc) => {
-    const existingText = doc.get('text');
-    return typeof existingText === 'string' &&
-      getTakeTextFingerprint(existingText) === textFingerprint;
-  });
-};
-
 const createTake = async ({
   text,
   category,
@@ -510,6 +589,10 @@ const httpStatusForError = (code: string): number => {
       return 400;
     case 'unauthenticated':
       return 401;
+    case 'permission-denied':
+      return 403;
+    case 'not-found':
+      return 404;
     case 'failed-precondition':
       return 412;
     default:
@@ -668,7 +751,9 @@ export const generateTakes = onRequest(
         });
       }
 
-      const candidates = await generateTakeCandidates(category);
+      const firstBatchCandidates = await generateTakeCandidates(category);
+      let generatedCandidateCount = firstBatchCandidates.length;
+      const comparisonTexts = await getRecentApprovedTakeTextsByCategory(category);
       let addedCount = 0;
       const skipped = {
         duplicate: 0,
@@ -677,63 +762,97 @@ export const generateTakes = onRequest(
       };
       const takeIds: string[] = [];
 
-      for (const text of candidates) {
-        const isDuplicate = await takeTextExists(text);
-        if (isDuplicate) {
-          skipped.duplicate += 1;
-          continue;
-        }
+      const processCandidateBatch = async (candidates: string[]) => {
+        for (const text of candidates) {
+          if (addedCount >= GENERATED_TAKE_COUNT) {
+            break;
+          }
 
-        const localPolicy = checkLocalPolicy(text);
-        if (!localPolicy.approved) {
-          skipped.localPolicy += 1;
-          continue;
-        }
-
-        try {
-          const moderation = await moderateWithOpenAI(text);
-          if (!moderation.approved) {
-            skipped.moderation += 1;
+          const similarTake = findSimilarTake(text, comparisonTexts);
+          if (similarTake) {
+            skipped.duplicate += 1;
+            logger.info('Skipped similar generated take.', {
+              category,
+              score: Math.round(similarTake.score * 1000) / 1000,
+              candidate: text,
+              matchedText: similarTake.text,
+            });
             continue;
           }
-        } catch (error) {
-          skipped.moderation += 1;
-          logger.error('OpenAI moderation failed for generated take; skipping candidate.', {
-            category,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          continue;
-        }
 
-        const takeId = await createTake({
-          text,
-          category,
-          userId: AI_SYSTEM_USER_ID,
-          status: 'approved',
-          isAIGenerated: true,
-        });
-        takeIds.push(takeId);
-        addedCount += 1;
+          const localPolicy = checkLocalPolicy(text);
+          if (!localPolicy.approved) {
+            skipped.localPolicy += 1;
+            continue;
+          }
+
+          try {
+            const moderation = await moderateWithOpenAI(text);
+            if (!moderation.approved) {
+              skipped.moderation += 1;
+              continue;
+            }
+          } catch (error) {
+            skipped.moderation += 1;
+            logger.error('OpenAI moderation failed for generated take; skipping candidate.', {
+              category,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            continue;
+          }
+
+          const takeId = await createTake({
+            text,
+            category,
+            userId: AI_SYSTEM_USER_ID,
+            status: 'approved',
+            isAIGenerated: true,
+          });
+          takeIds.push(takeId);
+          comparisonTexts.push(text);
+          addedCount += 1;
+        }
+      };
+
+      await processCandidateBatch(firstBatchCandidates);
+
+      const shouldRegenerateForDuplicates =
+        skipped.duplicate > 0 && addedCount < GENERATED_TAKE_COUNT;
+
+      if (shouldRegenerateForDuplicates) {
+        const duplicateCountBeforeRetry = skipped.duplicate;
+        const retryCandidates = await generateTakeCandidates(category);
+        generatedCandidateCount += retryCandidates.length;
+        await processCandidateBatch(retryCandidates);
+
+        if (skipped.duplicate > duplicateCountBeforeRetry) {
+          logger.info('Retry generation still produced similar takes; remaining duplicates were skipped.', {
+            category,
+            duplicateCount: skipped.duplicate - duplicateCountBeforeRetry,
+          });
+        }
       }
 
       logger.info('Generated takes request completed.', {
         requestedBy: userId,
         requestedCategory,
         category,
-        generatedCount: candidates.length,
+        generatedCount: generatedCandidateCount,
         addedCount,
         takeIds,
         skipped,
+        retriedForDuplicates: shouldRegenerateForDuplicates,
       });
 
       response.status(200).json({
         result: {
           requestedCategory,
           category,
-          generatedCount: candidates.length,
+          generatedCount: generatedCandidateCount,
           addedCount,
           takeIds,
           skipped,
+          retriedForDuplicates: shouldRegenerateForDuplicates,
         },
       });
     } catch (error) {
@@ -745,6 +864,79 @@ export const generateTakes = onRequest(
 
       if (!(error instanceof HttpsError)) {
         logger.error('generateTakes failed.', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      response.status(httpStatusForError(code)).json({
+        error: {
+          status: code.toUpperCase().replace(/-/g, '_'),
+          message,
+        },
+      });
+    }
+  }
+);
+
+export const adminRemoveTake = onRequest(
+  {
+    region: 'us-central1',
+    invoker: 'public',
+    secrets: [ADMIN_DELETE_PIN],
+    timeoutSeconds: 20,
+  },
+  async (request, response) => {
+    response.set('Access-Control-Allow-Origin', '*');
+    response.set('Access-Control-Allow-Headers', 'Content-Type, X-Firebase-Auth');
+    response.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+
+    if (request.method === 'OPTIONS') {
+      response.status(204).send('');
+      return;
+    }
+
+    try {
+      if (request.method !== 'POST') {
+        throw new HttpsError('invalid-argument', 'adminRemoveTake accepts POST requests only.');
+      }
+
+      const userId = await verifyFirebaseAuth(request.header('X-Firebase-Auth'), 'remove takes');
+      const data = extractRequestData<AdminRemoveTakeRequest>(request.body);
+      const takeId = sanitizeTakeId(data.takeId);
+      const pin = sanitizeAdminPin(data.pin);
+      const expectedPin = ADMIN_DELETE_PIN.value();
+
+      if (!expectedPin || pin !== expectedPin) {
+        logger.warn('Invalid admin remove PIN.', { userId, takeId });
+        throw new HttpsError('permission-denied', 'Invalid admin PIN.');
+      }
+
+      const takeRef = db.collection('takes').doc(takeId);
+      const takeSnapshot = await takeRef.get();
+      if (!takeSnapshot.exists) {
+        throw new HttpsError('not-found', 'Take not found.');
+      }
+
+      await takeRef.update({
+        isApproved: false,
+        status: 'rejected',
+        rejectedAt: FieldValue.serverTimestamp(),
+        rejectionReason: 'Manually removed by admin',
+        adminRemovedAt: FieldValue.serverTimestamp(),
+        adminRemovedBy: userId,
+      });
+
+      logger.info('Take manually removed by admin tool.', { takeId, userId });
+      response.status(200).json({ result: { takeId, status: 'rejected' } });
+    } catch (error) {
+      const code = error instanceof HttpsError ? error.code : 'internal';
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Admin remove failed.';
+
+      if (!(error instanceof HttpsError)) {
+        logger.error('adminRemoveTake failed.', {
           error: error instanceof Error ? error.message : String(error),
         });
       }

@@ -53,6 +53,7 @@ interface CustomSwipeableCardDeckProps {
   onIdentityTeaserPress?: () => void;
   firstVoteHintTakeId?: string | null;
   onFirstVoteHintDismiss?: () => void;
+  onAdminRemoveRequest?: (take: Take) => void;
 }
 
 // Safe flip for Android - no 3D to avoid compositor crashes
@@ -85,6 +86,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   onIdentityTeaserPress,
   firstVoteHintTakeId = null,
   onFirstVoteHintDismiss,
+  onAdminRemoveRequest,
 }) => {
   const responsive = useResponsive();
   const screenWidth = responsive.screen.width;
@@ -1164,6 +1166,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
                 isDarkMode={isDarkMode}
                 onNotPress={() => handleButtonVote('not')}
                 onHotPress={() => handleButtonVote('hot')}
+                onAdminRemoveRequest={onAdminRemoveRequest}
                 showStats={false}
                 userVote={null}
                 isFlipped={false}

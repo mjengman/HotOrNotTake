@@ -23,6 +23,7 @@ import { Take, TakeSubmission, TakeStatus } from '../types/Take';
 const TAKES_COLLECTION = 'takes';
 const SUBMIT_TAKE_URL = 'https://us-central1-hot-or-not-takes.cloudfunctions.net/submitTake';
 const GENERATE_TAKES_URL = 'https://us-central1-hot-or-not-takes.cloudfunctions.net/generateTakes';
+const ADMIN_REMOVE_TAKE_URL = 'https://us-central1-hot-or-not-takes.cloudfunctions.net/adminRemoveTake';
 
 interface SubmitTakeResponse {
   takeId: string;
@@ -36,6 +37,11 @@ interface GenerateTakesResponse {
   generatedCount: number;
   addedCount: number;
   takeIds?: string[];
+}
+
+interface AdminRemoveTakeResponse {
+  takeId: string;
+  status: 'rejected';
 }
 
 const callSubmitTakeFunction = async (data: {
@@ -101,6 +107,41 @@ export const requestGeneratedTakes = async (category: string): Promise<GenerateT
   }
 
   return body.result as GenerateTakesResponse;
+};
+
+export const adminRemoveTake = async (
+  takeId: string,
+  pin: string
+): Promise<AdminRemoveTakeResponse> => {
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) {
+    throw new Error('User must be signed in to remove takes');
+  }
+
+  const response = await fetch(ADMIN_REMOVE_TAKE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Firebase-Auth': `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({
+      data: {
+        takeId,
+        pin,
+      },
+    }),
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.error) {
+    throw new Error(body.error?.message || 'Failed to remove take');
+  }
+
+  if (!body.result?.takeId || body.result?.status !== 'rejected') {
+    throw new Error('Admin remove service returned an invalid response');
+  }
+
+  return body.result as AdminRemoveTakeResponse;
 };
 
 // Convert Firestore timestamp to Date

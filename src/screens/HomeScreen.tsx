@@ -10,6 +10,8 @@ import {
   Animated,
   Platform,
   TouchableOpacity,
+  Modal,
+  TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +41,7 @@ import {
 } from '../hooks';
 import { useResponsive } from '../hooks/useResponsive';
 import { deleteVote, getUserVoteForTake } from '../services/voteService';
+import { adminRemoveTake } from '../services/takeService';
 import { getCommunityStats } from '../services/userService';
 import { prefetchLeaderboardCache } from '../services/leaderboardCacheService';
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
@@ -131,6 +134,10 @@ export const HomeScreen: React.FC = () => {
   const [streakToast, setStreakToast] = useState<EngagementToast | null>(null);
   const [identityTeaser, setIdentityTeaser] = useState<IdentityTeaser | null>(null);
   const [skipRequestToken, setSkipRequestToken] = useState(0);
+  const [adminRemovalTake, setAdminRemovalTake] = useState<Take | null>(null);
+  const [adminRemovalPin, setAdminRemovalPin] = useState('');
+  const [adminRemovalError, setAdminRemovalError] = useState<string | null>(null);
+  const [adminRemovalLoading, setAdminRemovalLoading] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const streakToastAnim = useRef(new Animated.Value(0)).current;
   const toastQueueRef = useRef<EngagementToast[]>([]);
@@ -144,7 +151,7 @@ export const HomeScreen: React.FC = () => {
   const onboardingCompletingRef = useRef(false);
   const firstVoteHintMarkedRef = useRef(false);
   const { user, loading: authLoading, signIn } = useAuth();
-  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake } = useFirebaseTakes({
+  const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake, removeTakeLocally } = useFirebaseTakes({
     category: selectedCategory
   });
   const { stats, loading: statsLoading, refreshStats, applyEngagementUpdate } = useUserStats();
@@ -766,6 +773,60 @@ export const HomeScreen: React.FC = () => {
   const openSafety = React.useCallback(() => setShowSafetyModal(true), []);
   const openVotingStyle = React.useCallback(() => setShowVotingStyleModal(true), []);
 
+  const requestAdminTakeRemoval = React.useCallback((take: Take) => {
+    setAdminRemovalTake(take);
+    setAdminRemovalPin('');
+    setAdminRemovalError(null);
+  }, []);
+
+  const closeAdminRemovalModal = React.useCallback(() => {
+    if (adminRemovalLoading) return;
+    setAdminRemovalTake(null);
+    setAdminRemovalPin('');
+    setAdminRemovalError(null);
+  }, [adminRemovalLoading]);
+
+  const confirmAdminTakeRemoval = React.useCallback(async () => {
+    if (!adminRemovalTake || adminRemovalLoading) {
+      return;
+    }
+
+    const pin = adminRemovalPin.trim();
+    if (!pin) {
+      setAdminRemovalError('Enter the admin PIN.');
+      return;
+    }
+
+    setAdminRemovalLoading(true);
+    setAdminRemovalError(null);
+
+    try {
+      await adminRemoveTake(adminRemovalTake.id, pin);
+      removeTakeLocally(adminRemovalTake.id);
+      setSessionVoteHistory(prev => prev.filter(entry => entry.take.id !== adminRemovalTake.id));
+      if (selectedTakeForStats?.take.id === adminRemovalTake.id) {
+        setSelectedTakeForStats(null);
+      }
+      enqueueToast({
+        title: 'Removed from feed',
+        subtitle: 'This take was rejected and will no longer appear for users.',
+      });
+      setAdminRemovalTake(null);
+      setAdminRemovalPin('');
+    } catch (error) {
+      setAdminRemovalError(error instanceof Error ? error.message : 'Unable to remove take.');
+    } finally {
+      setAdminRemovalLoading(false);
+    }
+  }, [
+    adminRemovalLoading,
+    adminRemovalPin,
+    adminRemovalTake,
+    enqueueToast,
+    removeTakeLocally,
+    selectedTakeForStats?.take.id,
+  ]);
+
   const handleCategoryChange = (newCategory: string) => {
     // Trigger ad on category change (session end)
     onSessionEnd();
@@ -948,6 +1009,7 @@ export const HomeScreen: React.FC = () => {
             onIdentityTeaserPress={openVotingStyle}
             firstVoteHintTakeId={firstVoteHintTakeId}
             onFirstVoteHintDismiss={() => setFirstVoteHintTakeId(null)}
+            onAdminRemoveRequest={requestAdminTakeRemoval}
           />
         )}
       </View>
@@ -1159,6 +1221,82 @@ export const HomeScreen: React.FC = () => {
           </Text>
         </Animated.View>
       )}
+
+      <Modal
+        visible={!!adminRemovalTake}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAdminRemovalModal}
+      >
+        <View style={styles.adminModalBackdrop}>
+          <View style={[
+            styles.adminModalCard,
+            {
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+            },
+          ]}>
+            <Text style={[styles.adminModalTitle, { color: theme.text }]}>
+              Remove this take?
+            </Text>
+            <Text style={[styles.adminModalTake, { color: theme.textSecondary }]} numberOfLines={3}>
+              {adminRemovalTake?.text}
+            </Text>
+            <TextInput
+              style={[
+                styles.adminPinInput,
+                {
+                  color: theme.text,
+                  borderColor: adminRemovalError ? theme.error : theme.border,
+                  backgroundColor: isDarkMode ? '#1F1F1F' : '#FFFFFF',
+                },
+              ]}
+              value={adminRemovalPin}
+              onChangeText={(value) => {
+                setAdminRemovalPin(value);
+                if (adminRemovalError) {
+                  setAdminRemovalError(null);
+                }
+              }}
+              placeholder="Admin PIN"
+              placeholderTextColor={theme.textSecondary}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!adminRemovalLoading}
+              returnKeyType="done"
+              onSubmitEditing={confirmAdminTakeRemoval}
+            />
+            {adminRemovalError && (
+              <Text style={[styles.adminModalError, { color: theme.error }]}>
+                {adminRemovalError}
+              </Text>
+            )}
+            <View style={styles.adminModalActions}>
+              <TouchableOpacity
+                style={[styles.adminModalButton, { backgroundColor: theme.border }]}
+                onPress={closeAdminRemovalModal}
+                disabled={adminRemovalLoading}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.adminModalButtonText, { color: theme.text }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.adminModalButton, { backgroundColor: theme.primary }]}
+                onPress={confirmAdminTakeRemoval}
+                disabled={adminRemovalLoading}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.adminModalButtonText, { color: '#FFFFFF' }]}>
+                  {adminRemovalLoading ? 'Removing...' : 'Remove'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
 
       {/* Submit Take Modal - Conditional Rendering */}
@@ -1571,6 +1709,75 @@ const createStyles = (responsive: any, insets: any) => {
     fontWeight: '600',
     textAlign: 'center',
     marginTop: 2,
+  },
+  adminModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: responsive.spacing.xl,
+    zIndex: 5000,
+  },
+  adminModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: responsive.spacing.lg,
+    paddingVertical: responsive.spacing.lg,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.26,
+    shadowRadius: 16,
+  },
+  adminModalTitle: {
+    fontSize: responsive.fontSize.large,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: responsive.spacing.sm,
+  },
+  adminModalTake: {
+    fontSize: responsive.fontSize.small,
+    fontWeight: '700',
+    lineHeight: responsive.fontSize.small * 1.3,
+    textAlign: 'center',
+    marginBottom: responsive.spacing.md,
+  },
+  adminPinInput: {
+    minHeight: motion.touchTarget.minimum,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: responsive.spacing.md,
+    fontSize: responsive.fontSize.medium,
+    fontWeight: '700',
+    marginBottom: responsive.spacing.sm,
+  },
+  adminModalError: {
+    fontSize: responsive.fontSize.small,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: responsive.spacing.sm,
+  },
+  adminModalActions: {
+    flexDirection: 'row',
+    gap: responsive.spacing.sm,
+    marginTop: responsive.spacing.xs,
+  },
+  adminModalButton: {
+    flex: 1,
+    minHeight: motion.touchTarget.minimum,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: responsive.spacing.md,
+  },
+  adminModalButtonText: {
+    fontSize: responsive.fontSize.medium,
+    fontWeight: '900',
   },
   emptySubtext: {
     fontSize: responsive.fontSize.medium,

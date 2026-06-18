@@ -38,6 +38,7 @@ interface UseFirebaseTakesResult {
   loadMore: (count?: number, force?: boolean, background?: boolean) => Promise<void>;
   hasMore: boolean;
   prependTake: (take: Take) => void;
+  removeTakeLocally: (takeId: string) => void;
 }
 
 interface UseFirebaseTakesOptions {
@@ -888,6 +889,31 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
   }, [userId]);
 
+  const removeTakeLocally = useCallback((takeId: string) => {
+    sessionHiddenTakeIdsRef.current.add(takeId);
+    sessionHiddenFromMySkipsRef.current.add(takeId);
+
+    setFeed(prev => {
+      const removedTake = prev.find(take => take.id === takeId);
+      if (removedTake) {
+        const textFingerprint = getTakeTextFingerprint(removedTake.text);
+        if (textFingerprint) {
+          sessionSeenTextFingerprintsRef.current.add(textFingerprint);
+        }
+      }
+
+      const nextFeed = prev.filter(take => take.id !== takeId);
+      if (userId) {
+        writeFeedCache(userId, category, nextFeed).catch(console.warn);
+        if (category !== 'all') {
+          removeTakeFromFeedCache(userId, 'all', takeId).catch(console.warn);
+        }
+        removeTakeFromFeedCache(userId, MY_SKIPS_CATEGORY, takeId).catch(console.warn);
+      }
+      return nextFeed;
+    });
+  }, [category, userId]);
+
   // Refresh takes manually
   const refreshTakes = useCallback(async (): Promise<void> => {
     if (!userId) {
@@ -1000,5 +1026,6 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     loadMore,
     hasMore,
     prependTake,
+    removeTakeLocally,
   };
 };
