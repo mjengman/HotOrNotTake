@@ -19,6 +19,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as StoreReview from 'expo-store-review';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
 import { OnboardingCard } from '../components/OnboardingCard';
@@ -68,6 +69,7 @@ const LEGACY_FIRST_LAUNCH_KEY = 'hasLaunchedBefore';
 const FIRST_VOTE_HINT_SHOWN_KEY = 'first_vote_hint_shown';
 const DAILY_CHALLENGE_NUDGE_PREFIX = 'dailyChallengeNudgeShown';
 const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
+const REVIEW_PROMPT_ATTEMPTED_KEY = 'review_prompt_attempted';
 type EngagementToast = {
   title: string;
   subtitle: string;
@@ -94,8 +96,8 @@ const SESSION_VOTE_HISTORY_LIMIT = 10;
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 const QUEST_COMPLETE_TOAST: EngagementToast = {
-  title: '🎯 Quest complete!',
-  subtitle: "Nice work. Today's goal is yours. Keep voting if you're feeling it.",
+  title: 'Quest complete 🎯',
+  subtitle: "You crushed today's quest. Keep playing if you're feeling it.",
   variant: 'questComplete',
 };
 
@@ -352,6 +354,12 @@ export const HomeScreen: React.FC = () => {
   const notificationSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationPermissionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationPermissionPendingRef = useRef(false);
+  const reviewPromptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reviewPromptPendingContextRef = useRef<{
+    totalVotes: number;
+    currentStreak: number;
+  } | null>(null);
+  const reviewPromptInFlightRef = useRef(false);
   const identityTeaserShownRef = useRef(false);
   const lastIdentityTeaserRef = useRef<string | null>(null);
   const onboardingCompletingRef = useRef(false);
@@ -477,6 +485,44 @@ export const HomeScreen: React.FC = () => {
     }, 1800);
   }, [authLoading, statsHydrated, statsLoading, user?.uid]);
 
+  const maybeRequestStoreReview = React.useCallback(async ({
+    totalVotes,
+    currentStreak,
+  }: {
+    totalVotes: number;
+    currentStreak: number;
+  }) => {
+    if (reviewPromptInFlightRef.current || totalVotes < 10 || currentStreak < 2) {
+      return;
+    }
+
+    reviewPromptInFlightRef.current = true;
+
+    try {
+      const alreadyAttempted = await AsyncStorage.getItem(REVIEW_PROMPT_ATTEMPTED_KEY);
+      if (alreadyAttempted === 'true') {
+        return;
+      }
+
+      const isAvailable = await StoreReview.isAvailableAsync();
+      if (!isAvailable) {
+        return;
+      }
+
+      const hasAction = await StoreReview.hasAction();
+      if (!hasAction) {
+        return;
+      }
+
+      await AsyncStorage.setItem(REVIEW_PROMPT_ATTEMPTED_KEY, 'true');
+      await StoreReview.requestReview();
+    } catch {
+      // Store review prompts are opportunistic; never interrupt the gameplay flow.
+    } finally {
+      reviewPromptInFlightRef.current = false;
+    }
+  }, []);
+
   const runPendingNotificationPermissionRequest = React.useCallback(() => {
     if (
       !notificationPermissionPendingRef.current ||
@@ -502,10 +548,42 @@ export const HomeScreen: React.FC = () => {
     }, 700);
   }, [syncNotificationReminders]);
 
+  const runPendingQuestCompletionFollowups = React.useCallback(() => {
+    if (
+      toastAnimatingRef.current ||
+      toastQueueRef.current.length > 0 ||
+      reviewPromptTimeoutRef.current
+    ) {
+      return;
+    }
+
+    const pendingReviewContext = reviewPromptPendingContextRef.current;
+    if (pendingReviewContext) {
+      reviewPromptPendingContextRef.current = null;
+      reviewPromptTimeoutRef.current = setTimeout(async () => {
+        reviewPromptTimeoutRef.current = null;
+        await maybeRequestStoreReview(pendingReviewContext);
+        runPendingNotificationPermissionRequest();
+      }, 1500);
+      return;
+    }
+
+    runPendingNotificationPermissionRequest();
+  }, [maybeRequestStoreReview, runPendingNotificationPermissionRequest]);
+
+  const requestStoreReviewAfterQuestCompletion = React.useCallback((context: {
+    totalVotes: number;
+    currentStreak: number;
+  }) => {
+    reviewPromptPendingContextRef.current = context;
+    runPendingQuestCompletionFollowups();
+  }, [runPendingQuestCompletionFollowups]);
+
   const requestNotificationsForCompletedQuest = React.useCallback(() => {
     notificationPermissionPendingRef.current = true;
-    runPendingNotificationPermissionRequest();
-  }, [runPendingNotificationPermissionRequest]);
+    runPendingQuestCompletionFollowups();
+  }, [runPendingQuestCompletionFollowups]);
+
 
   const notificationStatsKey = useMemo(() => {
     const challenge = stats.dailyChallenge;
@@ -750,7 +828,12 @@ export const HomeScreen: React.FC = () => {
         clearTimeout(notificationPermissionTimeoutRef.current);
         notificationPermissionTimeoutRef.current = null;
       }
+      if (reviewPromptTimeoutRef.current) {
+        clearTimeout(reviewPromptTimeoutRef.current);
+        reviewPromptTimeoutRef.current = null;
+      }
       notificationPermissionPendingRef.current = false;
+      reviewPromptPendingContextRef.current = null;
     };
   }, []);
 
@@ -833,7 +916,7 @@ export const HomeScreen: React.FC = () => {
 
     const nextToast = toastQueueRef.current.shift();
     if (!nextToast) {
-      runPendingNotificationPermissionRequest();
+      runPendingQuestCompletionFollowups();
       return;
     }
 
@@ -848,7 +931,7 @@ export const HomeScreen: React.FC = () => {
         damping: motion.spring.press.damping,
         stiffness: motion.spring.press.stiffness,
       }),
-      Animated.delay(nextToast.variant === 'questComplete' ? 3400 : 2400),
+      Animated.delay(nextToast.variant === 'questComplete' ? 4000 : 2400),
       Animated.timing(streakToastAnim, {
         toValue: 0,
         duration: motion.duration.fadeOut,
@@ -863,7 +946,7 @@ export const HomeScreen: React.FC = () => {
         }, 180);
       }
     });
-  }, [runPendingNotificationPermissionRequest, streakToastAnim]);
+  }, [runPendingQuestCompletionFollowups, streakToastAnim]);
 
   const enqueueToast = React.useCallback((toast: EngagementToast) => {
     toastQueueRef.current.push(toast);
@@ -1076,6 +1159,10 @@ export const HomeScreen: React.FC = () => {
           applyEngagementUpdate(streakUpdate);
         }
         enqueueToast(QUEST_COMPLETE_TOAST);
+        requestStoreReviewAfterQuestCompletion({
+          totalVotes: streakUpdate.totalVotes ?? statsRef.current.totalVotes,
+          currentStreak: streakUpdate.currentStreak,
+        });
         requestNotificationsForCompletedQuest();
       } else if (streakUpdate && !streakUpdate.didUpdateToday) {
         applyEngagementUpdate(streakUpdate);
@@ -1654,13 +1741,13 @@ export const HomeScreen: React.FC = () => {
       {streakToast && (() => {
         const isQuestCompleteToast = streakToast.variant === 'questComplete';
         const toastBackgroundColor = isQuestCompleteToast
-          ? (isDarkMode ? '#203A2A' : '#E9FAEF')
+          ? (isDarkMode ? '#3A2F1E' : '#FFF4D8')
           : (isDarkMode ? '#3A3020' : '#FFF6E2');
         const toastBorderColor = isQuestCompleteToast
-          ? (isDarkMode ? 'rgba(46, 213, 115, 0.72)' : '#A9ECC2')
+          ? (isDarkMode ? 'rgba(255, 165, 2, 0.78)' : '#FFC85A')
           : (isDarkMode ? 'rgba(255, 165, 2, 0.68)' : '#FFD88A');
         const toastSubtitleColor = isQuestCompleteToast
-          ? (isDarkMode ? '#C7F7D8' : '#277C46')
+          ? (isDarkMode ? '#FFE1A1' : '#745018')
           : (isDarkMode ? '#F3DDB8' : theme.textSecondary);
 
         return (
@@ -1672,8 +1759,8 @@ export const HomeScreen: React.FC = () => {
                 backgroundColor: toastBackgroundColor,
                 borderColor: toastBorderColor,
                 borderWidth: isQuestCompleteToast ? 1.5 : 1.25,
-                shadowColor: isQuestCompleteToast ? theme.success : (isDarkMode ? theme.accent : '#000'),
-                shadowOpacity: isQuestCompleteToast ? (isDarkMode ? 0.38 : 0.24) : 0.28,
+                shadowColor: isQuestCompleteToast ? theme.accent : (isDarkMode ? theme.accent : '#000'),
+                shadowOpacity: isQuestCompleteToast ? (isDarkMode ? 0.42 : 0.26) : 0.28,
                 opacity: streakToastAnim,
                 transform: [
                   {
@@ -1692,7 +1779,7 @@ export const HomeScreen: React.FC = () => {
               },
             ]}
           >
-            <Text style={[styles.streakToastTitle, { color: isQuestCompleteToast ? theme.success : theme.text }]}>
+            <Text style={[styles.streakToastTitle, { color: isQuestCompleteToast ? theme.accent : theme.text }]}>
               {streakToast.title}
             </Text>
             <Text style={[styles.streakToastSubtitle, { color: toastSubtitleColor }]}>
