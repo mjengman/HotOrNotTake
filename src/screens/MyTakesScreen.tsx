@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,12 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Animated,
+  Easing,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { useAuth } from '../hooks';
 import { useResponsive } from '../hooks/useResponsive';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, dimensions, motion } from '../constants';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { Take } from '../types';
@@ -25,6 +26,8 @@ interface MyTakesScreenProps {
   refreshTrigger?: number; // Timestamp to trigger refresh
 }
 
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
 export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
   onClose,
   onOpenSubmit,
@@ -34,15 +37,32 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
 }) => {
   const { user } = useAuth();
   const responsive = useResponsive();
-  const insets = useSafeAreaInsets();
   const [takes, setTakes] = useState<Take[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const summaryActionFillAnim = useRef(new Animated.Value(0)).current;
   
   const theme = isDarkMode ? colors.dark : colors.light;
   
   // Create responsive styles
-  const styles = useMemo(() => createStyles(responsive, insets), [responsive, insets]);
+  const styles = useMemo(() => createStyles(responsive), [responsive]);
+  const summaryActionSurface = isDarkMode ? theme.surface : '#F0F0F1';
+  const summaryActionFill = summaryActionFillAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [summaryActionSurface, `${theme.primary}5C`],
+  });
+
+  const handleOpenSubmit = () => {
+    summaryActionFillAnim.stopAnimation();
+    summaryActionFillAnim.setValue(1);
+    Animated.timing(summaryActionFillAnim, {
+      toValue: 0,
+      duration: 170,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+    onOpenSubmit();
+  };
 
   const loadUserTakes = async () => {
     if (!user) return;
@@ -292,6 +312,24 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
               Total Votes
             </Text>
           </View>
+
+          <AnimatedTouchableOpacity
+            style={[
+              styles.summaryAction,
+              {
+                backgroundColor: summaryActionFill,
+                borderColor: theme.primary,
+                shadowColor: theme.primary,
+              },
+            ]}
+            onPress={handleOpenSubmit}
+            activeOpacity={1}
+            accessibilityRole="button"
+            accessibilityLabel="Submit another hot take"
+          >
+            <Text style={styles.summaryActionIcon}>✏️</Text>
+            <Text style={[styles.summaryActionText, { color: theme.primary }]}>New take</Text>
+          </AnimatedTouchableOpacity>
         </View>
       </View>
 
@@ -317,7 +355,7 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
             </Text>
             <Text style={[styles.emptyDescription, { color: theme.textSecondary }]}>
               You haven't submitted any hot takes yet.{'\n'}
-              Tap the ✏️ button to create your first one!
+              Tap New take to create your first one.
             </Text>
           </View>
         ) : (
@@ -327,26 +365,12 @@ export const MyTakesScreen: React.FC<MyTakesScreenProps> = ({
         )}
       </ScrollView>
 
-      {/* Floating Action Button */}
-      <AnimatedPressable
-        style={[styles.fabButton, { backgroundColor: theme.primary }]}
-        onPress={onOpenSubmit}
-        scaleValue={0.9}
-        hapticIntensity={motion.haptic.selection}
-        accessibilityRole="button"
-        accessibilityLabel="Submit another hot take"
-      >
-        <Text style={styles.fabText}>✏️</Text>
-      </AnimatedPressable>
     </SafeAreaView>
   );
 };
 
 // Create responsive styles function
-const createStyles = (responsive: any, insets: any) => {
-  const controlSize = Math.max(motion.touchTarget.comfortable, responsive.iconSize.xlarge);
-  const fabBottom = Math.max(144, responsive.spacing.xxl * 3 + insets.bottom);
-
+const createStyles = (responsive: any) => {
   return StyleSheet.create({
   container: {
     flex: 1,
@@ -384,11 +408,39 @@ const createStyles = (responsive: any, insets: any) => {
   },
   summaryGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: dimensions.spacing.sm,
   },
   summaryItem: {
     alignItems: 'center',
     flex: 1,
+  },
+  summaryAction: {
+    minHeight: motion.touchTarget.minimum,
+    minWidth: 104,
+    borderRadius: 14,
+    borderWidth: 1.75,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    elevation: 3,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+  },
+  summaryActionIcon: {
+    fontSize: responsive.fontSize.medium,
+  },
+  summaryActionText: {
+    color: '#FFFFFF',
+    fontSize: dimensions.fontSize.small,
+    fontWeight: '800',
   },
   summaryValue: {
     fontSize: dimensions.fontSize.xlarge,
@@ -541,28 +593,6 @@ const createStyles = (responsive: any, insets: any) => {
     fontSize: dimensions.fontSize.medium,
     textAlign: 'center',
     lineHeight: 22,
-  },
-  fabButton: {
-    position: 'absolute',
-    bottom: fabBottom,
-    right: responsive.spacing.lg,
-    width: controlSize,
-    height: controlSize,
-    borderRadius: controlSize / 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4, // Match invite button elevation
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  fabText: {
-    fontSize: responsive.fontSize.large,
-    fontWeight: 'bold',
   },
   });
 };

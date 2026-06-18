@@ -7,7 +7,6 @@ import {
   Animated,
   useWindowDimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors, motion } from '../constants';
 import { AnimatedPressable } from './transitions/AnimatedPressable';
 
@@ -25,54 +24,32 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
   isDarkMode = false,
 }) => {
   const { width } = useWindowDimensions();
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.96)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
-      // Reset animations
-      scaleAnim.setValue(0);
-      rotateAnim.setValue(0);
+      scaleAnim.setValue(0.96);
       fadeAnim.setValue(0);
 
-      // Start animations
       Animated.parallel([
-        Animated.spring(scaleAnim, {
+        Animated.timing(scaleAnim, {
           toValue: 1,
-          tension: 50,
-          friction: 3,
+          duration: 220,
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 300,
+          duration: 180,
           useNativeDriver: true,
         }),
-        Animated.sequence([
-          Animated.timing(rotateAnim, {
-            toValue: 1,
-            duration: 400,
-            delay: 200,
-            useNativeDriver: true,
-          }),
-          Animated.spring(rotateAnim, {
-            toValue: 0,
-            tension: 100,
-            friction: 5,
-            useNativeDriver: true,
-          }),
-        ]),
       ]).start();
     }
   }, [visible]);
 
-  const spin = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
   const theme = isDarkMode ? colors.dark : colors.light;
+  const successSoft = isDarkMode ? 'rgba(46, 213, 115, 0.14)' : '#E9FAEF';
+  const successBorder = isDarkMode ? 'rgba(46, 213, 115, 0.38)' : '#A9ECC2';
 
   return (
     <Modal
@@ -92,78 +69,85 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
             }
           ]}
         >
-          <LinearGradient
-            colors={['#FF6B6B', '#FF8B8B']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.gradientContainer}
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+            ]}
           >
-            {/* Success Icon */}
-            <Animated.View 
+            <View
               style={[
                 styles.iconContainer,
-                { transform: [{ rotate: spin }] }
+                {
+                  backgroundColor: successSoft,
+                  borderColor: successBorder,
+                },
               ]}
             >
-              <Text style={styles.successIcon}>🔥</Text>
-            </Animated.View>
-
-            {/* Title */}
-            <Text style={styles.title}>TAKE RECEIVED!</Text>
-            
-            {/* Subtitle */}
-            <Text style={styles.subtitle}>
-              We're checking it now.
-            </Text>
-
-            {/* Stats Preview */}
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statEmoji}>❄️</Text>
-                <Text style={styles.statLabel}>NOT</Text>
-                <Text style={styles.statValue}>0</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statEmoji}>🔥</Text>
-                <Text style={styles.statLabel}>HOT</Text>
-                <Text style={styles.statValue}>0</Text>
-              </View>
+              <Text style={[styles.successIcon, { color: theme.success }]}>✓</Text>
             </View>
 
-            {/* Motivational Text */}
-            <Text style={styles.motivationalText}>
-              If approved, it joins the voting queue automatically.
+            <Text style={[styles.title, { color: theme.text }]}>Take submitted</Text>
+
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+              We'll review it before it joins the voting queue.
             </Text>
 
-            {/* Action Buttons */}
+            <View
+              style={[
+                styles.statusPill,
+                {
+                  backgroundColor: successSoft,
+                  borderColor: successBorder,
+                },
+              ]}
+            >
+              <Text style={[styles.statusText, { color: theme.success }]}>
+                Success
+              </Text>
+            </View>
+
+            <Text style={[styles.helperText, { color: theme.textSecondary }]}>
+              Thanks for helping keep the room interesting.
+            </Text>
+
             <View style={styles.buttonContainer}>
               <AnimatedPressable
-                style={[styles.button, styles.secondaryButton]}
+                style={[
+                  styles.button,
+                  styles.secondaryButton,
+                  {
+                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
+                    borderColor: theme.border,
+                  },
+                ]}
                 onPress={onSubmitAnother}
                 scaleValue={0.97}
-                hapticIntensity={motion.haptic.light}
+                hapticFeedback={false}
               >
-                <Text 
-                  style={styles.secondaryButtonText}
+                <Text
+                  style={[styles.secondaryButtonText, { color: theme.text }]}
                   numberOfLines={1}
                   adjustsFontSizeToFit={true}
                   minimumFontScale={0.8}
                 >
-                  More To Say? 🚀
+                  Submit another
                 </Text>
               </AnimatedPressable>
               
               <AnimatedPressable
-                style={[styles.button, styles.primaryButton]}
+                style={[styles.button, styles.primaryButton, { backgroundColor: theme.primary }]}
                 onPress={onDone}
                 scaleValue={0.97}
-                hapticIntensity={motion.haptic.light}
+                hapticFeedback={false}
               >
                 <Text style={styles.primaryButtonText}>Done</Text>
               </AnimatedPressable>
             </View>
-          </LinearGradient>
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -179,84 +163,60 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     maxWidth: 400,
-    borderRadius: 20,
+    borderRadius: 18,
     overflow: 'hidden',
-    elevation: 10,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
   },
-  gradientContainer: {
-    padding: 30,
+  card: {
+    padding: 26,
     alignItems: 'center',
+    borderWidth: 1,
   },
   iconContainer: {
-    marginBottom: 20,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
   },
   successIcon: {
-    fontSize: 80,
+    fontSize: 32,
+    fontWeight: '900',
   },
   title: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-    marginBottom: 10,
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#FFFFFF',
-    opacity: 0.95,
     textAlign: 'center',
-    marginBottom: 25,
-    lineHeight: 22,
+    marginBottom: 16,
+    lineHeight: 23,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+  statusPill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 16,
   },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statEmoji: {
-    fontSize: 30,
-    marginBottom: 5,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    opacity: 0.8,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  statValue: {
-    fontSize: 24,
-    color: '#FFFFFF',
+  statusText: {
+    fontSize: 13,
     fontWeight: '800',
-    marginTop: 2,
   },
-  statDivider: {
-    width: 1,
-    height: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginHorizontal: 20,
-  },
-  motivationalText: {
+  helperText: {
     fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.9,
     textAlign: 'center',
-    marginBottom: 25,
-    fontStyle: 'italic',
+    marginBottom: 22,
+    lineHeight: 20,
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -265,28 +225,29 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 13,
     minHeight: motion.touchTarget.minimum,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderWidth: 1,
   },
   primaryButton: {
-    backgroundColor: '#FFFFFF',
+    shadowColor: '#FF4757',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   secondaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
   primaryButtonText: {
-    color: '#FF6B6B',
-    fontSize: 16,
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
   },
 });
