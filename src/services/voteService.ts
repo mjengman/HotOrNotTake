@@ -65,6 +65,44 @@ const convertFirestoreVote = (id: string, data: any): TakeVote => ({
   userAgent: data.userAgent,
 });
 
+export const persistVoteToFirebase = async (
+  takeId: string,
+  userId: string,
+  vote: 'hot' | 'not'
+): Promise<boolean> => {
+  // Check if user has already voted on this take
+  const existingVote = await getUserVoteForTake(takeId, userId);
+  if (existingVote) {
+    return false;
+  }
+
+  // Create the vote document
+  const voteData: TakeVoteFirestore = {
+    takeId,
+    userId,
+    vote,
+    votedAt: new Date(),
+    userAgent: navigator?.userAgent || 'Unknown',
+  };
+
+  // Use batch write to ensure consistency
+  const batch = writeBatch(db);
+
+  // Add the vote document
+  const voteRef = doc(collection(db, VOTES_COLLECTION));
+  batch.set(voteRef, {
+    ...voteData,
+    votedAt: Timestamp.fromDate(voteData.votedAt),
+  });
+
+  // Commit the batch
+  await batch.commit();
+
+  // Update the take vote counts (separate operation for better reliability)
+  await updateTakeVotes(takeId, vote);
+  return true;
+};
+
 // Submit a vote
 export const submitVote = async (
   takeId: string,
@@ -72,38 +110,7 @@ export const submitVote = async (
   vote: 'hot' | 'not'
 ): Promise<void> => {
   try {
-    // Check if user has already voted on this take
-    const existingVote = await getUserVoteForTake(takeId, userId);
-    if (existingVote) {
-      console.warn(`Duplicate vote attempt: User ${userId} already voted on take ${takeId}`);
-      // Silently return success instead of throwing - prevents crash
-      return;
-    }
-
-    // Create the vote document
-    const voteData: TakeVoteFirestore = {
-      takeId,
-      userId,
-      vote,
-      votedAt: new Date(),
-      userAgent: navigator?.userAgent || 'Unknown',
-    };
-
-    // Use batch write to ensure consistency
-    const batch = writeBatch(db);
-
-    // Add the vote document
-    const voteRef = doc(collection(db, VOTES_COLLECTION));
-    batch.set(voteRef, {
-      ...voteData,
-      votedAt: Timestamp.fromDate(voteData.votedAt),
-    });
-
-    // Commit the batch
-    await batch.commit();
-
-    // Update the take vote counts (separate operation for better reliability)
-    await updateTakeVotes(takeId, vote);
+    await persistVoteToFirebase(takeId, userId, vote);
   } catch (error) {
     console.error('Error submitting vote:', error);
     // Don't throw - just log the error to prevent crashes

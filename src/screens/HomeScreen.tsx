@@ -44,13 +44,14 @@ import {
 import { useResponsive } from '../hooks/useResponsive';
 import { deleteVote, getUserVoteForTake } from '../services/voteService';
 import { adminRemoveTake } from '../services/takeService';
-import { getCommunityStats } from '../services/userService';
+import { buildOptimisticVoteEngagementUpdate, getCommunityStats } from '../services/userService';
 import { prefetchLeaderboardCache } from '../services/leaderboardCacheService';
 import {
   requestNotificationsAfterQuestCompletion,
   scheduleStreakMilestoneNotification,
   syncDailyReminderNotifications,
 } from '../services/notificationService';
+import { flushVoteOutbox } from '../services/voteOutboxService';
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 import { colors, motion } from '../constants';
 import { StreakUpdateResult, Take } from '../types';
@@ -68,7 +69,6 @@ type IdentityTeaser = { takeId: string; text: string };
 type SessionVoteHistoryEntry = { take: Take; vote: 'hot' | 'not' };
 
 const SESSION_VOTE_HISTORY_LIMIT = 10;
-const POST_RESULT_SYNC_DELAY_MS = 120;
 
 const formatCompactCount = (count: number) => {
   if (count >= 1000000) {
@@ -282,13 +282,29 @@ export const HomeScreen: React.FC = () => {
       return undefined;
     }
 
+    const launchFlushTimeout = setTimeout(() => {
+      InteractionManager.runAfterInteractions(() => {
+        flushVoteOutbox().catch(error => {
+          console.warn('Unable to flush queued votes on launch:', error);
+        });
+      });
+    }, 2500);
+
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
+        InteractionManager.runAfterInteractions(() => {
+          flushVoteOutbox().catch(error => {
+            console.warn('Unable to flush queued votes on foreground:', error);
+          });
+        });
         syncNotificationReminders(statsRef.current);
       }
     });
 
-    return () => subscription.remove();
+    return () => {
+      clearTimeout(launchFlushTimeout);
+      subscription.remove();
+    };
   }, [syncNotificationReminders, user?.uid]);
 
   useEffect(() => {
@@ -734,10 +750,33 @@ export const HomeScreen: React.FC = () => {
         optimisticallyAddedToHistory = true;
       }
 
-      await new Promise(resolve => setTimeout(resolve, POST_RESULT_SYNC_DELAY_MS));
-
-      const streakUpdate = await submitVote(takeId, vote, {
+      const hotVotesAfter = votedTake
+        ? votedTake.hotVotes + (vote === 'hot' ? 1 : 0)
+        : undefined;
+      const notVotesAfter = votedTake
+        ? votedTake.notVotes + (vote === 'not' ? 1 : 0)
+        : undefined;
+      const totalVotesAfter =
+        hotVotesAfter !== undefined && notVotesAfter !== undefined
+          ? hotVotesAfter + notVotesAfter
+          : undefined;
+      const voteContext = {
+        category: votedTake?.category,
+        totalVotesBefore: votedTake?.totalVotes,
+        hotVotesAfter,
+        notVotesAfter,
+        totalVotesAfter,
+      };
+      const streakUpdate = buildOptimisticVoteEngagementUpdate(statsRef.current, {
+        category: votedTake?.category,
         countDailyEngagement: !isVoteChange,
+        voteContext,
+      });
+
+      submitVote(takeId, vote, {
+        countDailyEngagement: !isVoteChange,
+      }).catch(error => {
+        console.warn('Unable to queue vote write:', error);
       });
       changeVoteTakeIdsRef.current.delete(takeId);
 

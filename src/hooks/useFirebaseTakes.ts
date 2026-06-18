@@ -12,13 +12,12 @@ import {
   resetFeedCursor,
 } from '../services/takeService';
 import {
-  submitVote,
   getUserVoteForTake,
 } from '../services/voteService';
 import { 
   incrementUserSubmissionCount,
-  updateUserEngagementAfterVote,
 } from '../services/userService';
+import { enqueueVoteWrite } from '../services/voteOutboxService';
 import { useAuth } from './useAuth';
 import { StreakUpdateResult } from '../types/User';
 import { MY_SKIPS_CATEGORY, isMySkipsCategory } from '../constants';
@@ -736,38 +735,34 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         return newFeed;
       });
       
-      // Submit the vote to Firebase
-      await submitVote(takeId, userId, vote);
+      const hotVotesAfter = votedTake
+        ? votedTake.hotVotes + (vote === 'hot' ? 1 : 0)
+        : undefined;
+      const notVotesAfter = votedTake
+        ? votedTake.notVotes + (vote === 'not' ? 1 : 0)
+        : undefined;
+      const totalVotesAfter =
+        hotVotesAfter !== undefined && notVotesAfter !== undefined
+          ? hotVotesAfter + notVotesAfter
+          : undefined;
+
+      await enqueueVoteWrite({
+        takeId,
+        userId,
+        vote,
+        category: votedTake?.category,
+        countDailyEngagement: options.countDailyEngagement !== false,
+        voteContext: {
+          category: votedTake?.category,
+          totalVotesBefore: votedTake?.totalVotes,
+          hotVotesAfter,
+          notVotesAfter,
+          totalVotesAfter,
+        },
+      });
       await addLocalVotedId(userId, takeId);
       await removeLocalSkippedId(userId, takeId);
       await removeTakeFromFeedCache(userId, MY_SKIPS_CATEGORY, takeId);
-
-      let streakUpdate: StreakUpdateResult | null = null;
-      try {
-        const hotVotesAfter = votedTake
-          ? votedTake.hotVotes + (vote === 'hot' ? 1 : 0)
-          : undefined;
-        const notVotesAfter = votedTake
-          ? votedTake.notVotes + (vote === 'not' ? 1 : 0)
-          : undefined;
-        const totalVotesAfter =
-          hotVotesAfter !== undefined && notVotesAfter !== undefined
-            ? hotVotesAfter + notVotesAfter
-            : undefined;
-        streakUpdate = await updateUserEngagementAfterVote(userId, {
-          category: votedTake?.category,
-          countDailyEngagement: options.countDailyEngagement !== false,
-          voteContext: {
-            category: votedTake?.category,
-            totalVotesBefore: votedTake?.totalVotes,
-            hotVotesAfter,
-            notVotesAfter,
-            totalVotesAfter,
-          },
-        });
-      } catch (streakError) {
-        console.warn('Vote engagement update failed:', streakError);
-      }
       
       // Auto-load more if getting low
       if (!viewingMySkips && feed.length < 10 && hasMore) {
@@ -778,7 +773,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         }, 800);
       }
       
-      return streakUpdate;
+      return null;
     } catch (err) {
       // Rollback on error
       setInteractedTakeIds(prev => prev.filter(id => id !== takeId));

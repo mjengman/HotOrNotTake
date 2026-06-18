@@ -736,6 +736,80 @@ export const updateUserEngagementAfterVote = async (
   });
 };
 
+export const buildOptimisticVoteEngagementUpdate = (
+  stats: UserStats,
+  options: {
+    category?: string;
+    countDailyEngagement?: boolean;
+    voteContext?: VoteEngagementContext;
+  } = {}
+): StreakUpdateResult => {
+  const now = new Date();
+  const todayKey = getLocalDateKey(now);
+  const countDailyEngagement = options.countDailyEngagement !== false;
+  const previousTotalVotes = stats.totalVotes || 0;
+  const totalVotes = previousTotalVotes + 1;
+  const previousStreak = stats.votingStreak || 0;
+  const previousLongest = stats.longestVotingStreak || previousStreak;
+  const previousTotalStreakDays = stats.totalStreakDays || 0;
+  const previousDateKey = stats.lastStreakDate;
+
+  let dailyChallenge = stats.dailyChallenge?.date === todayKey
+    ? stats.dailyChallenge
+    : getFreshDailyChallenge(todayKey);
+  let challengeCompleted = false;
+  let currentStreak = Math.max(previousStreak, previousDateKey === todayKey ? 1 : 0);
+  let longestVotingStreak = Math.max(previousLongest, currentStreak);
+  let totalStreakDays = previousTotalStreakDays;
+  let didUpdateToday = false;
+  let milestoneReached: number | undefined;
+  let lastStreakDate = previousDateKey || todayKey;
+
+  if (countDailyEngagement) {
+    const nextChallengeProgress = updateDailyChallengeProgress(dailyChallenge, {
+      ...options.voteContext,
+      category: options.category || options.voteContext?.category,
+    });
+    challengeCompleted =
+      !dailyChallenge.completed && nextChallengeProgress.progress >= nextChallengeProgress.goal;
+    dailyChallenge = {
+      ...nextChallengeProgress,
+      completed: dailyChallenge.completed || challengeCompleted,
+      completedAt: challengeCompleted ? now : dailyChallenge.completedAt,
+    };
+
+    if (previousDateKey === todayKey) {
+      currentStreak = Math.max(previousStreak, 1);
+      longestVotingStreak = Math.max(previousLongest, currentStreak);
+      lastStreakDate = todayKey;
+    } else {
+      const distanceFromLastVote =
+        previousDateKey ? getDateKeyDistance(previousDateKey, todayKey) : null;
+      currentStreak =
+        distanceFromLastVote === 1 ? Math.max(previousStreak, 0) + 1 : 1;
+      longestVotingStreak = Math.max(previousLongest, currentStreak);
+      totalStreakDays = previousTotalStreakDays + 1;
+      milestoneReached =
+        STREAK_MILESTONES.has(currentStreak) ? currentStreak : undefined;
+      didUpdateToday = true;
+      lastStreakDate = todayKey;
+    }
+  }
+
+  return {
+    totalVotes,
+    currentStreak,
+    longestVotingStreak,
+    totalStreakDays,
+    lastStreakDate,
+    didUpdateToday,
+    milestoneReached,
+    dailyChallenge,
+    challengeCompleted,
+    achievementToasts: [],
+  };
+};
+
 // Decrement user's vote count (for vote changes/deletions)
 export const decrementUserVoteCount = async (userId: string): Promise<void> => {
   try {

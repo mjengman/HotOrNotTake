@@ -145,6 +145,7 @@ export const useUserStats = (): UseUserStatsResult => {
     setStats(prevStats => {
       const nextStats: UserStats = {
         ...prevStats,
+        totalVotes: update.totalVotes ?? prevStats.totalVotes,
         votingStreak: update.currentStreak,
         longestVotingStreak: update.longestVotingStreak,
         totalStreakDays: update.totalStreakDays,
