@@ -68,7 +68,11 @@ const LEGACY_FIRST_LAUNCH_KEY = 'hasLaunchedBefore';
 const FIRST_VOTE_HINT_SHOWN_KEY = 'first_vote_hint_shown';
 const DAILY_CHALLENGE_NUDGE_PREFIX = 'dailyChallengeNudgeShown';
 const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
-type EngagementToast = { title: string; subtitle: string };
+type EngagementToast = {
+  title: string;
+  subtitle: string;
+  variant?: 'questComplete';
+};
 type IdentityTeaser = { takeId: string; text: string };
 type SessionVoteHistoryEntry = { take: Take; vote: 'hot' | 'not' };
 type FooterControlButtonProps = {
@@ -88,6 +92,12 @@ type FooterControlButtonProps = {
 
 const SESSION_VOTE_HISTORY_LIMIT = 10;
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
+const QUEST_COMPLETE_TOAST: EngagementToast = {
+  title: '🎯 Quest complete!',
+  subtitle: "Nice work. Today's goal is yours. Keep voting if you're feeling it.",
+  variant: 'questComplete',
+};
 
 const formatCompactCount = (count: number) => {
   if (count >= 1000000) {
@@ -270,9 +280,15 @@ const getChallengeProgressCopy = (challenge: {
   const progressCopy = `${challenge.progress}/${challenge.goal} complete`;
 
   if (challenge.completed) {
+    return QUEST_COMPLETE_TOAST;
+  }
+
+  if (challenge.progress <= 0) {
     return {
-      title: '🎯 Quest complete',
-      subtitle: `${challenge.title || "Today's quest"} is done. Come back tomorrow for a fresh goal.`,
+      title: `🎯 ${challenge.title || "Today's quest"}`,
+      subtitle: challenge.description
+        ? `${challenge.description} Start with your next vote.`
+        : 'Start with your next vote.',
     };
   }
 
@@ -324,6 +340,7 @@ export const HomeScreen: React.FC = () => {
   const [adminRemovalLoading, setAdminRemovalLoading] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const streakToastAnim = useRef(new Animated.Value(0)).current;
+  const questFooterGlowAnim = useRef(new Animated.Value(0)).current;
   const toastQueueRef = useRef<EngagementToast[]>([]);
   const toastAnimatingRef = useRef(false);
   const changeVoteTakeIdsRef = useRef<Set<string>>(new Set());
@@ -334,9 +351,11 @@ export const HomeScreen: React.FC = () => {
   const favoritesPrefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationPermissionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notificationPermissionPendingRef = useRef(false);
   const identityTeaserShownRef = useRef(false);
   const lastIdentityTeaserRef = useRef<string | null>(null);
   const onboardingCompletingRef = useRef(false);
+  const shownStreakToastDatesRef = useRef<Set<string>>(new Set());
   const firstVoteHintMarkedRef = useRef(false);
   const { user, loading: authLoading, signIn } = useAuth();
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake, removeTakeLocally } = useFirebaseTakes({
@@ -357,6 +376,7 @@ export const HomeScreen: React.FC = () => {
 
   // Create responsive styles
   const styles = useMemo(() => createStyles(responsive, insets), [responsive, insets]);
+  const onboardingActive = onboardingChecked && showOnboardingCard;
   const selectedHistoryIndex = selectedTakeForStats
     ? sessionVoteHistory.findIndex(entry => entry.take.id === selectedTakeForStats.take.id)
     : -1;
@@ -369,7 +389,7 @@ export const HomeScreen: React.FC = () => {
     }
 
     if (stats.streakUpdatedToday) {
-      return `🔥 ${stats.votingStreak}-day streak active today`;
+      return `🔥 ${stats.votingStreak}-day streak is on the board`;
     }
 
     return `🔥 Vote today to keep your ${stats.votingStreak}-day streak`;
@@ -397,9 +417,45 @@ export const HomeScreen: React.FC = () => {
     };
   }, [communityTotalVotes, stats.dailyChallenge, stats.votingStreak]);
 
+  const shouldGlowQuestFooter =
+    !stats.dailyChallenge.completed;
+
   useEffect(() => {
     statsRef.current = stats;
   }, [stats]);
+
+  useEffect(() => {
+    questFooterGlowAnim.stopAnimation();
+
+    if (!shouldGlowQuestFooter) {
+      questFooterGlowAnim.setValue(0);
+      return;
+    }
+
+    questFooterGlowAnim.setValue(0);
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(questFooterGlowAnim, {
+          toValue: 1,
+          duration: 1350,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(questFooterGlowAnim, {
+          toValue: 0,
+          duration: 1350,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulse.start();
+
+    return () => {
+      pulse.stop();
+    };
+  }, [questFooterGlowAnim, shouldGlowQuestFooter]);
 
   const syncNotificationReminders = React.useCallback((nextStats = statsRef.current) => {
     if (!user?.uid || authLoading || statsLoading || !statsHydrated) {
@@ -421,11 +477,17 @@ export const HomeScreen: React.FC = () => {
     }, 1800);
   }, [authLoading, statsHydrated, statsLoading, user?.uid]);
 
-  const requestNotificationsForCompletedQuest = React.useCallback(() => {
-    if (notificationPermissionTimeoutRef.current) {
+  const runPendingNotificationPermissionRequest = React.useCallback(() => {
+    if (
+      !notificationPermissionPendingRef.current ||
+      notificationPermissionTimeoutRef.current ||
+      toastAnimatingRef.current ||
+      toastQueueRef.current.length > 0
+    ) {
       return;
     }
 
+    notificationPermissionPendingRef.current = false;
     notificationPermissionTimeoutRef.current = setTimeout(async () => {
       notificationPermissionTimeoutRef.current = null;
 
@@ -437,8 +499,13 @@ export const HomeScreen: React.FC = () => {
       } catch (error) {
         console.warn('Unable to request notification permissions:', error);
       }
-    }, 1000);
+    }, 700);
   }, [syncNotificationReminders]);
+
+  const requestNotificationsForCompletedQuest = React.useCallback(() => {
+    notificationPermissionPendingRef.current = true;
+    runPendingNotificationPermissionRequest();
+  }, [runPendingNotificationPermissionRequest]);
 
   const notificationStatsKey = useMemo(() => {
     const challenge = stats.dailyChallenge;
@@ -683,6 +750,7 @@ export const HomeScreen: React.FC = () => {
         clearTimeout(notificationPermissionTimeoutRef.current);
         notificationPermissionTimeoutRef.current = null;
       }
+      notificationPermissionPendingRef.current = false;
     };
   }, []);
 
@@ -765,6 +833,7 @@ export const HomeScreen: React.FC = () => {
 
     const nextToast = toastQueueRef.current.shift();
     if (!nextToast) {
+      runPendingNotificationPermissionRequest();
       return;
     }
 
@@ -779,7 +848,7 @@ export const HomeScreen: React.FC = () => {
         damping: motion.spring.press.damping,
         stiffness: motion.spring.press.stiffness,
       }),
-      Animated.delay(2400),
+      Animated.delay(nextToast.variant === 'questComplete' ? 3400 : 2400),
       Animated.timing(streakToastAnim, {
         toValue: 0,
         duration: motion.duration.fadeOut,
@@ -794,7 +863,7 @@ export const HomeScreen: React.FC = () => {
         }, 180);
       }
     });
-  }, [streakToastAnim]);
+  }, [runPendingNotificationPermissionRequest, streakToastAnim]);
 
   const enqueueToast = React.useCallback((toast: EngagementToast) => {
     toastQueueRef.current.push(toast);
@@ -802,6 +871,12 @@ export const HomeScreen: React.FC = () => {
   }, [processToastQueue]);
 
   const showStreakToast = React.useCallback((streakUpdate: StreakUpdateResult) => {
+    if (shownStreakToastDatesRef.current.has(streakUpdate.lastStreakDate)) {
+      return;
+    }
+
+    shownStreakToastDatesRef.current.add(streakUpdate.lastStreakDate);
+
     const isMilestone = Boolean(streakUpdate.milestoneReached);
     const isFirstDay = streakUpdate.currentStreak === 1;
 
@@ -812,8 +887,8 @@ export const HomeScreen: React.FC = () => {
           ? '🔥 Streak started'
           : `🔥 ${streakUpdate.currentStreak}-day streak`,
       subtitle: isMilestone
-        ? 'Milestone hit. Keep it rolling tomorrow.'
-        : 'Come back tomorrow to keep it alive.',
+        ? 'Milestone hit. Keep the run rolling.'
+        : "You're on the board for today.",
     });
   }, [enqueueToast]);
 
@@ -829,8 +904,8 @@ export const HomeScreen: React.FC = () => {
     enqueueToast({
       title: `🔥 ${stats.votingStreak}-day streak`,
       subtitle: stats.streakUpdatedToday
-        ? "You've kept it alive today. Come back tomorrow."
-        : 'Vote today to keep it alive.',
+        ? "You're on the board for today."
+        : `Keep your ${stats.votingStreak}-day streak alive today.`,
     });
   }, [enqueueToast, stats.streakUpdatedToday, stats.votingStreak]);
 
@@ -838,10 +913,7 @@ export const HomeScreen: React.FC = () => {
     const challenge = stats.dailyChallenge;
     const copy = getChallengeProgressCopy(challenge);
 
-    enqueueToast({
-      title: copy.title,
-      subtitle: copy.subtitle,
-    });
+    enqueueToast(copy);
   }, [enqueueToast, stats.dailyChallenge]);
 
   const showCommunityInfo = React.useCallback(() => {
@@ -852,7 +924,14 @@ export const HomeScreen: React.FC = () => {
   }, [communityTotalVotes, enqueueToast]);
 
   useEffect(() => {
-    if (!user || authLoading || statsLoading || !statsHydrated || stats.dailyChallenge.completed) {
+    if (
+      onboardingActive ||
+      !user ||
+      authLoading ||
+      statsLoading ||
+      !statsHydrated ||
+      stats.dailyChallenge.completed
+    ) {
       return;
     }
 
@@ -869,10 +948,7 @@ export const HomeScreen: React.FC = () => {
         if (cancelled) return;
 
         const copy = getChallengeProgressCopy(challenge);
-        enqueueToast({
-          title: copy.title,
-          subtitle: copy.subtitle,
-        });
+        enqueueToast(copy);
       } catch (error) {
         console.warn('Unable to show daily challenge nudge:', error);
       }
@@ -884,7 +960,7 @@ export const HomeScreen: React.FC = () => {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [authLoading, enqueueToast, stats.dailyChallenge, statsHydrated, statsLoading, user]);
+  }, [authLoading, enqueueToast, onboardingActive, stats.dailyChallenge, statsHydrated, statsLoading, user]);
 
   const showFirstVoteHint = React.useCallback(async (takeId: string) => {
     if (firstVoteHintMarkedRef.current) {
@@ -999,11 +1075,8 @@ export const HomeScreen: React.FC = () => {
         if (!streakUpdate.didUpdateToday) {
           applyEngagementUpdate(streakUpdate);
         }
+        enqueueToast(QUEST_COMPLETE_TOAST);
         requestNotificationsForCompletedQuest();
-        enqueueToast({
-          title: '🎯 Challenge complete!',
-          subtitle: `${streakUpdate.dailyChallenge?.title || "Today's quest"} is done. Come back tomorrow.`,
-        });
       } else if (streakUpdate && !streakUpdate.didUpdateToday) {
         applyEngagementUpdate(streakUpdate);
       }
@@ -1030,12 +1103,14 @@ export const HomeScreen: React.FC = () => {
       // Reconcile secondary stats after interactions so gameplay stays snappy.
       setTimeout(() => {
         InteractionManager.runAfterInteractions(() => {
-          refreshStats().catch(error => {
-            console.warn('Unable to refresh user stats after vote:', error);
-          });
+          flushVoteOutbox()
+            .then(refreshStats)
+            .catch(error => {
+              console.warn('Unable to reconcile user stats after vote:', error);
+            });
           refreshCommunityStats();
         });
-      }, 650);
+      }, 1400);
 
       if (updatedTakeForHistory) {
         const totalVotesAfterVote = Math.max(
@@ -1082,9 +1157,11 @@ export const HomeScreen: React.FC = () => {
       // Refresh stats later so skip animation is never waiting on Firestore.
       setTimeout(() => {
         InteractionManager.runAfterInteractions(() => {
-          refreshStats().catch(error => {
-            console.warn('Unable to refresh user stats after skip:', error);
-          });
+          flushVoteOutbox()
+            .then(refreshStats)
+            .catch(error => {
+              console.warn('Unable to reconcile user stats after skip:', error);
+            });
         });
       }, 650);
     } catch (error) {
@@ -1287,7 +1364,13 @@ export const HomeScreen: React.FC = () => {
       />
 
       {/* Fixed Header Section */}
-      <View style={styles.fixedHeader}>
+      <View
+        pointerEvents={onboardingActive ? 'none' : 'auto'}
+        style={[
+          styles.fixedHeader,
+          onboardingActive && styles.onboardingBackgroundMuted,
+        ]}
+      >
         <View style={styles.headerRow}>
           <BurgerMenu
             isDarkMode={isDarkMode}
@@ -1383,7 +1466,13 @@ export const HomeScreen: React.FC = () => {
       </View>
 
       {/* Fixed Bottom Section */}
-      <View style={styles.fixedFooter}>
+      <View
+        pointerEvents={onboardingActive ? 'none' : 'auto'}
+        style={[
+          styles.fixedFooter,
+          onboardingActive && styles.onboardingBackgroundMuted,
+        ]}
+      >
         {/* Bottom Buttons Row */}
         <View style={styles.bottomButtonsRow}>
           {/* Voting Style Button */}
@@ -1481,8 +1570,36 @@ export const HomeScreen: React.FC = () => {
               accessibilityRole="button"
               accessibilityLabel="Explain daily quest"
             >
+              {shouldGlowQuestFooter && (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.questSegmentGlow,
+                    {
+                      backgroundColor: isDarkMode
+                        ? 'rgba(255, 165, 2, 0.18)'
+                        : 'rgba(255, 165, 2, 0.12)',
+                      borderColor: isDarkMode
+                        ? 'rgba(255, 165, 2, 0.58)'
+                        : 'rgba(255, 165, 2, 0.34)',
+                      opacity: questFooterGlowAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.28, 0.9],
+                      }),
+                      transform: [
+                        {
+                          scale: questFooterGlowAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.96, 1.08],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+              )}
               <Text
-                style={[styles.voteCounterText, { color: theme.textSecondary }]}
+                style={[styles.voteCounterText, { color: shouldGlowQuestFooter ? theme.accent : theme.textSecondary }]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.78}
@@ -1534,40 +1651,56 @@ export const HomeScreen: React.FC = () => {
         </View>
       </View>
 
-      {streakToast && (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.streakToast,
-            {
-              backgroundColor: isDarkMode ? theme.surface : '#FFF6E2',
-              borderColor: isDarkMode ? theme.border : '#FFD88A',
-              opacity: streakToastAnim,
-              transform: [
-                {
-                  translateY: streakToastAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [12, 0],
-                  }),
-                },
-                {
-                  scale: streakToastAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.96, 1],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <Text style={[styles.streakToastTitle, { color: theme.text }]}>
-            {streakToast.title}
-          </Text>
-          <Text style={[styles.streakToastSubtitle, { color: theme.textSecondary }]}>
-            {streakToast.subtitle}
-          </Text>
-        </Animated.View>
-      )}
+      {streakToast && (() => {
+        const isQuestCompleteToast = streakToast.variant === 'questComplete';
+        const toastBackgroundColor = isQuestCompleteToast
+          ? (isDarkMode ? '#203A2A' : '#E9FAEF')
+          : (isDarkMode ? '#3A3020' : '#FFF6E2');
+        const toastBorderColor = isQuestCompleteToast
+          ? (isDarkMode ? 'rgba(46, 213, 115, 0.72)' : '#A9ECC2')
+          : (isDarkMode ? 'rgba(255, 165, 2, 0.68)' : '#FFD88A');
+        const toastSubtitleColor = isQuestCompleteToast
+          ? (isDarkMode ? '#C7F7D8' : '#277C46')
+          : (isDarkMode ? '#F3DDB8' : theme.textSecondary);
+
+        return (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.streakToast,
+              {
+                backgroundColor: toastBackgroundColor,
+                borderColor: toastBorderColor,
+                borderWidth: isQuestCompleteToast ? 1.5 : 1.25,
+                shadowColor: isQuestCompleteToast ? theme.success : (isDarkMode ? theme.accent : '#000'),
+                shadowOpacity: isQuestCompleteToast ? (isDarkMode ? 0.38 : 0.24) : 0.28,
+                opacity: streakToastAnim,
+                transform: [
+                  {
+                    translateY: streakToastAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [12, 0],
+                    }),
+                  },
+                  {
+                    scale: streakToastAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.96, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Text style={[styles.streakToastTitle, { color: isQuestCompleteToast ? theme.success : theme.text }]}>
+              {streakToast.title}
+            </Text>
+            <Text style={[styles.streakToastSubtitle, { color: toastSubtitleColor }]}>
+              {streakToast.subtitle}
+            </Text>
+          </Animated.View>
+        );
+      })()}
 
       <Modal
         visible={!!adminRemovalTake}
@@ -1818,6 +1951,9 @@ const createStyles = (responsive: any, insets: any) => {
     paddingTop: Platform.OS === 'ios' ? 0 : insets.top + responsive.spacing.xs,
     paddingBottom: responsive.spacing.xs,
   },
+  onboardingBackgroundMuted: {
+    opacity: 0.38,
+  },
   flexibleMiddle: {
     // backgroundColor: 'green',
     flex: 1,
@@ -2019,6 +2155,16 @@ const createStyles = (responsive: any, insets: any) => {
     alignItems: 'center',
     paddingHorizontal: responsive.spacing.xs,
     flexShrink: 1,
+    position: 'relative',
+  },
+  questSegmentGlow: {
+    position: 'absolute',
+    left: -responsive.spacing.xs,
+    right: -responsive.spacing.xs,
+    top: 6,
+    bottom: 6,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   statsBarDivider: {
     width: StyleSheet.hairlineWidth,
@@ -2032,7 +2178,7 @@ const createStyles = (responsive: any, insets: any) => {
     right: responsive.spacing.xl,
     bottom: toastBottom,
     borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: 1.25,
     paddingHorizontal: responsive.spacing.md,
     paddingVertical: responsive.spacing.sm,
     alignItems: 'center',
@@ -2043,8 +2189,8 @@ const createStyles = (responsive: any, insets: any) => {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
   },
   streakToastTitle: {
     fontSize: responsive.fontSize.medium,

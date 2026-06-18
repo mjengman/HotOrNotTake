@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StreakUpdateResult, UserStats } from '../types/User';
-import { getUserStats } from '../services/userService';
+import { getFreshDailyChallenge, getUserStats } from '../services/userService';
 import { useAuth } from './useAuth';
 
 interface UseUserStatsResult {
@@ -21,22 +21,15 @@ const getTodayKey = () => {
   return `${year}-${month}-${day}`;
 };
 
-const getDefaultDailyChallenge = () => ({
-  date: getTodayKey(),
-  type: 'vote_count' as const,
-  title: 'Daily heat check',
-  description: 'Vote on 20 takes today.',
-  goal: 20,
-  progress: 0,
-  completed: false,
-});
+const getDefaultDailyChallenge = (userId?: string) =>
+  getFreshDailyChallenge(getTodayKey(), userId);
 
 const USER_STATS_CACHE_VERSION = 'v1';
 const USER_STATS_CACHE_PREFIX = `user-stats-cache:${USER_STATS_CACHE_VERSION}`;
 
 const getUserStatsCacheKey = (userId: string) => `${USER_STATS_CACHE_PREFIX}:${userId}`;
 
-const getDefaultStats = (): UserStats => ({
+const getDefaultStats = (userId?: string): UserStats => ({
   totalVotes: 0,
   hotVotesGiven: 0,
   notVotesGiven: 0,
@@ -45,12 +38,12 @@ const getDefaultStats = (): UserStats => ({
   longestVotingStreak: 0,
   totalStreakDays: 0,
   streakUpdatedToday: false,
-  dailyChallenge: getDefaultDailyChallenge(),
+  dailyChallenge: getDefaultDailyChallenge(userId),
   favoriteCategories: [],
   joinedAt: new Date(),
 });
 
-const normalizeCachedStats = (stats: UserStats): UserStats => {
+const normalizeCachedStats = (stats: UserStats, userId?: string): UserStats => {
   const todayKey = getTodayKey();
 
   return {
@@ -58,8 +51,35 @@ const normalizeCachedStats = (stats: UserStats): UserStats => {
     streakUpdatedToday: stats.lastStreakDate === todayKey,
     dailyChallenge: stats.dailyChallenge?.date === todayKey
       ? stats.dailyChallenge
-      : getDefaultDailyChallenge(),
+      : getDefaultDailyChallenge(userId),
   };
+};
+
+const isServerStatsBehindLocal = (incoming: UserStats, current: UserStats): boolean => {
+  if ((incoming.totalVotes || 0) < (current.totalVotes || 0)) {
+    return true;
+  }
+
+  if (
+    current.streakUpdatedToday &&
+    current.lastStreakDate &&
+    incoming.lastStreakDate !== current.lastStreakDate
+  ) {
+    return true;
+  }
+
+  const sameChallengeDate = incoming.dailyChallenge?.date === current.dailyChallenge?.date;
+  if (sameChallengeDate) {
+    if ((incoming.dailyChallenge?.progress || 0) < (current.dailyChallenge?.progress || 0)) {
+      return true;
+    }
+
+    if (current.dailyChallenge?.completed && !incoming.dailyChallenge?.completed) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 const readCachedStats = async (userId: string): Promise<UserStats | null> => {
@@ -77,7 +97,7 @@ const readCachedStats = async (userId: string): Promise<UserStats | null> => {
           ? new Date(parsed.dailyChallenge.completedAt)
           : undefined,
       },
-    });
+    }, userId);
   } catch (error) {
     console.warn('Unable to read user stats cache:', error);
     return null;
@@ -105,9 +125,14 @@ const writeCachedStats = async (userId: string, stats: UserStats) => {
 export const useUserStats = (): UseUserStatsResult => {
   const { user } = useAuth();
   const [stats, setStats] = useState<UserStats>(getDefaultStats);
+  const statsRef = useRef<UserStats>(stats);
   const [loading, setLoading] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    statsRef.current = stats;
+  }, [stats]);
 
   // Load user stats
   const loadStats = useCallback(async () => {
@@ -124,14 +149,27 @@ export const useUserStats = (): UseUserStatsResult => {
 
       const cachedStats = await readCachedStats(user.uid);
       if (cachedStats) {
-        setStats(cachedStats);
+        if (!isServerStatsBehindLocal(cachedStats, statsRef.current)) {
+          statsRef.current = cachedStats;
+          setStats(cachedStats);
+        }
+        setHydrated(true);
+      } else {
+        const defaultStats = getDefaultStats(user.uid);
+        if (!isServerStatsBehindLocal(defaultStats, statsRef.current)) {
+          statsRef.current = defaultStats;
+          setStats(defaultStats);
+        }
         setHydrated(true);
       }
 
       const userStats = await getUserStats(user.uid);
-      setStats(userStats);
+      if (!isServerStatsBehindLocal(userStats, statsRef.current)) {
+        statsRef.current = userStats;
+        setStats(userStats);
+        writeCachedStats(user.uid, userStats);
+      }
       setHydrated(true);
-      writeCachedStats(user.uid, userStats);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load stats');
       console.error('Error loading user stats:', err);
@@ -153,6 +191,8 @@ export const useUserStats = (): UseUserStatsResult => {
         streakUpdatedToday: true,
         dailyChallenge: update.dailyChallenge || prevStats.dailyChallenge,
       };
+
+      statsRef.current = nextStats;
 
       if (user) {
         writeCachedStats(user.uid, nextStats);

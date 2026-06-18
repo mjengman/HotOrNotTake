@@ -179,7 +179,7 @@ export const OnboardingCard: React.FC<OnboardingCardProps> = ({
                 onPress={onComplete}
                 activeOpacity={0.72}
                 accessibilityRole="button"
-                accessibilityLabel="Skip intro"
+                accessibilityLabel="Skip intro and start voting"
               >
                 <Text
                   style={[
@@ -190,7 +190,7 @@ export const OnboardingCard: React.FC<OnboardingCardProps> = ({
                     },
                   ]}
                 >
-                  Skip intro
+                  Already know this
                 </Text>
               </TouchableOpacity>
             </View>

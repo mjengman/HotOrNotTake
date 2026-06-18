@@ -238,7 +238,7 @@ const convertDailyChallenge = (data: any, userId?: string): DailyChallenge | und
   };
 };
 
-const getFreshDailyChallenge = (
+export const getFreshDailyChallenge = (
   dateKey = getLocalDateKey(),
   userId?: string
 ): DailyChallenge => {
