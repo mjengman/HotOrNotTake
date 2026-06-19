@@ -14,12 +14,12 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  Linking,
   InteractionManager,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as StoreReview from 'expo-store-review';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CustomSwipeableCardDeck } from '../components/CustomSwipeableCardDeck';
 import { OnboardingCard } from '../components/OnboardingCard';
@@ -70,6 +70,11 @@ const FIRST_VOTE_HINT_SHOWN_KEY = 'first_vote_hint_shown';
 const DAILY_CHALLENGE_NUDGE_PREFIX = 'dailyChallengeNudgeShown';
 const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
 const REVIEW_PROMPT_ATTEMPTED_KEY = 'review_prompt_attempted';
+const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
+const IOS_REVIEW_URL = 'https://apps.apple.com/us/app/hot-or-not-takes/id6751363365?action=write-review';
+const ANDROID_MARKET_URL = 'market://details?id=com.anonymous.HotOrNotTakes';
+const ANDROID_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.anonymous.HotOrNotTakes';
+type StoreReviewModule = typeof import('expo-store-review');
 type EngagementToast = {
   title: string;
   subtitle: string;
@@ -99,6 +104,14 @@ const QUEST_COMPLETE_TOAST: EngagementToast = {
   title: 'Quest complete 🎯',
   subtitle: "You crushed today's quest. Keep playing if you're feeling it.",
   variant: 'questComplete',
+};
+
+const loadStoreReviewModule = async (): Promise<StoreReviewModule | null> => {
+  try {
+    return await import('expo-store-review');
+  } catch {
+    return null;
+  }
 };
 
 const formatCompactCount = (count: number) => {
@@ -324,6 +337,7 @@ export const HomeScreen: React.FC = () => {
   const [showRecentVotesModal, setShowRecentVotesModal] = useState(false);
   const [showFavoritesModal, setShowFavoritesModal] = useState(false);
   const [showVotingStyleModal, setShowVotingStyleModal] = useState(false);
+  const [showInviteReviewModal, setShowInviteReviewModal] = useState(false);
   const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: Take, vote: 'hot' | 'not' | null} | null>(null);
   const [sessionVoteHistory, setSessionVoteHistory] = useState<SessionVoteHistoryEntry[]>([]);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -501,6 +515,11 @@ export const HomeScreen: React.FC = () => {
     try {
       const alreadyAttempted = await AsyncStorage.getItem(REVIEW_PROMPT_ATTEMPTED_KEY);
       if (alreadyAttempted === 'true') {
+        return;
+      }
+
+      const StoreReview = await loadStoreReviewModule();
+      if (!StoreReview) {
         return;
       }
 
@@ -857,6 +876,10 @@ export const HomeScreen: React.FC = () => {
         setShowVotingStyleModal(false);
         return true;
       }
+      if (showInviteReviewModal) {
+        setShowInviteReviewModal(false);
+        return true;
+      }
       if (showLeaderboardModal) {
         setShowLeaderboardModal(false);
         return true;
@@ -883,7 +906,7 @@ export const HomeScreen: React.FC = () => {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [showSubmitModal, showRecentVotesModal, showFavoritesModal, showVotingStyleModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, showSafetyModal, selectedTakeForStats]);
+  }, [showSubmitModal, showRecentVotesModal, showFavoritesModal, showVotingStyleModal, showInviteReviewModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, showSafetyModal, selectedTakeForStats]);
 
   // Rotate instruction text with a quiet fade so the footer feels alive without flicker.
   useEffect(() => {
@@ -1259,7 +1282,6 @@ export const HomeScreen: React.FC = () => {
 
   const handleInviteFriends = React.useCallback(async () => {
     try {
-      const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
       const inviteMessage = `Try Hot or Not Takes - Vote on spicy hot takes! 🔥 ${SMART_LINK}`;
 
       await RNShare.open({
@@ -1270,6 +1292,40 @@ export const HomeScreen: React.FC = () => {
     } catch (error) {
     }
   }, []);
+
+  const openStoreReviewPage = React.useCallback(async () => {
+    try {
+      if (Platform.OS === 'android') {
+        try {
+          await Linking.openURL(ANDROID_MARKET_URL);
+        } catch (marketError) {
+          await Linking.openURL(ANDROID_PLAY_URL);
+        }
+        return;
+      }
+
+      await Linking.openURL(IOS_REVIEW_URL);
+    } catch (error) {
+    }
+  }, []);
+
+  const openInviteReview = React.useCallback(() => {
+    setShowInviteReviewModal(true);
+  }, []);
+
+  const closeInviteReview = React.useCallback(() => {
+    setShowInviteReviewModal(false);
+  }, []);
+
+  const handleInviteOption = React.useCallback(() => {
+    closeInviteReview();
+    setTimeout(handleInviteFriends, 100);
+  }, [closeInviteReview, handleInviteFriends]);
+
+  const handleReviewOption = React.useCallback(() => {
+    closeInviteReview();
+    setTimeout(openStoreReviewPage, 100);
+  }, [closeInviteReview, openStoreReviewPage]);
 
   const toggleTheme = React.useCallback(() => {
     setIsDarkMode(prev => {
@@ -1466,7 +1522,7 @@ export const HomeScreen: React.FC = () => {
             onRecentVotes={openRecentVotes}
             onFavorites={openFavorites}
             onInstructions={openInstructions}
-            onInviteFriends={handleInviteFriends}
+            onInviteFriends={openInviteReview}
             onSafety={openSafety}
             onVotingStyle={openVotingStyle}
             onToggleTheme={toggleTheme}
@@ -1858,6 +1914,81 @@ export const HomeScreen: React.FC = () => {
               >
                 <Text style={[styles.adminModalButtonText, { color: '#FFFFFF' }]}>
                   {adminRemovalLoading ? 'Removing...' : 'Remove'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showInviteReviewModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeInviteReview}
+      >
+        <View style={styles.inviteReviewBackdrop}>
+          <View style={[
+            styles.inviteReviewCard,
+            {
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+            },
+          ]}>
+            <View style={styles.inviteReviewHeader}>
+              <Text style={[styles.inviteReviewTitle, { color: theme.text }]}>
+                Invite & Review
+              </Text>
+              <TouchableOpacity
+                style={styles.inviteReviewCloseButton}
+                onPress={closeInviteReview}
+                activeOpacity={0.72}
+                accessibilityRole="button"
+                accessibilityLabel="Close invite and review"
+              >
+                <Text style={[styles.inviteReviewCloseText, { color: theme.textSecondary }]}>
+                  ×
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.inviteReviewSubtitle, { color: theme.textSecondary }]}>
+              Share the game or leave a quick rating.
+            </Text>
+            <View style={styles.inviteReviewActions}>
+              <TouchableOpacity
+                style={[
+                  styles.inviteReviewAction,
+                  {
+                    backgroundColor: isDarkMode ? 'rgba(255, 165, 2, 0.14)' : '#FFF4D8',
+                    borderColor: theme.accent,
+                  },
+                ]}
+                onPress={handleInviteOption}
+                activeOpacity={0.78}
+                accessibilityRole="button"
+                accessibilityLabel="Invite a friend"
+              >
+                <Text style={styles.inviteReviewActionIcon}>💌</Text>
+                <Text style={[styles.inviteReviewActionText, { color: theme.text }]}>
+                  Invite a friend
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.inviteReviewAction,
+                  {
+                    backgroundColor: isDarkMode ? 'rgba(255, 71, 87, 0.14)' : '#FFECEF',
+                    borderColor: theme.primary,
+                  },
+                ]}
+                onPress={handleReviewOption}
+                activeOpacity={0.78}
+                accessibilityRole="button"
+                accessibilityLabel="Rate the app"
+              >
+                <Text style={styles.inviteReviewActionIcon}>⭐</Text>
+                <Text style={[styles.inviteReviewActionText, { color: theme.text }]}>
+                  Rate the app
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2358,6 +2489,84 @@ const createStyles = (responsive: any, insets: any) => {
   adminModalButtonText: {
     fontSize: responsive.fontSize.medium,
     fontWeight: '900',
+  },
+  inviteReviewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.52)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: responsive.spacing.xl,
+    zIndex: 5000,
+  },
+  inviteReviewCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: responsive.spacing.lg,
+    paddingVertical: responsive.spacing.lg,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.24,
+    shadowRadius: 16,
+  },
+  inviteReviewHeader: {
+    minHeight: motion.touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteReviewTitle: {
+    fontSize: responsive.fontSize.large,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  inviteReviewCloseButton: {
+    position: 'absolute',
+    right: -responsive.spacing.xs,
+    width: motion.touchTarget.minimum,
+    height: motion.touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteReviewCloseText: {
+    fontSize: responsive.fontSize.xlarge,
+    fontWeight: '800',
+    lineHeight: responsive.fontSize.xlarge + 2,
+  },
+  inviteReviewSubtitle: {
+    fontSize: responsive.fontSize.small,
+    fontWeight: '700',
+    lineHeight: responsive.fontSize.small * 1.3,
+    textAlign: 'center',
+    marginBottom: responsive.spacing.md,
+  },
+  inviteReviewActions: {
+    flexDirection: 'row',
+    gap: responsive.spacing.sm,
+  },
+  inviteReviewAction: {
+    flex: 1,
+    minHeight: 96,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: responsive.spacing.sm,
+    paddingVertical: responsive.spacing.md,
+  },
+  inviteReviewActionIcon: {
+    fontSize: responsive.fontSize.xlarge,
+    marginBottom: responsive.spacing.xs,
+  },
+  inviteReviewActionText: {
+    fontSize: responsive.fontSize.small,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   emptySubtext: {
     fontSize: responsive.fontSize.medium,

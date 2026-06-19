@@ -69,7 +69,7 @@ const BurgerMenuComponent: React.FC<BurgerMenuProps> = ({
       onPress: () => handleMenuItemPress(onInstructions),
     },
     {
-      label: 'Invite Friends',
+      label: 'Invite & Review',
       icon: '💌',
       onPress: () => handleMenuItemPress(onInviteFriends),
     },
