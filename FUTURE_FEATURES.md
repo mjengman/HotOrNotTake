@@ -1,40 +1,55 @@
 # Future Features Backlog - Hot or Not Takes
 
-**Updated**: June 16, 2026
-**Status**: Living product backlog
-**Purpose**: Capture product ideas, deploy constraints, and likely sprint candidates. This is not a promise list; it is where good ideas stay warm until they are scoped.
+**Updated**: June 20, 2026
+**Status**: Living product roadmap
+**Purpose**: Capture product ideas, deploy constraints, current priorities, and sprint candidates. This is not a promise list; it is where good ideas stay warm until they are scoped.
 
-Hot or Not Takes is a production app with server-side moderation, AI-generated feed refill, warm-start feed cache, daily quests, vote history, My Skips, in-app safety reporting, cached leaderboards, and a much richer core swipe loop. Future work should make the loop more personally rewarding before adding heavy new surfaces.
+Hot or Not Takes is a production app with a real gameplay loop: swipe, reveal, react, repeat. The app now has enough foundation that future work should mostly make the core feed feel faster, fresher, smarter, and more personally rewarding before adding heavy new surfaces.
 
 ## Product Principles
 
-- **Strengthen the core loop first**: Swipe, reveal, react, repeat.
-- **Make every vote feel alive**: Results should feel like a social reveal, not just a stat panel.
-- **Build identity before comparison**: Personal stats and taste profiles should come before heavier global ranking mechanics.
-- **Protect flow speed**: Menus, card transitions, cache reads, and result reveals should feel instant or intentionally animated.
-- **Prefer OTA improvements**: Ship JavaScript-only polish and retention features quickly when possible.
-- **Keep onboarding obvious**: New users should understand HOT, NOT, skip, results, and daily quests without hunting.
-- **Protect store trust**: Safety, moderation, child-safety standards, and store metadata are product features.
+- **Protect the core loop first**: Swipe, reveal, react, repeat must feel instant, reliable, and delightful.
+- **Make every vote feel alive**: Results should feel like a social reveal, not a stat panel.
+- **Build identity before comparison**: Personal stats and taste profiles matter more than global status mechanics.
+- **Respect user memory**: Voted and skipped takes should feel gone from the main feed forever.
+- **Make AI invisible in the right way**: AI content should feel human, varied, category-fit, and debate-worthy.
+- **Prefer OTA improvements**: Ship JavaScript-only quality, retention, and copy improvements quickly when possible.
+- **Keep native changes intentional**: Any new permission, dependency, or store build should earn its review cycle.
 - **Stay anonymous-friendly**: Do not force real names or full accounts unless the value is obvious.
-- **Make AI invisible in the right way**: AI content should feel human, varied, and category-appropriate.
+- **Protect store trust**: Safety, moderation, child-safety standards, and store metadata are product features.
 
 ## Current Product Baseline
 
-These are no longer future ideas; they are part of the working product foundation.
+These are no longer future ideas; they are part of the working product foundation in the current codebase or release line.
 
 - Server-side moderation through Firebase Cloud Functions; OpenAI key stays off the client.
-- Cloud Function AI generation refills under-supplied categories and avoids obvious duplicates.
+- Fail-closed moderation behavior: AI failures do not auto-approve bad content.
+- Cloud Function AI generation refills under-supplied categories.
+- Generated-take duplicate guard exists at write time for AI content.
+- Feed quality tooling exists for generated-take audits, duplicate cleanup, and soft-removing duplicate AI content.
 - Client feed warm-start cache renders returning users into cards quickly.
-- Feed filtering respects voted and skipped takes; My Skips lets users revisit skipped takes.
+- Core loop vote outbox decouples card animation from Firestore writes.
+- Feed filtering tracks voted and skipped takes; My Skips lets users revisit skipped takes intentionally.
 - Vote History is the primary history surface, replacing the old last-10 Recent Votes model.
 - Results card has dynamic reaction copy, percentage count-up, Save, Share result, Change vote, and Results Autoplay preference.
-- Daily quest system supports vote count, category votes, fresh takes, divisive takes, and multi-category quests.
+- Results share uses an image card plus app download/review-friendly link copy.
+- Daily quest system supports several lightweight quest types.
+- Quest completion has a warmer payoff toast instead of a flat status message.
 - Achievement-lite toasts exist for vote count, streak, and all-category milestones.
 - Footer stats expose streak, daily quest, and community votes with tap-to-explain nudges.
+- Footer quest copy and glow encourage completion without telling users to leave after finishing.
+- My Voting Style exists as the personal stats/taste profile surface.
 - Leaderboards include Hottest, Nottest, Divisive, and Skipped, with local cache/prefetch.
+- My Favorites, My Voting Style, Leaderboards, and feed surfaces use local caching where useful.
+- First-session onboarding card teaches HOT, NOT, skip, and results reveal.
 - Dark mode preference persists.
+- Button dock has consistent ring styling, tap-fill acknowledgement, and empty-rewind shake.
+- Submit a take and My Takes flows have been cleaned up and toned down.
 - In-app safety/reporting standards exist through the menu flow.
 - Store child-safety standards are published externally and reflected in app content.
+- Local notifications are implemented for daily quest/streak-style engagement.
+- Native review prompt is implemented for a positive quest-completion moment.
+- Menu has an Invite & Review modal with invite share and store review redirect.
 
 ## North Star Metric
 
@@ -49,59 +64,123 @@ Supporting metrics:
 - D1 and D7 retention.
 - Daily quest completion rate.
 - Streak continuation rate.
-- Share taps and completed shares.
+- Result-share taps and completed shares.
 - Vote History opens.
 - My Skips opens and skipped-take conversions.
+- My Voting Style opens.
 - Report volume and moderation pending volume.
 - Store page conversion after screenshot refresh.
 
 ## Current Risks
 
-- **First-session clarity**: The app is more polished now, but brand-new users may still need a clearer first minute.
-- **Perceived community size**: Small vote counts can make a take feel less alive unless copy frames it well.
-- **AI repetition**: Generated content can still overuse certain phrasing, punctuation, or topics.
-- **Duplicate/near-duplicate fatigue**: Users noticing similar takes will erode trust that their votes matter.
-- **Haptic sensitivity**: iOS haptics can feel mistimed or blocking; keep haptics conservative unless tested on real devices.
-- **Menu responsiveness**: Utility surfaces must open instantly; any lag makes the app feel heavier than it is.
-- **Firestore rules drift**: Vote percentage denormalization currently needs rules/backfill care so Divisive data stays reliable.
-- **Store release friction**: Android/iOS builds, OTA compatibility, and service-account automation should be kept healthy.
+- **Core loop snags**: The loop is dramatically better, but occasional card sticking or delayed vote response is still the highest-risk UX issue.
+- **Feed trust**: If voted/skipped takes or near-duplicates reappear, users feel like the app forgot them.
+- **Warm cache edge cases**: Cached cards can render before Firestore reconciliation; cache paths must exclude interacted IDs aggressively.
+- **AI repetition**: Generated content still risks repeated frames, repeated phrasing, semicolon overuse, and category drift.
+- **Shuffle smell**: Current ordering can feel more random than thoughtfully fresh; repeated testing makes the weakness visible.
+- **Perceived community size**: Small vote counts need copy that frames the moment instead of making the app feel empty.
+- **Native module drift**: OTA bundles must degrade gracefully when a native module is missing from an older binary.
+- **Store release friction**: Android/iOS builds, OTA compatibility, and service-account automation should stay healthy.
 
-## Recommended Next OTA Sprint Candidates
+## Recommended Next Sprint Candidates
 
-### 1. Personal Stats and Taste Profile
+### 1. AI Content Generation Deep Dive + Feed Freshness
 
-**Why**: This is the most natural next retention layer. The app already has vote history, categories, crowd splits, and results reactions. Now it should reflect the user's identity back to them.
+**Deploy path**: OTA for client feed ordering/filtering; Cloud Function deploy if generation prompts, quality scoring, or write-time guards change.
+
+**Why**: The app is content-hungry in a good way. Better generated takes improve every session immediately, and better feed freshness protects the feeling that votes and skips matter.
 
 Scope ideas:
 
-- Crowd agreement percentage: "You agree with the room 68% of the time."
-- HOT vs NOT tendency.
-- Favorite/hottest/coldest personal categories.
-- Contrarian category: "Politics is where you break from the crowd."
-- Close-call voter: "You keep landing on split-room takes."
-- Lightweight labels:
-  - Contrarian
-  - Crowd Follower
-  - Chaos Agent
-  - Category Loyalist
-  - Optimist
-  - Skeptic
-  - Food Critic
-  - Sports Purist
+- Inspect the current generation pipeline before changing prompts so we know where variety, shuffle, and duplicate checks actually live.
+- Audit generated takes by category for repetition, blandness, category drift, and punctuation tics.
+- Tune prompts to reduce semicolons and repeated AI frames.
+- Add stronger per-category voice guidance.
+- Add a quality rubric for generated takes before writing them.
+- Strengthen duplicate and near-duplicate rejection for AI-generated content.
+- Add banned frame/phrase guidance such as:
+  - "is overrated and way too"
+  - "people need to stop pretending"
+  - "should be normalized"
+  - "is not talked about enough"
+- Improve feed ordering so "All Categories" feels varied without feeling random or repetitive.
+- Review session-level text/topic de-duping.
+- Confirm My Skips and voted-take exclusions cannot leak through warm cache.
+- Keep user submissions out of duplicate rejection; moderation screens safety, not originality.
 
-Start with a compact stats card or result-card teaser before building a full profile screen.
+Definition-of-done candidates:
 
-### 2. Results Share Card 2.0
+- New generated content feels more human and less templated.
+- Same-topic clusters are rarer within a session.
+- Voted/skipped IDs are excluded from warm cache and live fetch paths.
+- `generateTakes` duplicate guard remains stricter than normal user submissions.
+- The feed has an explainable freshness/shuffle strategy instead of an accidental ordering smell.
+- No new native dependencies.
 
-**Why**: The results card is the emotional core. Sharing should feel like sharing a story, not a table of numbers.
+### 2. Core Loop Reliability V2
+
+**Deploy path**: OTA.
+
+**Why**: The app can be feature-rich, but one stuck card makes the whole thing feel amateur. This is still the most important quality bar.
+
+Scope ideas:
+
+- Audit the card state machine around freeze, promotion, results reveal, and dismiss.
+- Make stuck cards self-healing with a timeout/reset path.
+- Keep UI animations fully decoupled from Firestore, outbox, ads, and prefetch work.
+- Audit all `runAfterInteractions`, timeouts, and post-vote side effects.
+- Add lightweight instrumentation for local testing only if it helps diagnose snags.
+- Keep the card deck deterministic enough that the next card never visibly changes after it is revealed.
+
+### 3. Feed Filtering Robustness
+
+**Deploy path**: OTA/backend depending on implementation.
+
+**Why**: The intended rule is simple: voted takes never return; skipped takes never return to the main feed. The implementation is currently hybrid local cache + Firestore, so edge cases need tightening.
+
+Scope ideas:
+
+- Persist local interacted IDs earlier and more atomically.
+- Include both voted and skipped IDs in every warm-cache read.
+- Consider a server-authoritative `users/{userId}/interactions` mirror or compact hash set if Firestore query costs stay reasonable.
+- Reconcile vote outbox and local hidden IDs on app start.
+- Keep My Skips as the only intentional path back to skipped takes.
+- Decide how long local interacted history should persist if a user clears app data.
+
+### 4. Quest Depth and Payoff
+
+**Deploy path**: OTA.
+
+**Why**: Quests work, but they should feel more like playful session fuel than chores.
+
+Scope ideas:
+
+- More quest variants:
+  - Take the unpopular side 3 times.
+  - Vote on 3 close-call takes.
+  - Vote in 3 different categories.
+  - Vote on fresh takes with fewer than 10 votes.
+  - Revisit Vote History.
+  - Clear 5 skipped takes.
+  - Save or share one result.
+- Better completion moment and copy variety.
+- Quest tie-ins to My Voting Style.
+- Quest history only if it creates motivation.
+- Rewards should stay cosmetic/identity-based, not pay-to-win.
+
+### 5. Results Share Card 2.0
+
+**Deploy path**: OTA for share-card polish; backend/web if adding public OG pages.
+
+**Why**: Sharing should tell a story, not just show numbers.
 
 Scope ideas:
 
 - Sharper visual share card for close calls, landslides, and contrarian moments.
 - Use result reaction headline as share lead.
 - Stronger CTA when user is in a small minority.
+- Public web/OG page per take or per result if we want rich previews.
 - Preserve one-tap native share behavior.
-- Avoid new native share targets unless truly needed.
 
 Example copy:
 
@@ -110,19 +189,10 @@ Example copy:
 - "I took the unpopular side."
 - "Almost everyone said HOT."
 
-### 3. First-Session Onboarding
+### 6. Store Screenshots and Listing Refresh
 
-**Why**: The app is simple once understood, but the first minute determines whether new users get to the good part.
-
-Scope ideas:
-
-- First-launch guided card or lightweight tutorial.
-- Show HOT, NOT, and skip affordances before the user needs them.
-- Explain the results reveal after the first vote.
-- Keep the existing Instructions screen swipeable, but do not rely on it for first-session comprehension.
-- Avoid a marketing-style landing page; drop users into gameplay quickly.
-
-### 4. Store Screenshots and Listing Refresh
+**Owner**: Michael
+**Deploy path**: Store metadata, not app code.
 
 **Why**: Conversion is free growth. The app now looks much better than old store assets probably show.
 
@@ -130,54 +200,11 @@ Suggested screenshot story:
 
 1. Vote HOT or NOT on spicy takes.
 2. See how the community voted.
-3. Keep your daily quest/streak alive.
-4. Revisit skipped takes and vote history.
-5. Browse Hottest, Nottest, Divisive, and Skipped.
-6. Submit your own take after moderation.
-
-Include both light and dark mode if store slots allow it.
-
-### 5. Feed Quality and Duplicate Defense
-
-**Why**: The endless feed only works if users believe they are seeing fresh takes and that votes/skips count.
-
-Scope ideas:
-
-- Improve near-duplicate detection beyond exact text/fingerprint.
-- Add small admin script for scanning repeated topics/phrases.
-- Track AI source prompts/categories for quality audits.
-- Keep semicolon use low in generation prompts.
-- Continue correcting category drift.
-- Consider lightweight recency/topic diversity controls.
-
-### 6. Quest and Achievement Depth
-
-**Why**: Daily quests are a strong first pass. They need variety, clarity, and better emotional payoff.
-
-Scope ideas:
-
-- More quest variants:
-  - Take the unpopular side 3 times.
-  - Vote on 3 close-call takes.
-  - Revisit Vote History.
-  - Clear 5 skipped takes.
-  - Save or share one result.
-- Better completion moment.
-- Quest copy bank with more personality.
-- Quest history or "yesterday's quest" only if it adds motivation.
-- Rewards should stay cosmetic/identity-based, not pay-to-win.
-
-### 7. Menu and Surface Performance
-
-**Why**: The main game now feels strong. Secondary surfaces should feel equally snappy.
-
-Scope ideas:
-
-- Keep burger menu opening instant.
-- Defer leaderboard prefetch and ad work away from first interactions.
-- Reduce noisy ad re-render/log churn where possible.
-- Profile slow surface opens on real Android and iOS devices.
-- Keep overlay transitions consistent through `FullScreenOverlay`.
+3. Discover your voting style.
+4. Keep your daily quest/streak alive.
+5. Revisit skipped takes and vote history.
+6. Browse Hottest, Nottest, Divisive, and Skipped.
+7. Submit your own take after moderation.
 
 ## OTA Eligible Backlog
 
@@ -185,6 +212,7 @@ These should be possible without app store review if implemented with current de
 
 ### Core Loop and Results
 
+- Harden card freeze/promotion/result-dismiss behavior.
 - More reaction headline variants.
 - More nuanced rare-contrarian visual treatment.
 - Better result-card share copy.
@@ -192,20 +220,39 @@ These should be possible without app store review if implemented with current de
 - Keep Results Autoplay default off unless user behavior suggests otherwise.
 - Keep haptics conservative; reintroduce only after device-tested proof.
 
+### Feed Quality
+
+- Better session-level de-duping.
+- Better warm-cache filtering against voted/skipped IDs.
+- Better "All Categories" ordering.
+- My Skips count badge in category picker.
+- Recency/topic diversity controls.
+- Reconciliation logic that never visibly swaps a card the user already saw.
+
+### AI Content Quality
+
+- Reduce semicolon frequency.
+- More sentence rhythm variety.
+- Avoid generic filler.
+- Avoid overusing the same topic frame.
+- Add near-duplicate checks.
+- Add category-fit validation.
+- Keep generated takes opinionated, human-feeling, and debatable.
+- Add quality-audit scripts for generated corpus review.
+
 ### Personal Identity
 
-- Personal stats card.
-- Taste profile label.
+- More voting-style titles and thresholds.
 - Weekly recap: "Your voting week."
 - Category personality summaries.
 - "You surprised the room" moments.
 - "You agree with the crowd" milestone copy.
+- Lightweight achievements screen if the toast-only system starts feeling too hidden.
 
 ### History and Revisit Surfaces
 
 - Vote History filters by category, vote type, or close-call status.
 - Search within Vote History.
-- My Skips count badge in category picker.
 - One-tap "clear this skipped take" behavior if needed.
 - Better empty states for History, Favorites, My Takes, and My Skips.
 
@@ -218,16 +265,6 @@ These should be possible without app store review if implemented with current de
 - More visual hierarchy in rows.
 - Backfill or repair `hotPercentage`/`notPercentage` for older takes if rules allow.
 
-### AI Content Quality
-
-- Reduce semicolon frequency.
-- More sentence rhythm variety.
-- Avoid generic filler.
-- Avoid overusing the same topic frame.
-- Add near-duplicate checks.
-- Add category-fit validation.
-- Keep generated takes opinionated, human-feeling, and debatable.
-
 ### Safety and Trust
 
 - Improve report confirmation copy.
@@ -238,20 +275,19 @@ These should be possible without app store review if implemented with current de
 
 ### Growth Without Native Changes
 
-- Store screenshot copywriting.
 - Store description refresh.
-- Simple "Rate us" link after a positive moment.
 - Share-copy experiments.
 - Referral copy if using existing share primitives only.
+- Invite & Review copy tweaks.
 
 ## Full Release Required Backlog
 
 These likely need new native permissions, native configuration, new native dependencies, or store review.
 
-### Notifications and Native Engagement
+### Remote Notifications and Native Engagement
 
-- Push notifications for streak reminders, daily quests, or trending takes.
-- APNs and FCM setup.
+- Push notifications for server-triggered streak reminders, daily quests, or trending takes.
+- APNs and FCM remote notification setup.
 - iOS Live Activities for streaks or daily quests.
 - iOS home screen widget showing a daily take.
 - Android widgets or quick tiles.
@@ -268,6 +304,7 @@ These likely need new native permissions, native configuration, new native depen
 - New AdMob ad formats.
 - Native ad placement changes that require configuration.
 - Subscription or in-app purchase support.
+- Ad-free premium tier.
 - Significant ATT/consent flow changes.
 
 ### Authentication and Permissions
@@ -295,14 +332,10 @@ These likely need new native permissions, native configuration, new native depen
 - **OTA path**: Firestore-based friend code or public profile links with no contacts permission.
 - **Full release path**: Contacts import, push notifications, or deep native integrations.
 
-### Review Prompt
-
-- **OTA path**: Simple "Rate us" link after a positive moment.
-- **Full release path**: Native in-app review prompt if the required module/config is not already present.
-
-### Share Improvements
+### Results Share 2.0
 
 - **OTA path**: Improve existing share button copy, share card, and trigger timing.
+- **Backend/web path**: Add public OG pages for individual shared results.
 - **Full release path**: Add or configure new native share targets.
 
 ## Longer-Term Product Ideas
@@ -342,7 +375,6 @@ These likely need new native permissions, native configuration, new native depen
 
 ### Monetization
 
-- Ad-free premium tier.
 - Advanced statistics.
 - Exclusive themes or badge designs.
 - Priority moderation for submitted takes.
@@ -359,6 +391,7 @@ These likely need new native permissions, native configuration, new native depen
 - Client-side OpenAI calls or exposed AI keys.
 - Auto-approving content when moderation fails.
 - Adding native permissions without a clear product reason.
+- Adding haptics casually after the iOS clunkiness lesson.
 
 ## Backlog Hygiene
 
