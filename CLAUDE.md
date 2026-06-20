@@ -54,6 +54,37 @@ Main Firestore collections:
 
 The feed filters out voted takes. Skipped takes can reappear by design.
 
+## Corpus Management
+
+Three content states:
+
+- **Approved** — Normal. Eligible for feed selection.
+- **Deprioritized** — Still approved and visible in history, favorites, admin, and audit tooling. Pushed to the back of the feed deck and used only when the normal pool is exhausted or thin. Not a quality failure — a surfacing decision.
+- **Rejected** — Objective failure: exact duplicate, malformed output, policy violation, broken category assignment. Soft-deleted (`isApproved: false`, `status: rejected`).
+
+Why gravity wells are a ranking problem, not a deletion problem:
+
+When a category accumulates too many takes in the same semantic neighborhood — texting expectations, open office layouts, raw pet diets — those takes are often individually valid. The problem is not that they should not exist. The problem is that users have seen enough of that flavor for now. Deprioritization is the honest response: reduce surfacing without destroying inventory.
+
+Deprioritization fields are sparse; absence means normal:
+
+```typescript
+deprioritized?: boolean
+deprioritizedReason?: 'gravity_well' | 'stale_lane' | 'manual'
+deprioritizedAt?: Timestamp
+deprioritizedUntil?: Timestamp
+deprioritizedAuditId?: string
+```
+
+Default `deprioritizedUntil` is 30 days from audit date. Categories running thin can have this shortened at audit time.
+
+Automation boundary, current:
+
+- Tier 1, objective failures: automatic soft-delete, no human review required.
+- Tier 2, gravity wells: audit script produces a classified report, human applies deprioritization manually. Will automate after 2–3 audit cycles demonstrate consistent, trustworthy reports.
+
+Audit cadence: see Corpus Audit Baselines section.
+
 ## AI and Moderation
 
 User submissions are moderated by the `submitTake` Firebase HTTPS function before any take can become visible in the public feed.

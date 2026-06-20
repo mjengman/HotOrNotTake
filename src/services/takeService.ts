@@ -17,7 +17,7 @@ import {
   startAfter,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { Take, TakeSubmission, TakeStatus } from '../types/Take';
+import { Take, TakeSubmission, TakeStatus, DeprioritizedReason } from '../types/Take';
 
 // Collection references
 const TAKES_COLLECTION = 'takes';
@@ -152,6 +152,17 @@ const convertTimestampToDate = (timestamp: any): Date => {
   return new Date(timestamp);
 };
 
+const deprioritizedReasons = new Set<DeprioritizedReason>([
+  'gravity_well',
+  'stale_lane',
+  'manual',
+]);
+
+const getDeprioritizedReason = (value: unknown): DeprioritizedReason | undefined =>
+  typeof value === 'string' && deprioritizedReasons.has(value as DeprioritizedReason)
+    ? (value as DeprioritizedReason)
+    : undefined;
+
 // Convert Take from Firestore format to app format
 const convertFirestoreTake = (id: string, data: any): Take => ({
   id,
@@ -172,6 +183,12 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   rejectionReason: data.rejectionReason,
   reportCount: data.reportCount || 0,
   isAIGenerated: data.isAIGenerated || false, // AI flag
+  deprioritized: data.deprioritized === true ? true : undefined,
+  deprioritizedReason: getDeprioritizedReason(data.deprioritizedReason),
+  deprioritizedAt: data.deprioritizedAt ? convertTimestampToDate(data.deprioritizedAt) : undefined,
+  deprioritizedUntil: data.deprioritizedUntil ? convertTimestampToDate(data.deprioritizedUntil) : undefined,
+  deprioritizedAuditId:
+    typeof data.deprioritizedAuditId === 'string' ? data.deprioritizedAuditId : undefined,
 });
 
 const isPermissionDeniedError = (error: unknown) =>

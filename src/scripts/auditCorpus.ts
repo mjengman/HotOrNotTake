@@ -34,6 +34,18 @@ interface DuplicateCluster {
   examples: Array<Pick<CorpusTake, 'id' | 'text' | 'category' | 'totalVotes'>>;
 }
 
+type ClassifiedAuditTier = 'tier_1' | 'tier_2';
+
+interface ClassifiedAuditCandidate {
+  tier: ClassifiedAuditTier;
+  id: string;
+  text: string;
+  category: string;
+  reason: string;
+  similarity?: number;
+  matchedId?: string;
+}
+
 interface PhraseFrequency {
   phrase: string;
   count: number;
@@ -67,6 +79,10 @@ interface CorpusAuditReport {
     examples: Array<Pick<CorpusTake, 'id' | 'text' | 'category'>>;
   };
   categoryDriftFlags: DriftFlag[];
+  classifiedCandidates: {
+    tier1: ClassifiedAuditCandidate[];
+    tier2: ClassifiedAuditCandidate[];
+  };
   structure: StructuralSummary;
   volumeByCategory: Array<{ category: string; count: number }>;
 }
@@ -76,6 +92,11 @@ const TOP_PHRASE_LIMIT = 25;
 const TOP_DRIFT_LIMIT = 50;
 const TOP_CLUSTER_LIMIT = 30;
 const TOP_RHYTHM_LIMIT = 15;
+const TOP_CLASSIFIED_CANDIDATE_LIMIT = 80;
+const EXACT_DUPLICATE_THRESHOLD = 0.95;
+const GRAVITY_WELL_MIN_SIMILARITY = 0.7;
+const GRAVITY_WELL_MAX_SIMILARITY = 0.95;
+const GRAVITY_WELL_TOPIC_MIN_COUNT = 3;
 
 const categoryTerms: Record<string, string[]> = {
   food: [
@@ -131,6 +152,54 @@ const categoryTerms: Record<string, string[]> = {
     'relationship', 'relationships', 'texting', 'commitment', 'boundaries',
   ],
 };
+
+const validCategories = new Set(Object.keys(categoryTerms));
+
+const topicStopWords = new Set([
+  'about',
+  'after',
+  'against',
+  'almost',
+  'because',
+  'before',
+  'being',
+  'better',
+  'could',
+  'deserve',
+  'deserves',
+  'every',
+  'from',
+  'have',
+  'into',
+  'just',
+  'less',
+  'make',
+  'makes',
+  'more',
+  'most',
+  'need',
+  'needs',
+  'never',
+  'only',
+  'over',
+  'people',
+  'really',
+  'should',
+  'than',
+  'that',
+  'their',
+  'them',
+  'they',
+  'thing',
+  'this',
+  'those',
+  'through',
+  'under',
+  'when',
+  'with',
+  'without',
+  'would',
+]);
 
 class UnionFind {
   private parent: number[];
@@ -279,6 +348,24 @@ const similarityScore = (firstText: string, secondText: string): number => {
   return Math.max(trigramScore, tokenScore);
 };
 
+const trigramSimilarityScore = (firstText: string, secondText: string): number => {
+  const firstNormalized = normalizeText(firstText);
+  const secondNormalized = normalizeText(secondText);
+
+  if (!firstNormalized || !secondNormalized) {
+    return 0;
+  }
+
+  if (firstNormalized === secondNormalized) {
+    return 1;
+  }
+
+  return jaccard(
+    getCharTrigrams(firstNormalized),
+    getCharTrigrams(secondNormalized)
+  );
+};
+
 const percentage = (part: number, total: number): number =>
   total === 0 ? 0 : Math.round((part / total) * 1000) / 10;
 
@@ -380,6 +467,195 @@ const findDuplicateClusters = (takes: CorpusTake[], threshold: number): Duplicat
   return clusters
     .sort((first, second) => second.count - first.count || second.maxSimilarity - first.maxSimilarity)
     .slice(0, TOP_CLUSTER_LIMIT);
+};
+
+const findSimilarityCandidatesInRange = (
+  takes: CorpusTake[],
+  minSimilarity: number,
+  maxSimilarity: number,
+  scorer: (firstText: string, secondText: string) => number = similarityScore
+): ClassifiedAuditCandidate[] => {
+  const candidates = new Map<string, ClassifiedAuditCandidate>();
+  const byCategory = new Map<string, CorpusTake[]>();
+
+  takes.forEach((take) => {
+    byCategory.set(take.category, [...(byCategory.get(take.category) ?? []), take]);
+  });
+
+  byCategory.forEach((categoryTakes) => {
+    for (let first = 0; first < categoryTakes.length; first += 1) {
+      for (let second = first + 1; second < categoryTakes.length; second += 1) {
+        const firstTake = categoryTakes[first];
+        const secondTake = categoryTakes[second];
+        const score = scorer(firstTake.text, secondTake.text);
+
+        if (score < minSimilarity || score >= maxSimilarity) {
+          continue;
+        }
+
+        [firstTake, secondTake].forEach((candidate, candidateIndex) => {
+          const matched = candidateIndex === 0 ? secondTake : firstTake;
+          const existing = candidates.get(candidate.id);
+          if (existing && (existing.similarity ?? 0) >= score) {
+            return;
+          }
+
+          candidates.set(candidate.id, {
+            tier: 'tier_2',
+            id: candidate.id,
+            text: candidate.text,
+            category: candidate.category,
+            reason: `Near-duplicate cluster candidate; similar to ${matched.id}`,
+            similarity: Math.round(score * 1000) / 1000,
+            matchedId: matched.id,
+          });
+        });
+      }
+    }
+  });
+
+  return Array.from(candidates.values())
+    .sort(
+      (first, second) =>
+        (second.similarity ?? 0) - (first.similarity ?? 0) ||
+        first.category.localeCompare(second.category)
+    )
+    .slice(0, TOP_CLASSIFIED_CANDIDATE_LIMIT);
+};
+
+const getTopicTokens = (text: string): string[] =>
+  tokenize(text).filter(token => token.length >= 4 && !topicStopWords.has(token));
+
+const getTopicPhrases = (take: CorpusTake): string[] => {
+  const tokens = getTopicTokens(take.text);
+  return [
+    ...getNgrams(tokens, 2),
+    ...getNgrams(tokens, 3),
+  ];
+};
+
+const findTopicGravityWellCandidates = (takes: CorpusTake[]): ClassifiedAuditCandidate[] => {
+  const candidates = new Map<string, ClassifiedAuditCandidate>();
+  const phraseCountsByCategory = new Map<string, Map<string, Set<string>>>();
+  const takesById = new Map(takes.map(take => [take.id, take]));
+
+  takes.forEach((take) => {
+    const categoryPhrases =
+      phraseCountsByCategory.get(take.category) ?? new Map<string, Set<string>>();
+    phraseCountsByCategory.set(take.category, categoryPhrases);
+
+    new Set(getTopicPhrases(take)).forEach((phrase) => {
+      const takeIds = categoryPhrases.get(phrase) ?? new Set<string>();
+      takeIds.add(take.id);
+      categoryPhrases.set(phrase, takeIds);
+    });
+  });
+
+  phraseCountsByCategory.forEach((phraseCounts, category) => {
+    Array.from(phraseCounts.entries())
+      .filter(([_phrase, takeIds]) => takeIds.size >= GRAVITY_WELL_TOPIC_MIN_COUNT)
+      .sort(
+        ([firstPhrase, firstTakeIds], [secondPhrase, secondTakeIds]) =>
+          secondTakeIds.size - firstTakeIds.size || firstPhrase.localeCompare(secondPhrase)
+      )
+      .slice(0, 5)
+      .forEach(([phrase, takeIds]) => {
+        Array.from(takeIds)
+          .slice(0, 5)
+          .forEach((takeId) => {
+            const take = takesById.get(takeId);
+            if (!take || candidates.has(take.id)) {
+              return;
+            }
+
+            candidates.set(take.id, {
+              tier: 'tier_2',
+              id: take.id,
+              text: take.text,
+              category,
+              reason: `Topic phrase "${phrase}" appears ${takeIds.size} times in ${category}`,
+            });
+          });
+      });
+  });
+
+  return Array.from(candidates.values())
+    .sort((first, second) => first.category.localeCompare(second.category) || first.id.localeCompare(second.id))
+    .slice(0, TOP_CLASSIFIED_CANDIDATE_LIMIT);
+};
+
+const findClassifiedAuditCandidates = (
+  takes: CorpusTake[]
+): CorpusAuditReport['classifiedCandidates'] => {
+  const tier1 = new Map<string, ClassifiedAuditCandidate>();
+  const tier2 = new Map<string, ClassifiedAuditCandidate>();
+
+  findSimilarityCandidatesInRange(
+    takes,
+    EXACT_DUPLICATE_THRESHOLD,
+    1.01,
+    trigramSimilarityScore
+  ).forEach((candidate) => {
+    tier1.set(candidate.id, {
+      ...candidate,
+      tier: 'tier_1',
+      reason: `Exact/high-similarity duplicate candidate; similar to ${candidate.matchedId}`,
+    });
+  });
+
+  takes
+    .filter((take) => take.isAIGenerated && take.text.includes(';'))
+    .forEach((take) => {
+      tier1.set(take.id, {
+        tier: 'tier_1',
+        id: take.id,
+        text: take.text,
+        category: take.category,
+        reason: 'AI-generated take contains a semicolon',
+      });
+    });
+
+  takes
+    .filter((take) => !validCategories.has(take.category))
+    .forEach((take) => {
+      tier1.set(take.id, {
+        tier: 'tier_1',
+        id: take.id,
+        text: take.text,
+        category: take.category,
+        reason: `Invalid category "${take.category}"`,
+      });
+    });
+
+  findSimilarityCandidatesInRange(
+    takes,
+    GRAVITY_WELL_MIN_SIMILARITY,
+    GRAVITY_WELL_MAX_SIMILARITY,
+    trigramSimilarityScore
+  ).forEach((candidate) => {
+    if (!tier1.has(candidate.id)) {
+      tier2.set(candidate.id, candidate);
+    }
+  });
+
+  findTopicGravityWellCandidates(takes).forEach((candidate) => {
+    if (!tier1.has(candidate.id) && !tier2.has(candidate.id)) {
+      tier2.set(candidate.id, candidate);
+    }
+  });
+
+  const sortCandidates = (candidates: ClassifiedAuditCandidate[]) =>
+    candidates.sort(
+      (first, second) =>
+        first.category.localeCompare(second.category) ||
+        first.reason.localeCompare(second.reason) ||
+        first.id.localeCompare(second.id)
+    );
+
+  return {
+    tier1: sortCandidates(Array.from(tier1.values())).slice(0, TOP_CLASSIFIED_CANDIDATE_LIMIT),
+    tier2: sortCandidates(Array.from(tier2.values())).slice(0, TOP_CLASSIFIED_CANDIDATE_LIMIT),
+  };
 };
 
 const findRepeatedPhrases = (takes: CorpusTake[], size: number): PhraseFrequency[] => {
@@ -513,6 +789,7 @@ const buildReport = (takes: CorpusTake[], threshold: number): CorpusAuditReport 
       examples: semicolonTakes.slice(0, 10).map(({ id, text, category }) => ({ id, text, category })),
     },
     categoryDriftFlags: findCategoryDrift(takes),
+    classifiedCandidates: findClassifiedAuditCandidates(takes),
     structure: summarizeStructure(takes),
     volumeByCategory: Array.from(volumeCounts.entries())
       .map(([category, count]) => ({ category, count }))
@@ -571,6 +848,36 @@ const printReport = (report: CorpusAuditReport) => {
       console.log(
         `- ${flag.id}: [${flag.category}] maybe [${flag.suspectedCategory}] ` +
         `(${flag.matchedTerms.join(', ')}) :: ${flag.text}`
+      );
+    });
+  }
+
+  printSection('Tier 1 candidates (safe to soft-delete)');
+  if (report.classifiedCandidates.tier1.length === 0) {
+    console.log('No Tier 1 candidates found.');
+  } else {
+    report.classifiedCandidates.tier1.forEach((candidate) => {
+      const similarity = candidate.similarity === undefined
+        ? ''
+        : ` similarity=${candidate.similarity}`;
+      console.log(
+        `- [${candidate.tier}] ${candidate.id} [${candidate.category}]${similarity}: ` +
+        `${candidate.reason} :: ${candidate.text}`
+      );
+    });
+  }
+
+  printSection('Tier 2 candidates (gravity well — deprioritize, do not delete)');
+  if (report.classifiedCandidates.tier2.length === 0) {
+    console.log('No Tier 2 candidates found.');
+  } else {
+    report.classifiedCandidates.tier2.forEach((candidate) => {
+      const similarity = candidate.similarity === undefined
+        ? ''
+        : ` similarity=${candidate.similarity}`;
+      console.log(
+        `- [${candidate.tier}] ${candidate.id} [${candidate.category}]${similarity}: ` +
+        `${candidate.reason} :: ${candidate.text}`
       );
     });
   }

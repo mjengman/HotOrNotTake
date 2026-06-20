@@ -40,6 +40,16 @@ const readQueue = async (): Promise<QueuedVoteWrite[]> => {
   }
 };
 
+export const getQueuedVoteTakeIds = async (userId?: string): Promise<string[]> => {
+  const queue = await readQueue();
+  return Array.from(new Set(
+    queue
+      .filter(entry => !userId || entry.userId === userId)
+      .map(entry => entry.takeId)
+      .filter((takeId): takeId is string => typeof takeId === 'string' && takeId.length > 0)
+  ));
+};
+
 const writeQueue = async (queue: QueuedVoteWrite[]) => {
   const trimmed = queue.slice(-MAX_OUTBOX_SIZE);
   await AsyncStorage.setItem(VOTE_OUTBOX_KEY, JSON.stringify(trimmed));

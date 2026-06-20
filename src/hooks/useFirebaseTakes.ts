@@ -17,7 +17,7 @@ import {
 import { 
   incrementUserSubmissionCount,
 } from '../services/userService';
-import { enqueueVoteWrite } from '../services/voteOutboxService';
+import { enqueueVoteWrite, getQueuedVoteTakeIds } from '../services/voteOutboxService';
 import { useAuth } from './useAuth';
 import { StreakUpdateResult } from '../types/User';
 import { MY_SKIPS_CATEGORY, isMySkipsCategory } from '../constants';
@@ -49,15 +49,23 @@ const FEED_CACHE_VERSION = 'v1';
 const FEED_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const FEED_CACHE_BATCH_SIZE = 30;
 const LIVE_FEED_RECONCILE_DELAY_MS = 2500;
+const LOCAL_ID_HYDRATION_SKELETON_MS = 150;
+const RECENT_TEXT_GUARD_SIZE = 10;
+const RECENT_TEXT_SIMILARITY_THRESHOLD = 0.7;
 const FEED_CACHE_PREFIX = `feed-cache:${FEED_CACHE_VERSION}`;
 const LOCAL_VOTED_PREFIX = `local-voted:${FEED_CACHE_VERSION}`;
 const LOCAL_SKIPPED_PREFIX = `local-skipped:${FEED_CACHE_VERSION}`;
 
-type CachedTake = Omit<Take, 'createdAt' | 'submittedAt' | 'approvedAt' | 'rejectedAt'> & {
+type CachedTake = Omit<
+  Take,
+  'createdAt' | 'submittedAt' | 'approvedAt' | 'rejectedAt' | 'deprioritizedAt' | 'deprioritizedUntil'
+> & {
   createdAt: string;
   submittedAt: string;
   approvedAt?: string;
   rejectedAt?: string;
+  deprioritizedAt?: string;
+  deprioritizedUntil?: string;
 };
 
 interface FeedCacheRecord {
@@ -81,6 +89,67 @@ const getTakeTextFingerprint = (text: string): string =>
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+const getCharTrigrams = (normalizedText: string): Set<string> => {
+  if (normalizedText.length <= 3) {
+    return normalizedText ? new Set([normalizedText]) : new Set();
+  }
+
+  const trigrams = new Set<string>();
+  for (let index = 0; index <= normalizedText.length - 3; index += 1) {
+    trigrams.add(normalizedText.slice(index, index + 3));
+  }
+
+  return trigrams;
+};
+
+const getJaccardSimilarity = <T>(first: Set<T>, second: Set<T>): number => {
+  if (first.size === 0 && second.size === 0) {
+    return 1;
+  }
+
+  let intersection = 0;
+  first.forEach((value) => {
+    if (second.has(value)) {
+      intersection += 1;
+    }
+  });
+
+  return intersection / (first.size + second.size - intersection);
+};
+
+const getRecentTextSimilarity = (firstText: string, secondText: string): number => {
+  const first = getTakeTextFingerprint(firstText);
+  const second = getTakeTextFingerprint(secondText);
+
+  if (!first || !second) {
+    return 0;
+  }
+
+  if (first === second) {
+    return 1;
+  }
+
+  return getJaccardSimilarity(getCharTrigrams(first), getCharTrigrams(second));
+};
+
+const hasSimilarRecentText = (take: Take, recentTexts: string[]): boolean =>
+  recentTexts.some(
+    recentText => getRecentTextSimilarity(take.text, recentText) >= RECENT_TEXT_SIMILARITY_THRESHOLD
+  );
+
+const appendRecentText = (recentTexts: string[], take: Take): string[] => {
+  const fingerprint = getTakeTextFingerprint(take.text);
+  if (!fingerprint) {
+    return recentTexts;
+  }
+
+  return [...recentTexts, fingerprint].slice(-RECENT_TEXT_GUARD_SIZE);
+};
+
+const isActiveDeprioritizedTake = (take: Take, now: number = Date.now()): boolean =>
+  take.deprioritized === true &&
+  (!take.deprioritizedUntil || take.deprioritizedUntil.getTime() >= now);
 
 const filterUniqueTakes = (
   takes: Take[],
@@ -118,6 +187,8 @@ const serializeTake = (take: Take): CachedTake => ({
   submittedAt: take.submittedAt.toISOString(),
   approvedAt: take.approvedAt?.toISOString(),
   rejectedAt: take.rejectedAt?.toISOString(),
+  deprioritizedAt: take.deprioritizedAt?.toISOString(),
+  deprioritizedUntil: take.deprioritizedUntil?.toISOString(),
 });
 
 const parseDate = (value?: string): Date | undefined => {
@@ -132,6 +203,8 @@ const deserializeTake = (take: CachedTake): Take => ({
   submittedAt: parseDate(take.submittedAt) ?? new Date(),
   approvedAt: parseDate(take.approvedAt),
   rejectedAt: parseDate(take.rejectedAt),
+  deprioritizedAt: parseDate(take.deprioritizedAt),
+  deprioritizedUntil: parseDate(take.deprioritizedUntil),
 });
 
 const readLocalVotedIds = async (userId: string): Promise<string[]> => {
@@ -237,7 +310,7 @@ const removeTakeFromFeedCache = async (
 const readFeedCache = async (
   userId: string,
   category: string,
-  votedIds: Set<string>
+  hiddenIds: Set<string>
 ): Promise<Take[]> => {
   try {
     const raw = await AsyncStorage.getItem(getFeedCacheKey(userId, category));
@@ -256,7 +329,7 @@ const readFeedCache = async (
     return record.takes
       .map(deserializeTake)
       .filter(take =>
-        !votedIds.has(take.id) &&
+        !hiddenIds.has(take.id) &&
         (take.isApproved === true || take.status === 'approved')
       );
   } catch (error) {
@@ -338,61 +411,81 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const initialLoadRequestRef = useRef(0);
   const sessionHiddenTakeIdsRef = useRef<Set<string>>(new Set());
   const sessionHiddenFromMySkipsRef = useRef<Set<string>>(new Set());
-  const sessionSeenTextFingerprintsRef = useRef<Set<string>>(new Set());
+  const sessionRecentTextFingerprintsRef = useRef<string[]>([]);
 
   useEffect(() => {
     sessionHiddenTakeIdsRef.current.clear();
     sessionHiddenFromMySkipsRef.current.clear();
-    sessionSeenTextFingerprintsRef.current.clear();
+    sessionRecentTextFingerprintsRef.current = [];
   }, [userId]);
 
-  // Stable category variety algorithm - freezes prefix to prevent reshuffling
-  const ensureCategoryVariety = useCallback((takesArray: Take[], freezePrefixCount: number = 0): Take[] => {
-    // Don't touch the already-present prefix
+  const rememberSeenTakeText = useCallback((take?: Take) => {
+    if (!take) {
+      return;
+    }
+
+    const textFingerprint = getTakeTextFingerprint(take.text);
+    if (textFingerprint) {
+      sessionRecentTextFingerprintsRef.current = appendRecentText(
+        sessionRecentTextFingerprintsRef.current,
+        take
+      );
+    }
+  }, []);
+
+  const orderFeedForFreshness = useCallback((takesArray: Take[], freezePrefixCount: number = 0): Take[] => {
     const prefix = takesArray.slice(0, freezePrefixCount);
     const tail = takesArray.slice(freezePrefixCount);
-    if (category !== 'all' || tail.length <= 2) return takesArray;
+    if (tail.length <= 1) return takesArray;
 
+    const now = Date.now();
+    const normalTail = tail.filter(take => !isActiveDeprioritizedTake(take, now));
+    const lastResortTail = tail.filter(take => isActiveDeprioritizedTake(take, now));
     const result: Take[] = [...prefix];
-    const availableTakes = [...tail];
+    let recentTexts = sessionRecentTextFingerprintsRef.current.slice(-RECENT_TEXT_GUARD_SIZE);
     let lastCategory: string | null = prefix.length ? prefix[prefix.length - 1]?.category ?? null : null;
-    let consecutiveCount = 0;
-    const maxConsecutive = 2;
-    
-    while (availableTakes.length > 0) {
-      // Check if we need variety (already have 2 consecutive of same category)
-      const needsVariety = lastCategory && consecutiveCount >= maxConsecutive;
-      
-      let nextTakeIndex = 0;
-      if (needsVariety) {
-        // Try to find a different category
-        const differentIndex = availableTakes.findIndex(t => t.category !== lastCategory);
-        if (differentIndex !== -1) {
-          nextTakeIndex = differentIndex;
-        } else {
-          // No different categories available, just warn once and continue
-          if (consecutiveCount === maxConsecutive) {
-          }
+
+    prefix.forEach((take) => {
+      recentTexts = appendRecentText(recentTexts, take);
+    });
+
+    const appendBucket = (bucket: Take[]) => {
+      const availableTakes = [...bucket];
+
+      while (availableTakes.length > 0) {
+        const canAvoidCategoryRepeat =
+          category === 'all' &&
+          Boolean(lastCategory) &&
+          availableTakes.some(take => take.category !== lastCategory);
+
+        let nextTakeIndex = availableTakes.findIndex(take => {
+          const categoryOk = !canAvoidCategoryRepeat || take.category !== lastCategory;
+          return categoryOk && !hasSimilarRecentText(take, recentTexts);
+        });
+
+        if (nextTakeIndex === -1 && canAvoidCategoryRepeat) {
+          nextTakeIndex = availableTakes.findIndex(take => take.category !== lastCategory);
         }
-      }
-      
-      // Take the selected item
-      const nextTake = availableTakes[nextTakeIndex];
-      availableTakes.splice(nextTakeIndex, 1);
-      result.push(nextTake);
-      
-      // Update tracking
-      if (nextTake.category === lastCategory) {
-        consecutiveCount++;
-      } else {
+
+        if (nextTakeIndex === -1) {
+          nextTakeIndex = availableTakes.findIndex(take => !hasSimilarRecentText(take, recentTexts));
+        }
+
+        if (nextTakeIndex === -1) {
+          nextTakeIndex = 0;
+        }
+
+        const nextTake = availableTakes[nextTakeIndex];
+        availableTakes.splice(nextTakeIndex, 1);
+        result.push(nextTake);
         lastCategory = nextTake.category;
-        consecutiveCount = 1;
+        recentTexts = appendRecentText(recentTexts, nextTake);
       }
-    }
-    
-    // Log summary
-    const categories = result.slice(0, 10).map(t => t.category);
-    
+    };
+
+    appendBucket(normalTail);
+    appendBucket(lastResortTail);
+
     return result;
   }, [category]);
 
@@ -421,16 +514,27 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       let renderedCache = false;
 
       try {
-        const [localVotedIds, localSkippedIds] = await Promise.all([
+        const hydrationTimer = setTimeout(() => {
+          if (isCurrentRequest()) {
+            setFeed([]);
+            setLoading(true);
+          }
+        }, LOCAL_ID_HYDRATION_SKELETON_MS);
+
+        const [localVotedIds, localSkippedIds, queuedVoteIds] = await Promise.all([
           readLocalVotedIds(userId),
           readLocalSkippedIds(userId),
+          getQueuedVoteTakeIds(userId),
         ]);
+        clearTimeout(hydrationTimer);
+
         if (!isCurrentRequest()) {
           return;
         }
 
         const localHiddenSet = new Set([
           ...localVotedIds,
+          ...queuedVoteIds,
           ...(viewingMySkips ? [] : localSkippedIds),
           ...(viewingMySkips
             ? sessionHiddenFromMySkipsRef.current
@@ -446,9 +550,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         }
 
         if (cachedTakes.length > 0) {
-          const orderedCached = category === 'all'
-            ? ensureCategoryVariety(cachedTakes, cachedTakes.length)
-            : cachedTakes;
+          const orderedCached = orderFeedForFreshness(cachedTakes, 0);
 
           setFeed(orderedCached);
           setInteractedTakeIds(Array.from(localHiddenSet));
@@ -477,7 +579,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           const skippedTakes = filterUniqueTakes(
             await getUserSkippedTakes(userId),
             {
-              excludedIds: new Set([...voted, ...sessionHiddenFromMySkipsRef.current]),
+              excludedIds: new Set([...voted, ...queuedVoteIds, ...sessionHiddenFromMySkipsRef.current]),
             }
           );
 
@@ -485,12 +587,12 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
             return;
           }
 
-          setInteractedTakeIds(Array.from(new Set(voted)));
+          setInteractedTakeIds(Array.from(new Set([...voted, ...queuedVoteIds])));
           setFeed(prev => {
             const mergedSkippedTakes = filterUniqueTakes(
               [...prev, ...skippedTakes],
               {
-                excludedIds: new Set([...voted, ...sessionHiddenFromMySkipsRef.current]),
+                excludedIds: new Set([...voted, ...queuedVoteIds, ...sessionHiddenFromMySkipsRef.current]),
               }
             );
             writeFeedCache(userId, category, mergedSkippedTakes).catch(console.warn);
@@ -503,6 +605,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         const freshInteractedIds = new Set([
           ...voted,
           ...skipped,
+          ...queuedVoteIds,
           ...sessionHiddenTakeIdsRef.current,
         ]);
         setInteractedTakeIds(Array.from(freshInteractedIds));
@@ -527,23 +630,18 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         });
         
         // Apply variety once on initial load
-        const textExclusions = new Set(sessionSeenTextFingerprintsRef.current);
         const orderedItems = filterUniqueTakes(doubleFiltered, {
           excludedIds: freshInteractedIds,
-          excludedTextFingerprints: textExclusions,
         });
-        const ordered = category === 'all' ? ensureCategoryVariety(orderedItems, 0) : orderedItems;
+        const ordered = orderFeedForFreshness(orderedItems, 0);
         setFeed(prev => {
           const merged = renderedCache
             ? mergeLiveFeedWithVisibleDeck(prev, ordered, freshInteractedIds)
             : ordered;
           const uniqueMerged = filterUniqueTakes(merged, {
             excludedIds: freshInteractedIds,
-            excludedTextFingerprints: sessionSeenTextFingerprintsRef.current,
           });
-          const finalFeed = category === 'all' && renderedCache
-            ? ensureCategoryVariety(uniqueMerged, prev.length)
-            : uniqueMerged;
+          const finalFeed = orderFeedForFreshness(uniqueMerged, renderedCache ? prev.length : 0);
           writeFeedCache(userId, category, finalFeed).catch(console.warn);
           return finalFeed;
         });
@@ -568,7 +666,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     return () => {
       isActive = false;
     };
-  }, [authLoading, category, userId, ensureCategoryVariety, viewingMySkips]);
+  }, [authLoading, category, userId, orderFeedForFreshness, viewingMySkips]);
 
   // Load more takes function
   const loadMore = useCallback(async (
@@ -591,7 +689,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         ...interactedTakeIds,
         ...sessionHiddenTakeIdsRef.current,
       ]);
-      const excludedTextFingerprints = new Set(sessionSeenTextFingerprintsRef.current);
+      const excludedTextFingerprints = new Set<string>();
       
       // Also exclude what's already in feed to avoid duplicates
       for (const take of feed) {
@@ -625,14 +723,14 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setFeed(prev => {
         const combined = filterUniqueTakes([...prev, ...uniqueFreshTakes], {
           excludedIds: sessionHiddenTakeIdsRef.current,
-          excludedTextFingerprints: sessionSeenTextFingerprintsRef.current,
         });
         if (category !== 'all') {
-          writeFeedCache(userId, category, combined).catch(console.warn);
-          return combined;
+          const ordered = orderFeedForFreshness(combined, prev.length);
+          writeFeedCache(userId, category, ordered).catch(console.warn);
+          return ordered;
         }
-        // Freeze the existing length so we only variety-shuffle the newly appended tail
-        const ordered = ensureCategoryVariety(combined, prev.length);
+        // Freeze the existing length so we only freshness-shuffle the newly appended tail
+        const ordered = orderFeedForFreshness(combined, prev.length);
         writeFeedCache(userId, category, ordered).catch(console.warn);
         return ordered;
       });
@@ -647,7 +745,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         setLoading(false);
       }
     }
-  }, [category, feed, hasMore, loading, interactedTakeIds, ensureCategoryVariety, userId, viewingMySkips]);
+  }, [category, feed, hasMore, loading, interactedTakeIds, orderFeedForFreshness, userId, viewingMySkips]);
 
   // Return feed directly - variety is applied once during load, not on every render
   const takes = feed;
@@ -720,12 +818,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       const votedTake = feed.find(take => take.id === takeId);
       sessionHiddenTakeIdsRef.current.add(takeId);
       sessionHiddenFromMySkipsRef.current.add(takeId);
-      if (votedTake) {
-        const textFingerprint = getTakeTextFingerprint(votedTake.text);
-        if (textFingerprint) {
-          sessionSeenTextFingerprintsRef.current.add(textFingerprint);
-        }
-      }
+      rememberSeenTakeText(votedTake);
 
       // Optimistically update interacted IDs and remove from feed
       setInteractedTakeIds(prev => Array.from(new Set([...prev, takeId])));
@@ -786,7 +879,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Always clear in-flight flag
       inFlightVotesRef.current.delete(takeId);
     }
-  }, [userId, category, feed, hasMore, loadMore, interactedTakeIds, viewingMySkips]);
+  }, [userId, category, feed, hasMore, loadMore, interactedTakeIds, rememberSeenTakeText, viewingMySkips]);
 
   // Skip a take
   const handleSkipTake = useCallback(async (takeId: string): Promise<void> => {
@@ -801,12 +894,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       } else {
         sessionHiddenTakeIdsRef.current.add(takeId);
       }
-      if (skippedTake) {
-        const textFingerprint = getTakeTextFingerprint(skippedTake.text);
-        if (textFingerprint) {
-          sessionSeenTextFingerprintsRef.current.add(textFingerprint);
-        }
-      }
+      rememberSeenTakeText(skippedTake);
 
       setInteractedTakeIds(prev => Array.from(new Set([...prev, takeId])));
 
@@ -843,7 +931,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       console.error('❌ Skip failed in hook:', err);
       throw new Error(err instanceof Error ? err.message : 'Failed to skip take');
     }
-  }, [userId, category, feed, hasMore, loadMore, viewingMySkips]);
+  }, [userId, category, feed, hasMore, loadMore, rememberSeenTakeText, viewingMySkips]);
 
   // Submit a new take
   const handleSubmitNewTake = useCallback(async (
@@ -899,12 +987,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
 
     setFeed(prev => {
       const removedTake = prev.find(take => take.id === takeId);
-      if (removedTake) {
-        const textFingerprint = getTakeTextFingerprint(removedTake.text);
-        if (textFingerprint) {
-          sessionSeenTextFingerprintsRef.current.add(textFingerprint);
-        }
-      }
+      rememberSeenTakeText(removedTake);
 
       const nextFeed = prev.filter(take => take.id !== takeId);
       if (userId) {
@@ -916,7 +999,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       }
       return nextFeed;
     });
-  }, [category, userId]);
+  }, [category, rememberSeenTakeText, userId]);
 
   // Refresh takes manually
   const refreshTakes = useCallback(async (): Promise<void> => {
@@ -937,7 +1020,10 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setHasMore(!viewingMySkips);
       resetFeedCursor(category);
 
-      const { voted, skipped } = await getUserVotedAndSkippedTakeIds(userId);
+      const [{ voted, skipped }, queuedVoteIds] = await Promise.all([
+        getUserVotedAndSkippedTakeIds(userId),
+        getQueuedVoteTakeIds(userId),
+      ]);
       writeLocalVotedIds(userId, voted).catch(console.warn);
       writeLocalSkippedIds(userId, skipped).catch(console.warn);
 
@@ -945,16 +1031,16 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         const skippedTakes = filterUniqueTakes(
           await getUserSkippedTakes(userId),
           {
-            excludedIds: new Set([...voted, ...sessionHiddenFromMySkipsRef.current]),
+            excludedIds: new Set([...voted, ...queuedVoteIds, ...sessionHiddenFromMySkipsRef.current]),
           }
         );
 
-        setInteractedTakeIds(Array.from(new Set(voted)));
+        setInteractedTakeIds(Array.from(new Set([...voted, ...queuedVoteIds])));
         setFeed(prev => {
           const mergedSkippedTakes = filterUniqueTakes(
             [...prev, ...skippedTakes],
             {
-              excludedIds: new Set([...voted, ...sessionHiddenFromMySkipsRef.current]),
+              excludedIds: new Set([...voted, ...queuedVoteIds, ...sessionHiddenFromMySkipsRef.current]),
             }
           );
           writeFeedCache(userId, category, mergedSkippedTakes).catch(console.warn);
@@ -967,6 +1053,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       const freshInteractedIds = new Set([
         ...voted,
         ...skipped,
+        ...queuedVoteIds,
         ...sessionHiddenTakeIdsRef.current,
       ]);
       setInteractedTakeIds(Array.from(freshInteractedIds));
@@ -982,9 +1069,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       // Apply variety once to the fresh list
       const uniqueItems = filterUniqueTakes(items, {
         excludedIds: freshInteractedIds,
-        excludedTextFingerprints: sessionSeenTextFingerprintsRef.current,
       });
-      const ordered = category === 'all' ? ensureCategoryVariety(uniqueItems, 0) : uniqueItems;
+      const ordered = orderFeedForFreshness(uniqueItems, 0);
       setFeed(ordered);
       writeFeedCache(userId, category, ordered).catch(console.warn);
       setHasMore(gotAny && ordered.length > 0);
@@ -993,7 +1079,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     } finally {
       setLoading(false);
     }
-  }, [category, ensureCategoryVariety, userId, viewingMySkips]);
+  }, [category, orderFeedForFreshness, userId, viewingMySkips]);
 
   // Prepend a take to the front of the deck (used for vote changes)
   const prependTake = useCallback((take: Take) => {

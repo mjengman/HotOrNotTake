@@ -83,6 +83,28 @@ interface GeneratedTakeBatch {
   takes?: unknown;
 }
 
+interface GeneratedTakeCandidate {
+  text: string;
+  categoryFit: 'yes' | 'no';
+  qualityScore: 1 | 2 | 3 | 4 | 5;
+  rejectionReason: string | null;
+}
+
+interface GeneratedTakeCandidateOutput {
+  take: string;
+  categoryFit: 'yes' | 'no';
+  qualityScore: 1 | 2 | 3 | 4 | 5;
+  rejectionReason: string | null;
+}
+
+type GenerationAttempt = 'initial' | 'retry';
+
+interface CategoryGravityWellGuidance {
+  avoidTopics: string[];
+  avoidFrames: string[];
+  freshLanes: string[];
+}
+
 const db = getFirestore();
 
 const profanityWords = new Set([
@@ -121,6 +143,397 @@ const categoryGenerationGuidance: Record<Category, string> = {
   sports: 'Teams, athletes, leagues, fans, rule changes, coaching, youth sports, and sports media.',
   travel: 'Airports, hotels, tourism, road trips, packing, etiquette abroad, destinations, and vacation habits.',
   relationships: 'Dating, marriage, friendship, boundaries, communication, breakups, commitment, and modern romance.',
+};
+
+const categoryVoiceExamples: Record<Category, string[]> = {
+  food: [
+    'Restaurant dessert menus are usually not worth the money.',
+    'Cooking for friends beats going out almost every time.',
+  ],
+  work: [
+    'Unlimited PTO mostly benefits companies that make people afraid to use it.',
+    'A quiet office should count as an employee benefit.',
+  ],
+  pets: [
+    'Dog owners should have to train themselves before training the dog.',
+    'Cat people understand boundaries better than dog people.',
+  ],
+  technology: [
+    'Smart home gadgets create more tiny chores than they solve.',
+    'Phones got boring once every camera became good enough.',
+  ],
+  life: [
+    'Being early is usually just anxiety dressed up as virtue.',
+    'Most people would be happier with fewer plans on their calendar.',
+  ],
+  entertainment: [
+    'A short, messy album is better than a bloated perfect one.',
+    'Most streaming shows would be stronger as two-hour movies.',
+  ],
+  environment: [
+    'Reusable bags are theater if the grocery store still wraps everything in plastic.',
+    'Cities should make driving inconvenient before begging people to take transit.',
+  ],
+  wellness: [
+    'Morning routines are overrated if your sleep is bad.',
+    'A boring workout you actually do beats an optimized plan you quit.',
+  ],
+  society: [
+    'Adults need third places more than they need another delivery app.',
+    'Schools should teach conflict repair as seriously as math.',
+  ],
+  politics: [
+    'Local elections affect daily life more than the races people argue about online.',
+    'Politicians should have to use the public services they control.',
+  ],
+  sports: [
+    'Instant replay has made some sports more correct and less fun.',
+    'A loyal fan base matters more than a perfect stadium experience.',
+  ],
+  travel: [
+    'A slow neighborhood walk tells you more about a city than its famous landmark.',
+    'Overplanned vacations feel like errands in a nicer place.',
+  ],
+  relationships: [
+    'Compatibility matters more than chemistry after the first month.',
+    'A clean breakup is kinder than a slow fade.',
+  ],
+};
+
+const bannedGenerationFrames = [
+  'is overrated and way too',
+  'people need to stop pretending',
+  'should be normalized',
+  'is not talked about enough',
+  'is a scam',
+  'should be mandatory',
+  'we need to',
+  'X is nice, but Y is the real issue',
+  'generic advice or safe consensus statements',
+  'obvious virtue statements',
+  'X is better than Y structures unless highly specific and opinionated',
+  'semicolons',
+];
+
+const avoidedGenerationTopics = [
+  'open office layouts and productivity',
+  'four-day work weeks',
+  'pineapple on pizza',
+  'road trips vs flying',
+];
+
+const categoryGravityWellGuidance: Record<Category, CategoryGravityWellGuidance> = {
+  food: {
+    avoidTopics: [
+      'pineapple on pizza',
+      'avocado toast prices',
+      'breakfast for dinner',
+      'coffee as a personality',
+    ],
+    avoidFrames: [
+      'X food is overrated',
+      'X belongs or does not belong on pizza',
+      'generic best food debates',
+    ],
+    freshLanes: [
+      'restaurant etiquette',
+      'delivery app guilt',
+      'kids menus',
+      'splitting appetizers',
+      'tipping at counter service',
+      'food allergies in groups',
+      'home cooking expectations',
+      'diet identity',
+      'expensive groceries',
+      'potluck behavior',
+    ],
+  },
+  work: {
+    avoidTopics: [
+      'open office layouts',
+      'four-day work week',
+      'hustle culture',
+      'work-life balance as a generic idea',
+    ],
+    avoidFrames: [
+      'X kills productivity',
+      'we need to normalize Y',
+    ],
+    freshLanes: [
+      'office friendships',
+      'performance reviews',
+      'salary transparency',
+      'middle management',
+      'networking events',
+      'return-to-office mandates',
+      'manager behavior',
+      'side hustles as identity',
+      'promotions and workplace politics',
+      'retirement age',
+    ],
+  },
+  pets: {
+    avoidTopics: [
+      'cats vs dogs as a generic debate',
+      'adopt do not shop as a generic slogan',
+      'grooming',
+    ],
+    avoidFrames: [
+      'X pet owners are better than Y pet owners',
+    ],
+    freshLanes: [
+      'off-leash dogs in shared spaces',
+      'pets in restaurants or planes',
+      'vet costs and pet insurance',
+      'outdoor cats',
+      'raw diets',
+      'emotional support animal designations',
+      'dog parks',
+      'pet grief',
+      'breed bans',
+      'pet clothing and strollers',
+      'fur baby language',
+    ],
+  },
+  technology: {
+    avoidTopics: [
+      'phone addiction as a generic idea',
+      'AI art as a generic idea',
+      'privacy as a generic idea',
+    ],
+    avoidFrames: [
+      'X is ruining Y',
+    ],
+    freshLanes: [
+      'algorithmic feeds and mood',
+      'right to repair',
+      'smart home devices',
+      'subscription software fatigue',
+      'tech support falling on tech-savvy family members',
+      'LinkedIn culture',
+      'Bluetooth earbuds etiquette',
+      'digital minimalism as status',
+      'group chat expectations',
+      'kids with tablets in public',
+    ],
+  },
+  life: {
+    avoidTopics: [
+      'wake up early',
+      'be kind',
+      'simple productivity advice',
+      'generic adulthood is hard jokes',
+    ],
+    avoidFrames: [
+      'everyone should do X',
+      'X is the secret to happiness',
+    ],
+    freshLanes: [
+      'neighbor etiquette',
+      'birthday expectations',
+      'being late',
+      'gift giving',
+      'house guests',
+      'chores and invisible labor',
+      'public phone calls',
+      'social plans as obligation',
+      'money habits among friends',
+      'family group chats',
+    ],
+  },
+  entertainment: {
+    avoidTopics: [
+      'Marvel or superhero fatigue as a generic idea',
+      'streaming has too much content as a generic idea',
+    ],
+    avoidFrames: [
+      'X is overrated',
+    ],
+    freshLanes: [
+      'reality TV as legitimate culture',
+      'award shows',
+      'reboots and IP recycling',
+      'music festivals',
+      'parasocial relationships with creators',
+      'background TV habits',
+      'movie theater experience',
+      'binge-watching vs week-to-week',
+      'celebrity culture',
+    ],
+  },
+  environment: {
+    avoidTopics: [
+      'recycling',
+      'electric cars',
+      'solar panels',
+      'reusable bags',
+      'planting trees',
+      'carbon offsets as a generic idea',
+    ],
+    avoidFrames: [
+      'X helps but will not save the planet unless Y',
+      'we need systemic change',
+      'we need to',
+    ],
+    freshLanes: [
+      'lawns and suburbs',
+      'air conditioning',
+      'nuclear power',
+      'meat and dairy',
+      'water rights',
+      'greenwashing',
+      'corporate accountability vs individual guilt',
+      'eco-friendly product status signaling',
+      'outdoor cats',
+      'flight shaming',
+      'fast fashion',
+    ],
+  },
+  wellness: {
+    avoidTopics: [
+      'cold showers',
+      'supplements as a generic idea',
+      'therapy as a generic idea',
+      'self-care as a generic idea',
+      'skincare routines',
+    ],
+    avoidFrames: [
+      'X is mostly a scam',
+      'Y is the real self-care',
+    ],
+    freshLanes: [
+      'wellness as class privilege',
+      'fitness culture toxicity',
+      'diet culture and body image',
+      'sleep tracking obsession',
+      'sober curiosity trend',
+      'therapy-speak overuse in everyday conversation',
+      'Ozempic and weight loss drugs',
+      'meditation apps',
+      'healthy lifestyle as identity',
+      'gym bro culture',
+    ],
+  },
+  society: {
+    avoidTopics: [
+      'kids these days',
+      'social media is bad as a generic idea',
+      'schools should teach taxes',
+      'be nicer in public',
+    ],
+    avoidFrames: [
+      'society needs to',
+      'X should be mandatory',
+    ],
+    freshLanes: [
+      'public space etiquette',
+      'third places',
+      'family obligations',
+      'dress codes',
+      'wedding and funeral norms',
+      'school discipline',
+      'neighborhood surveillance culture',
+      'generational money tension',
+      'customer service expectations',
+      'noise in shared spaces',
+    ],
+  },
+  politics: {
+    avoidTopics: [
+      'generic Trump takes',
+      'generic Biden takes',
+      'party identity slogans',
+      'everyone should vote as a generic statement',
+    ],
+    avoidFrames: [
+      'X politician is terrible',
+      'the other side is dumb',
+    ],
+    freshLanes: [
+      'local government competence',
+      'term limits',
+      'campaign donations',
+      'age limits for office',
+      'ballot measures',
+      'public services',
+      'zoning politics',
+      'school boards',
+      'political yard signs',
+      'debate performance vs governing ability',
+    ],
+  },
+  sports: {
+    avoidTopics: [
+      'GOAT debates as a generic idea',
+      'LeBron vs Jordan',
+      'baseball is too slow',
+      'soccer is boring',
+    ],
+    avoidFrames: [
+      'X is the greatest, no debate',
+      'real fans know',
+    ],
+    freshLanes: [
+      'youth sports parents',
+      'sports betting culture',
+      'fantasy sports loyalty',
+      'load management',
+      'stadium food prices',
+      'college athlete pay',
+      'bandwagon fans',
+      'sports documentaries',
+      'coach accountability',
+      'rule changes that alter tradition',
+    ],
+  },
+  travel: {
+    avoidTopics: [
+      'road trips vs flying',
+      'travel broadens the mind as a generic idea',
+      'packing tips',
+    ],
+    avoidFrames: [
+      'X is overrated for travelers',
+    ],
+    freshLanes: [
+      'over-tourism',
+      'travel influencers',
+      'destination weddings',
+      'solo travel',
+      'authentic travel snobbery',
+      'cruise ships',
+      'tourist traps vs locals',
+      'resort vs independent travel',
+      'travel as identity or status',
+      'airport behavior',
+      'souvenirs',
+    ],
+  },
+  relationships: {
+    avoidTopics: [
+      'love languages',
+      'boundaries as a generic idea',
+      'dating apps as a generic idea',
+      'long-distance as a generic idea',
+    ],
+    avoidFrames: [
+      'boundaries are essential',
+      'communication is key',
+    ],
+    freshLanes: [
+      'texting response expectations',
+      'exes staying friends',
+      'splitting checks or bills',
+      'jealousy',
+      'cohabitation before marriage',
+      'weddings and guest behavior',
+      'age gaps',
+      'social media behavior in relationships',
+      'meeting organically vs apps',
+      'relationship timelines',
+      'public vs private couples',
+    ],
+  },
 };
 
 const localRejectionRules: Array<{ pattern: RegExp; reason: string }> = [
@@ -331,19 +744,13 @@ const normalizeGeneratedTake = (value: unknown): string | null => {
     return null;
   }
 
-  const withoutPrefix = value
+  const text = value
     .replace(/\s+/g, ' ')
     .replace(/^["']+|["']+$/g, '')
     .replace(/^hot take:\s*/i, '')
     .trim();
 
-  const plainPunctuation = withoutPrefix
-    .replace(/\s*;\s*([a-z])/g, (_match, letter: string) => `. ${letter.toUpperCase()}`)
-    .replace(/\s*;\s*/g, '. ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return plainPunctuation.length ? plainPunctuation : null;
+  return text.length ? text : null;
 };
 
 const getTakeTextFingerprint = (text: string): string =>
@@ -445,22 +852,52 @@ const findSimilarTake = (
   return bestMatch;
 };
 
-const parseGeneratedTakes = (data: OpenAIChatCompletionResponse): string[] => {
+const stripMarkdownFences = (content: string): string => {
+  const trimmed = content.trim();
+  const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fencedMatch ? fencedMatch[1].trim() : trimmed;
+};
+
+const isGeneratedTakeCandidateOutput = (value: unknown): value is GeneratedTakeCandidateOutput => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const qualityScore = candidate.qualityScore;
+
+  return (
+    typeof candidate.take === 'string' &&
+    (candidate.categoryFit === 'yes' || candidate.categoryFit === 'no') &&
+    (qualityScore === 1 ||
+      qualityScore === 2 ||
+      qualityScore === 3 ||
+      qualityScore === 4 ||
+      qualityScore === 5) &&
+    (candidate.rejectionReason === null || typeof candidate.rejectionReason === 'string')
+  );
+};
+
+const parseGeneratedTakes = (data: OpenAIChatCompletionResponse): GeneratedTakeCandidate[] => {
   const content = data.choices?.[0]?.message?.content;
   if (!content) {
     throw new Error('OpenAI generation returned no content.');
   }
 
-  const parsed = JSON.parse(content) as GeneratedTakeBatch;
+  const parsed = JSON.parse(stripMarkdownFences(content)) as GeneratedTakeBatch;
   if (!Array.isArray(parsed.takes)) {
     throw new Error('OpenAI generation returned an invalid take list.');
   }
 
   const seen = new Set<string>();
-  const takes: string[] = [];
+  const takes: GeneratedTakeCandidate[] = [];
 
   for (const rawTake of parsed.takes) {
-    const normalized = normalizeGeneratedTake(rawTake);
+    if (!isGeneratedTakeCandidateOutput(rawTake)) {
+      throw new Error('OpenAI generation returned a take with missing or invalid evaluation fields.');
+    }
+
+    const normalized = normalizeGeneratedTake(rawTake.take);
     if (!normalized) {
       continue;
     }
@@ -473,7 +910,12 @@ const parseGeneratedTakes = (data: OpenAIChatCompletionResponse): string[] => {
       }
 
       seen.add(duplicateKey);
-      takes.push(text);
+      takes.push({
+        text,
+        categoryFit: rawTake.categoryFit,
+        qualityScore: rawTake.qualityScore,
+        rejectionReason: rawTake.rejectionReason,
+      });
     } catch {
       // Skip malformed model output instead of failing the whole batch.
     }
@@ -486,7 +928,45 @@ const parseGeneratedTakes = (data: OpenAIChatCompletionResponse): string[] => {
   return takes.slice(0, 10);
 };
 
-const generateTakeCandidates = async (category: Category): Promise<string[]> => {
+const generationPromptForAttempt = (category: Category, attempt: GenerationAttempt): string => {
+  const retryInstruction = attempt === 'retry'
+    ? 'This is a retry because the previous batch had low-quality, mismatched, duplicated, or policy-rejected candidates. Be more specific, more varied, and more category-grounded. '
+    : '';
+  const gravityWellGuidance = categoryGravityWellGuidance[category];
+
+  return (
+    retryInstruction +
+    `Generate ${GENERATED_TAKE_COUNT} fresh hot-or-not takes for the "${category}" category. ` +
+    `Category scope: ${categoryGenerationGuidance[category]} ` +
+    `Voice examples for tone and range only: ${categoryVoiceExamples[category].map(example => `"${example}"`).join(' / ')} ` +
+    `Known repeated topics to avoid for this category: ${gravityWellGuidance.avoidTopics.join(' | ')}. ` +
+    `Known repeated rhetorical frames to avoid for this category: ${gravityWellGuidance.avoidFrames.join(' | ')}. ` +
+    `Fresh lanes to explore for this category: ${gravityWellGuidance.freshLanes.join(' | ')}. ` +
+    'Quality target: A good take should make two normal people disagree at brunch without becoming toxic. It is specific, social, and rooted in real lived behavior, not generic advice, virtue signaling, or recycled internet debates. ' +
+    'Each take must be opinionated, specific, debatable, and feel like something a real person would post. ' +
+    'Mix short punchy takes with longer argumentative takes. Do not use the same sentence structure twice in a row. ' +
+    'Stake a clear position. Do not write observations, questions, vague culture commentary, or hedged takes. ' +
+    'Do not use hedging language like might, could arguably, or some would say. Vary sentence openers. ' +
+    'First person is allowed, but not required. ' +
+    `Never use these reusable frames: ${bannedGenerationFrames.join(' | ')}. ` +
+    `Avoid these repeated topics entirely: ${avoidedGenerationTopics.join(' | ')}. ` +
+    'Do not use semicolons. Not one. Use periods, commas, or dashes instead. ' +
+    'Avoid generic filler, slurs, explicit sexual content, threats, medical advice, legal advice, hashtags, links, questions, and "hot take" prefixes. ' +
+    `Keep every take between ${MIN_TAKE_LENGTH} and ${MAX_TAKE_LENGTH} characters. ` +
+    'For each candidate, self-evaluate honestly. categoryFit must be "no" if the take could fit any generic category. ' +
+    'Reject candidates that are generic advice, obvious virtue statements, safe consensus opinions, recycled category tropes, common internet arguments, "X is nice, but Y is the real issue" scaffolding, "we need to" framing, or "X should be mandatory" framing. ' +
+    'Use qualityScore 5 only for specific, opinionated takes rooted in real social friction that would genuinely split a room. ' +
+    'Use qualityScore 4 only for a clear opinion with recognizable conflict that is not a trope or cliche. ' +
+    'Use qualityScore 3 for plausible but generic, safe, or weakly opinionated takes. Use 2 for virtue statements, advice, or obvious consensus. Use 1 for harmful, off-category, or incoherent takes. ' +
+    'Set rejectionReason to null only when categoryFit is "yes" and qualityScore is 4 or 5. Otherwise provide a short rejectionReason. ' +
+    'Return raw JSON only. No markdown fences, no prose, no explanation.'
+  );
+};
+
+const generateTakeCandidates = async (
+  category: Category,
+  attempt: GenerationAttempt = 'initial'
+): Promise<GeneratedTakeCandidate[]> => {
   const response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
     method: 'POST',
     headers: {
@@ -500,23 +980,17 @@ const generateTakeCandidates = async (category: Category): Promise<string[]> => 
         {
           role: 'system',
           content:
-            'You write short, human-sounding debate prompts for a swipe voting app. Use plain, spoken punctuation and never use semicolons. Return only JSON that matches the schema.',
+            'You write sharp, human-sounding debate prompts for a swipe voting app. You also judge your own candidates strictly. Return raw JSON only, with no markdown fences or explanation text.',
         },
         {
           role: 'user',
-          content:
-            `Generate ${GENERATED_TAKE_COUNT} fresh hot-or-not takes for the "${category}" category. ` +
-            `Category scope: ${categoryGenerationGuidance[category]} ` +
-            'Each take must be opinionated, specific, debatable, and feel like something a real person would post. ' +
-            'Use casual, direct phrasing with simple punctuation. Do not use semicolons at all; prefer short sentences, commas, or dashes. ' +
-            'Avoid generic filler, slurs, explicit sexual content, threats, medical advice, legal advice, hashtags, links, questions, and "hot take" prefixes. ' +
-            `Keep every take between ${MIN_TAKE_LENGTH} and ${MAX_TAKE_LENGTH} characters.`,
+          content: generationPromptForAttempt(category, attempt),
         },
       ],
       response_format: {
         type: 'json_schema',
         json_schema: {
-          name: 'hot_take_batch',
+          name: 'evaluated_hot_take_batch',
           strict: true,
           schema: {
             type: 'object',
@@ -526,7 +1000,28 @@ const generateTakeCandidates = async (category: Category): Promise<string[]> => 
               takes: {
                 type: 'array',
                 items: {
-                  type: 'string',
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['take', 'categoryFit', 'qualityScore', 'rejectionReason'],
+                  properties: {
+                    take: {
+                      type: 'string',
+                    },
+                    categoryFit: {
+                      type: 'string',
+                      enum: ['yes', 'no'],
+                    },
+                    qualityScore: {
+                      type: 'integer',
+                      enum: [1, 2, 3, 4, 5],
+                    },
+                    rejectionReason: {
+                      anyOf: [
+                        { type: 'string' },
+                        { type: 'null' },
+                      ],
+                    },
+                  },
                 },
               },
             },
@@ -543,6 +1038,28 @@ const generateTakeCandidates = async (category: Category): Promise<string[]> => 
 
   const data = (await response.json()) as OpenAIChatCompletionResponse;
   return parseGeneratedTakes(data);
+};
+
+const tryGenerateTakeCandidates = async (
+  category: Category,
+  attempt: GenerationAttempt
+): Promise<GeneratedTakeCandidate[]> => {
+  try {
+    const candidates = await generateTakeCandidates(category, attempt);
+    logger.info('OpenAI generated evaluated candidates.', {
+      category,
+      attempt,
+      candidates,
+    });
+    return candidates;
+  } catch (error) {
+    logger.error('OpenAI generation produced no usable candidates.', {
+      category,
+      attempt,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 };
 
 const createTake = async ({
@@ -751,21 +1268,79 @@ export const generateTakes = onRequest(
         });
       }
 
-      const firstBatchCandidates = await generateTakeCandidates(category);
+      const firstBatchCandidates = await tryGenerateTakeCandidates(category, 'initial');
       let generatedCandidateCount = firstBatchCandidates.length;
       const comparisonTexts = await getRecentApprovedTakeTextsByCategory(category);
       let addedCount = 0;
       const skipped = {
         duplicate: 0,
+        generation: 0,
+        categoryMismatch: 0,
+        lowQuality: 0,
+        punctuation: 0,
         localPolicy: 0,
         moderation: 0,
       };
       const takeIds: string[] = [];
 
-      const processCandidateBatch = async (candidates: string[]) => {
-        for (const text of candidates) {
+      const processCandidateBatch = async (
+        candidates: GeneratedTakeCandidate[],
+        attempt: GenerationAttempt
+      ) => {
+        if (candidates.length === 0) {
+          skipped.generation += 1;
+        }
+
+        for (const candidate of candidates) {
           if (addedCount >= GENERATED_TAKE_COUNT) {
             break;
+          }
+
+          const { text } = candidate;
+
+          if (candidate.categoryFit !== 'yes') {
+            skipped.categoryMismatch += 1;
+            logger.info('Skipped category-mismatched generated take.', {
+              category,
+              attempt,
+              candidate: text,
+              reason: candidate.rejectionReason,
+            });
+            continue;
+          }
+
+          if (candidate.qualityScore < 4) {
+            skipped.lowQuality += 1;
+            logger.info('Skipped low-quality generated take.', {
+              category,
+              attempt,
+              qualityScore: candidate.qualityScore,
+              candidate: text,
+              reason: candidate.rejectionReason,
+            });
+            continue;
+          }
+
+          if (candidate.rejectionReason) {
+            skipped.lowQuality += 1;
+            logger.info('Skipped self-rejected generated take.', {
+              category,
+              attempt,
+              qualityScore: candidate.qualityScore,
+              candidate: text,
+              reason: candidate.rejectionReason,
+            });
+            continue;
+          }
+
+          if (text.includes(';')) {
+            skipped.punctuation += 1;
+            logger.info('Skipped generated take containing semicolon.', {
+              category,
+              attempt,
+              candidate: text,
+            });
+            continue;
           }
 
           const similarTake = findSimilarTake(text, comparisonTexts);
@@ -773,6 +1348,7 @@ export const generateTakes = onRequest(
             skipped.duplicate += 1;
             logger.info('Skipped similar generated take.', {
               category,
+              attempt,
               score: Math.round(similarTake.score * 1000) / 1000,
               candidate: text,
               matchedText: similarTake.text,
@@ -814,21 +1390,37 @@ export const generateTakes = onRequest(
         }
       };
 
-      await processCandidateBatch(firstBatchCandidates);
+      await processCandidateBatch(firstBatchCandidates, 'initial');
 
-      const shouldRegenerateForDuplicates =
-        skipped.duplicate > 0 && addedCount < GENERATED_TAKE_COUNT;
+      const firstAttemptSkipped =
+        skipped.generation +
+        skipped.categoryMismatch +
+        skipped.lowQuality +
+        skipped.punctuation +
+        skipped.duplicate +
+        skipped.localPolicy +
+        skipped.moderation;
+      const shouldRegenerate = firstAttemptSkipped > 0 && addedCount < GENERATED_TAKE_COUNT;
 
-      if (shouldRegenerateForDuplicates) {
-        const duplicateCountBeforeRetry = skipped.duplicate;
-        const retryCandidates = await generateTakeCandidates(category);
+      if (shouldRegenerate) {
+        const skippedBeforeRetry = { ...skipped };
+        const retryCandidates = await tryGenerateTakeCandidates(category, 'retry');
         generatedCandidateCount += retryCandidates.length;
-        await processCandidateBatch(retryCandidates);
+        await processCandidateBatch(retryCandidates, 'retry');
 
-        if (skipped.duplicate > duplicateCountBeforeRetry) {
-          logger.info('Retry generation still produced similar takes; remaining duplicates were skipped.', {
+        const retrySkippedCount =
+          skipped.generation - skippedBeforeRetry.generation +
+          skipped.categoryMismatch - skippedBeforeRetry.categoryMismatch +
+          skipped.lowQuality - skippedBeforeRetry.lowQuality +
+          skipped.punctuation - skippedBeforeRetry.punctuation +
+          skipped.duplicate - skippedBeforeRetry.duplicate +
+          skipped.localPolicy - skippedBeforeRetry.localPolicy +
+          skipped.moderation - skippedBeforeRetry.moderation;
+
+        if (retrySkippedCount > 0) {
+          logger.info('Retry generation still produced rejected candidates; remaining failures were skipped.', {
             category,
-            duplicateCount: skipped.duplicate - duplicateCountBeforeRetry,
+            retrySkippedCount,
           });
         }
       }
@@ -841,7 +1433,7 @@ export const generateTakes = onRequest(
         addedCount,
         takeIds,
         skipped,
-        retriedForDuplicates: shouldRegenerateForDuplicates,
+        retried: shouldRegenerate,
       });
 
       response.status(200).json({
@@ -852,7 +1444,7 @@ export const generateTakes = onRequest(
           addedCount,
           takeIds,
           skipped,
-          retriedForDuplicates: shouldRegenerateForDuplicates,
+          retried: shouldRegenerate,
         },
       });
     } catch (error) {

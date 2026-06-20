@@ -1,5 +1,6 @@
 // Submission status type
 export type TakeStatus = 'pending' | 'approved' | 'rejected';
+export type DeprioritizedReason = 'gravity_well' | 'stale_lane' | 'manual';
 
 // Firestore document interfaces
 export interface Take {
@@ -22,6 +23,11 @@ export interface Take {
   reportCount: number;
   isUserSubmitted?: boolean; // For UI display purposes
   isAIGenerated?: boolean; // Flag for AI-generated content
+  deprioritized?: boolean;
+  deprioritizedReason?: DeprioritizedReason;
+  deprioritizedAt?: Date;
+  deprioritizedUntil?: Date;
+  deprioritizedAuditId?: string;
 }
 
 export interface TakeVote {
@@ -52,6 +58,11 @@ export interface TakeFirestore {
   rejectionReason?: string;
   reportCount: number;
   isAIGenerated?: boolean; // Flag for AI-generated content
+  deprioritized?: boolean;
+  deprioritizedReason?: DeprioritizedReason;
+  deprioritizedAt?: Date;
+  deprioritizedUntil?: Date;
+  deprioritizedAuditId?: string;
 }
 
 export interface TakeVoteFirestore {
