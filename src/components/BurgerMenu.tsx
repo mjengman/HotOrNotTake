@@ -15,6 +15,7 @@ import { useResponsive } from '../hooks/useResponsive';
 
 interface BurgerMenuProps {
   isDarkMode: boolean;
+  onAchievements: () => void;
   onMyTakes: () => void;
   onLeaderboard: () => void;
   onRecentVotes: () => void;
@@ -30,6 +31,7 @@ interface BurgerMenuProps {
 
 const BurgerMenuComponent: React.FC<BurgerMenuProps> = ({
   isDarkMode,
+  onAchievements,
   onMyTakes,
   onLeaderboard,
   onRecentVotes,
@@ -58,6 +60,11 @@ const BurgerMenuComponent: React.FC<BurgerMenuProps> = ({
   }, [closeMenu]);
 
   const menuItems = useMemo(() => [
+    {
+      label: 'Achievements',
+      icon: '🏅',
+      onPress: () => handleMenuItemPress(onAchievements),
+    },
     {
       label: isDarkMode ? 'Light Mode' : 'Dark Mode',
       icon: isDarkMode ? '☀️' : '🌙',
@@ -112,6 +119,7 @@ const BurgerMenuComponent: React.FC<BurgerMenuProps> = ({
   ].sort((first, second) => first.label.localeCompare(second.label)), [
     handleMenuItemPress,
     isDarkMode,
+    onAchievements,
     onFavorites,
     onInstructions,
     onInviteFriends,

@@ -56,24 +56,27 @@ const VOTE_ACHIEVEMENTS = [
     id: 'votes_10',
     threshold: 10,
     toast: {
-      title: '🗳️ 10 votes cast',
-      subtitle: "You're getting warmed up.",
+      id: 'votes_10',
+      title: '🗳️ 10 votes!',
+      subtitle: "You're warming up.",
     },
   },
   {
     id: 'votes_100',
     threshold: 100,
     toast: {
-      title: '💯 100 votes',
-      subtitle: "You're a regular.",
+      id: 'votes_100',
+      title: '💯 100 votes!',
+      subtitle: "You're officially a regular.",
     },
   },
   {
     id: 'votes_1000',
     threshold: 1000,
     toast: {
-      title: '🔥 1,000 votes',
-      subtitle: 'Certified Hot or Not veteran.',
+      id: 'votes_1000',
+      title: '🔥 1,000 votes!',
+      subtitle: "You're basically the app now.",
     },
   },
 ] as const;
@@ -82,16 +85,18 @@ const STREAK_ACHIEVEMENTS = [
     id: 'streak_7',
     threshold: 7,
     toast: {
-      title: '🔥 7-day streak',
-      subtitle: 'The habit is real.',
+      id: 'streak_7',
+      title: '🔥 7-day streak!',
+      subtitle: "That's commitment.",
     },
   },
   {
     id: 'streak_30',
     threshold: 30,
     toast: {
-      title: '🏆 30 days',
-      subtitle: 'Legendary.',
+      id: 'streak_30',
+      title: '🏆 30 days!',
+      subtitle: 'Legendary behavior.',
     },
   },
 ] as const;
@@ -690,8 +695,9 @@ export const updateUserEngagementAfterVote = async (
       ) {
         achievements.add(ALL_CATEGORY_ACHIEVEMENT_ID);
         achievementToasts.push({
-          title: "🌐 You've voted in every category",
-          subtitle: 'Full-spectrum takes unlocked.',
+          id: 'all_categories',
+          title: '🌐 All categories voted!',
+          subtitle: "You've got range.",
         });
       }
     }
@@ -857,6 +863,7 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
         streakUpdatedToday: false,
         dailyChallenge: getFreshDailyChallenge(undefined, userId),
         favoriteCategories: [],
+        categoriesVoted: [],
         joinedAt: new Date(),
       };
     }
@@ -904,6 +911,7 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
       streakUpdatedToday: lastStreakDate === todayKey,
       dailyChallenge,
       favoriteCategories: [], // TODO: Calculate from vote history
+      categoriesVoted: user.categoriesVoted || [],
       joinedAt: user.joinedAt,
     };
   } catch (error) {
@@ -919,6 +927,7 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
       streakUpdatedToday: false,
       dailyChallenge: getFreshDailyChallenge(undefined, userId),
       favoriteCategories: [],
+      categoriesVoted: [],
       joinedAt: new Date(),
     };
   }

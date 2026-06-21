@@ -40,6 +40,7 @@ const getDefaultStats = (userId?: string): UserStats => ({
   streakUpdatedToday: false,
   dailyChallenge: getDefaultDailyChallenge(userId),
   favoriteCategories: [],
+  categoriesVoted: [],
   joinedAt: new Date(),
 });
 
@@ -111,6 +112,7 @@ const writeCachedStats = async (userId: string, stats: UserStats) => {
       JSON.stringify({
         ...stats,
         joinedAt: stats.joinedAt.toISOString(),
+        categoriesVoted: stats.categoriesVoted || [],
         dailyChallenge: {
           ...stats.dailyChallenge,
           completedAt: stats.dailyChallenge.completedAt?.toISOString(),

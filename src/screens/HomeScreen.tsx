@@ -16,6 +16,7 @@ import {
   TextInput,
   Linking,
   InteractionManager,
+  Pressable,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -38,6 +39,7 @@ import { RecentVotesScreen } from './RecentVotesScreen';
 import { MyFavoritesScreen } from './MyFavoritesScreen';
 import { SafetyStandardsScreen } from './SafetyStandardsScreen';
 import { VotingStyleScreen } from './VotingStyleScreen';
+import { AchievementsScreen } from './AchievementsScreen';
 import {
   buildVotingStyleTeaser,
   useAuth,
@@ -51,6 +53,7 @@ import { adminRemoveTake } from '../services/takeService';
 import { buildOptimisticVoteEngagementUpdate, getCommunityStats } from '../services/userService';
 import { prefetchLeaderboardCache } from '../services/leaderboardCacheService';
 import { prefetchUserFavoritesCache } from '../services/favoritesService';
+import { backfillUnlockedAchievements, unlockAchievementFromToast } from '../services/achievementService';
 import {
   requestNotificationsAfterQuestCompletion,
   scheduleStreakMilestoneNotification,
@@ -59,7 +62,7 @@ import {
 import { flushVoteOutbox } from '../services/voteOutboxService';
 import { useInterstitialAds } from '../hooks/useInterstitialAds';
 import { colors, motion } from '../constants';
-import { StreakUpdateResult, Take } from '../types';
+import { DailyChallenge, StreakUpdateResult, Take } from '../types';
 import RNShare from 'react-native-share';
 
 const THEME_PREFERENCE_KEY = 'themePreference';
@@ -70,15 +73,19 @@ const FIRST_VOTE_HINT_SHOWN_KEY = 'first_vote_hint_shown';
 const DAILY_CHALLENGE_NUDGE_PREFIX = 'dailyChallengeNudgeShown';
 const COMMUNITY_STATS_CACHE_KEY = 'community-stats-cache:v1';
 const REVIEW_PROMPT_ATTEMPTED_KEY = 'review_prompt_attempted';
+const DISMISSED_TOAST_IDS_KEY = 'dismissed-engagement-toast-ids:v1';
+const PENDING_TOASTS_KEY = 'pending-engagement-toasts:v1';
 const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
 const IOS_REVIEW_URL = 'https://apps.apple.com/us/app/hot-or-not-takes/id6751363365?action=write-review';
 const ANDROID_MARKET_URL = 'market://details?id=com.anonymous.HotOrNotTakes';
 const ANDROID_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.anonymous.HotOrNotTakes';
 type StoreReviewModule = typeof import('expo-store-review');
 type EngagementToast = {
+  id: string;
   title: string;
   subtitle: string;
   variant?: 'questComplete';
+  persist?: boolean;
 };
 type IdentityTeaser = { takeId: string; text: string };
 type SessionVoteHistoryEntry = { take: Take; vote: 'hot' | 'not' };
@@ -100,10 +107,63 @@ type FooterControlButtonProps = {
 const SESSION_VOTE_HISTORY_LIMIT = 10;
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
-const QUEST_COMPLETE_TOAST: EngagementToast = {
-  title: 'Quest complete 🎯',
-  subtitle: "You crushed today's quest. Keep playing if you're feeling it.",
+const QUEST_COMPLETE_SUBTITLES = [
+  'You crushed it.',
+  'Nicely done.',
+  'Quest handled.',
+  'Clean finish.',
+  'Done and done.',
+  'Nailed it.',
+  'Good job.',
+];
+
+const getDeterministicCopy = (seed: string, options: string[]) => {
+  const hash = seed.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return options[hash % options.length];
+};
+
+const getQuestCompleteToast = (dateKey: string): EngagementToast => ({
+  id: `quest-complete:${dateKey}`,
+  title: 'Quest complete!',
+  subtitle: getDeterministicCopy(dateKey, QUEST_COMPLETE_SUBTITLES),
   variant: 'questComplete',
+});
+
+const getStoredToastArray = async (): Promise<EngagementToast[]> => {
+  const rawToasts = await AsyncStorage.getItem(PENDING_TOASTS_KEY);
+  if (!rawToasts) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawToasts);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter((toast): toast is EngagementToast => (
+      toast &&
+      typeof toast.id === 'string' &&
+      typeof toast.title === 'string' &&
+      typeof toast.subtitle === 'string'
+    ));
+  } catch {
+    return [];
+  }
+};
+
+const getDismissedToastIds = async (): Promise<Set<string>> => {
+  const rawIds = await AsyncStorage.getItem(DISMISSED_TOAST_IDS_KEY);
+  if (!rawIds) {
+    return new Set();
+  }
+
+  try {
+    const parsed = JSON.parse(rawIds);
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []);
+  } catch {
+    return new Set();
+  }
 };
 
 const loadStoreReviewModule = async (): Promise<StoreReviewModule | null> => {
@@ -284,32 +344,46 @@ const FooterControlButton: React.FC<FooterControlButtonProps> = ({
   );
 };
 
-const getChallengeProgressCopy = (challenge: {
-  title?: string;
-  description?: string;
-  goal: number;
-  progress: number;
-  completed: boolean;
-}) => {
+const getChallengeProgressCopy = (
+  challenge: DailyChallenge,
+  options?: { idPrefix?: string; persist?: boolean }
+): EngagementToast => {
   const remaining = Math.max(0, challenge.goal - challenge.progress);
-  const progressCopy = `${challenge.progress}/${challenge.goal} complete`;
+  const idPrefix = options?.idPrefix || 'quest-info';
+  const baseToast = {
+    id: `${idPrefix}:${challenge.date}:${challenge.type || 'quest'}:${challenge.completed ? 'done' : challenge.progress}`,
+    title: `🎯 ${challenge.title || "Today's quest"}`,
+    persist: options?.persist ?? false,
+  };
 
   if (challenge.completed) {
-    return QUEST_COMPLETE_TOAST;
+    return {
+      ...baseToast,
+      title: 'Quest complete!',
+      subtitle: getDeterministicCopy(challenge.date, QUEST_COMPLETE_SUBTITLES),
+      variant: 'questComplete',
+    };
   }
 
   if (challenge.progress <= 0) {
+    const categoryLabel = (challenge.categoryLabel || challenge.category || '').toLowerCase();
+    const subtitleByType = {
+      vote_count: `${challenge.goal} votes. Let's see what you've got.`,
+      category_votes: `${challenge.goal} ${categoryLabel || 'category'} votes. Go make some calls.`,
+      fresh_votes: `Find ${challenge.goal} fresh takes before the room piles on.`,
+      divisive_votes: `Find ${challenge.goal} takes the room can't agree on.`,
+      multi_category_votes: `Hit ${challenge.goal} categories. Show some range.`,
+    } satisfies Record<NonNullable<DailyChallenge['type']>, string>;
+
     return {
-      title: `🎯 ${challenge.title || "Today's quest"}`,
-      subtitle: challenge.description
-        ? `${challenge.description} Start with your next vote.`
-        : 'Start with your next vote.',
+      ...baseToast,
+      subtitle: subtitleByType[challenge.type || 'vote_count'],
     };
   }
 
   return {
-    title: `🎯 ${challenge.title || "Today's quest"}`,
-    subtitle: `${challenge.description || 'Vote today to complete it.'} ${remaining} to go. ${progressCopy}.`,
+    ...baseToast,
+    subtitle: `${remaining} left. You're cooking.`,
   };
 };
 
@@ -337,6 +411,7 @@ export const HomeScreen: React.FC = () => {
   const [showRecentVotesModal, setShowRecentVotesModal] = useState(false);
   const [showFavoritesModal, setShowFavoritesModal] = useState(false);
   const [showVotingStyleModal, setShowVotingStyleModal] = useState(false);
+  const [showAchievementsModal, setShowAchievementsModal] = useState(false);
   const [showInviteReviewModal, setShowInviteReviewModal] = useState(false);
   const [selectedTakeForStats, setSelectedTakeForStats] = useState<{take: Take, vote: 'hot' | 'not' | null} | null>(null);
   const [sessionVoteHistory, setSessionVoteHistory] = useState<SessionVoteHistoryEntry[]>([]);
@@ -358,7 +433,10 @@ export const HomeScreen: React.FC = () => {
   const streakToastAnim = useRef(new Animated.Value(0)).current;
   const questFooterGlowAnim = useRef(new Animated.Value(0)).current;
   const toastQueueRef = useRef<EngagementToast[]>([]);
+  const currentToastRef = useRef<EngagementToast | null>(null);
   const toastAnimatingRef = useRef(false);
+  const toastDismissingRef = useRef(false);
+  const dismissedToastIdsRef = useRef<Set<string>>(new Set());
   const changeVoteTakeIdsRef = useRef<Set<string>>(new Set());
   const changeVoteDeletePromisesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const leaderboardPrefetchStartedRef = useRef(false);
@@ -876,6 +954,10 @@ export const HomeScreen: React.FC = () => {
         setShowVotingStyleModal(false);
         return true;
       }
+      if (showAchievementsModal) {
+        setShowAchievementsModal(false);
+        return true;
+      }
       if (showInviteReviewModal) {
         setShowInviteReviewModal(false);
         return true;
@@ -906,7 +988,7 @@ export const HomeScreen: React.FC = () => {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [showSubmitModal, showRecentVotesModal, showFavoritesModal, showVotingStyleModal, showInviteReviewModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, showSafetyModal, selectedTakeForStats]);
+  }, [showSubmitModal, showRecentVotesModal, showFavoritesModal, showVotingStyleModal, showAchievementsModal, showInviteReviewModal, showLeaderboardModal, showMyTakesModal, showInstructionsModal, showSafetyModal, selectedTakeForStats]);
 
   // Rotate instruction text with a quiet fade so the footer feels alive without flicker.
   useEffect(() => {
@@ -932,49 +1014,149 @@ export const HomeScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [instructionTexts.length, fadeAnim]);
 
+  const persistPendingToasts = React.useCallback(async () => {
+    const pendingToasts = [
+      currentToastRef.current,
+      ...toastQueueRef.current,
+    ].filter((toast): toast is EngagementToast => {
+      if (!toast) {
+        return false;
+      }
+
+      return toast.persist !== false && !dismissedToastIdsRef.current.has(toast.id);
+    });
+
+    try {
+      if (pendingToasts.length > 0) {
+        await AsyncStorage.setItem(PENDING_TOASTS_KEY, JSON.stringify(pendingToasts));
+      } else {
+        await AsyncStorage.removeItem(PENDING_TOASTS_KEY);
+      }
+    } catch (error) {
+      console.warn('Unable to persist toast queue:', error);
+    }
+  }, []);
+
   const processToastQueue = React.useCallback(() => {
     if (toastAnimatingRef.current) {
       return;
     }
 
-    const nextToast = toastQueueRef.current.shift();
+    let nextToast = toastQueueRef.current.shift();
+    while (
+      nextToast &&
+      nextToast.persist !== false &&
+      dismissedToastIdsRef.current.has(nextToast.id)
+    ) {
+      nextToast = toastQueueRef.current.shift();
+    }
+
     if (!nextToast) {
+      void persistPendingToasts();
       runPendingQuestCompletionFollowups();
       return;
     }
 
     toastAnimatingRef.current = true;
+    toastDismissingRef.current = false;
+    currentToastRef.current = nextToast;
     setStreakToast(nextToast);
     streakToastAnim.stopAnimation();
     streakToastAnim.setValue(0);
-    Animated.sequence([
-      Animated.spring(streakToastAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        damping: motion.spring.press.damping,
-        stiffness: motion.spring.press.stiffness,
-      }),
-      Animated.delay(nextToast.variant === 'questComplete' ? 4000 : 2400),
-      Animated.timing(streakToastAnim, {
-        toValue: 0,
-        duration: motion.duration.fadeOut,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (finished) {
-        setStreakToast(null);
-        setTimeout(() => {
-          toastAnimatingRef.current = false;
-          processToastQueue();
-        }, 180);
-      }
+    Animated.spring(streakToastAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      damping: motion.spring.press.damping,
+      stiffness: motion.spring.press.stiffness,
+    }).start(() => {
+      void persistPendingToasts();
     });
-  }, [runPendingQuestCompletionFollowups, streakToastAnim]);
+  }, [persistPendingToasts, runPendingQuestCompletionFollowups, streakToastAnim]);
 
   const enqueueToast = React.useCallback((toast: EngagementToast) => {
+    const existingToastIds = new Set([
+      currentToastRef.current?.id,
+      ...toastQueueRef.current.map(queuedToast => queuedToast.id),
+    ]);
+
+    if (
+      existingToastIds.has(toast.id) ||
+      (toast.persist !== false && dismissedToastIdsRef.current.has(toast.id))
+    ) {
+      return;
+    }
+
     toastQueueRef.current.push(toast);
+    void persistPendingToasts();
     processToastQueue();
-  }, [processToastQueue]);
+  }, [persistPendingToasts, processToastQueue]);
+
+  const dismissCurrentToast = React.useCallback(() => {
+    const toast = currentToastRef.current;
+    if (!toast || toastDismissingRef.current) {
+      return;
+    }
+
+    toastDismissingRef.current = true;
+    if (toast.persist !== false) {
+      dismissedToastIdsRef.current.add(toast.id);
+      AsyncStorage.setItem(
+        DISMISSED_TOAST_IDS_KEY,
+        JSON.stringify(Array.from(dismissedToastIdsRef.current))
+      ).catch(error => {
+        console.warn('Unable to persist dismissed toast:', error);
+      });
+    }
+
+    streakToastAnim.stopAnimation();
+    Animated.timing(streakToastAnim, {
+      toValue: 0,
+      duration: motion.duration.fadeOut,
+      useNativeDriver: true,
+    }).start(() => {
+      setStreakToast(null);
+      currentToastRef.current = null;
+      toastAnimatingRef.current = false;
+      toastDismissingRef.current = false;
+      void persistPendingToasts();
+      setTimeout(processToastQueue, 80);
+    });
+  }, [persistPendingToasts, processToastQueue, streakToastAnim]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydratePendingToasts = async () => {
+      try {
+        const [dismissedToastIds, pendingToasts] = await Promise.all([
+          getDismissedToastIds(),
+          getStoredToastArray(),
+        ]);
+        if (cancelled) {
+          return;
+        }
+
+        dismissedToastIdsRef.current = dismissedToastIds;
+        const queuedToastIds = new Set(toastQueueRef.current.map(toast => toast.id));
+        pendingToasts.forEach(toast => {
+          if (!dismissedToastIds.has(toast.id) && !queuedToastIds.has(toast.id)) {
+            toastQueueRef.current.push(toast);
+            queuedToastIds.add(toast.id);
+          }
+        });
+        void persistPendingToasts();
+        processToastQueue();
+      } catch (error) {
+        console.warn('Unable to hydrate pending toasts:', error);
+      }
+    };
+
+    hydratePendingToasts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [persistPendingToasts, processToastQueue]);
 
   const showStreakToast = React.useCallback((streakUpdate: StreakUpdateResult) => {
     if (shownStreakToastDatesRef.current.has(streakUpdate.lastStreakDate)) {
@@ -987,33 +1169,42 @@ export const HomeScreen: React.FC = () => {
     const isFirstDay = streakUpdate.currentStreak === 1;
 
     enqueueToast({
+      id: `streak:${streakUpdate.lastStreakDate}:${streakUpdate.currentStreak}`,
       title: isMilestone
         ? `🔥 ${streakUpdate.currentStreak}-day streak!`
         : isFirstDay
-          ? '🔥 Streak started'
-          : `🔥 ${streakUpdate.currentStreak}-day streak`,
+          ? '🔥 Streak started!'
+          : `🔥 ${streakUpdate.currentStreak} days straight!`,
       subtitle: isMilestone
-        ? 'Milestone hit. Keep the run rolling.'
-        : "You're on the board for today.",
+        ? "That's commitment."
+        : isFirstDay
+          ? 'Day one is locked.'
+          : "You're on a roll.",
     });
   }, [enqueueToast]);
 
   const showStreakInfo = React.useCallback(() => {
     if (stats.votingStreak <= 0) {
       enqueueToast({
+        id: 'streak-info:none',
         title: '🔥 Daily streak',
-        subtitle: 'Vote today to start your streak.',
+        subtitle: 'One vote starts the flame.',
+        persist: false,
       });
       return;
     }
 
     enqueueToast({
-      title: `🔥 ${stats.votingStreak}-day streak`,
+      id: `streak-info:${stats.lastStreakDate || 'none'}:${stats.streakUpdatedToday ? 'done' : 'open'}`,
+      title: stats.streakUpdatedToday
+        ? `🔥 ${stats.votingStreak} days straight!`
+        : `🔥 ${stats.votingStreak}-day streak`,
       subtitle: stats.streakUpdatedToday
-        ? "You're on the board for today."
-        : `Keep your ${stats.votingStreak}-day streak alive today.`,
+        ? 'Today is locked.'
+        : 'One vote keeps it alive.',
+      persist: false,
     });
-  }, [enqueueToast, stats.streakUpdatedToday, stats.votingStreak]);
+  }, [enqueueToast, stats.lastStreakDate, stats.streakUpdatedToday, stats.votingStreak]);
 
   const showChallengeInfo = React.useCallback(() => {
     const challenge = stats.dailyChallenge;
@@ -1024,8 +1215,10 @@ export const HomeScreen: React.FC = () => {
 
   const showCommunityInfo = React.useCallback(() => {
     enqueueToast({
+      id: `community-info:${communityTotalVotes}`,
       title: `👥 ${communityTotalVotes.toLocaleString()} community votes`,
-      subtitle: 'Votes cast across Hot or Not Takes.',
+      subtitle: 'The room is alive.',
+      persist: false,
     });
   }, [communityTotalVotes, enqueueToast]);
 
@@ -1053,7 +1246,10 @@ export const HomeScreen: React.FC = () => {
         await AsyncStorage.setItem(storageKey, 'true');
         if (cancelled) return;
 
-        const copy = getChallengeProgressCopy(challenge);
+        const copy = getChallengeProgressCopy(challenge, {
+          idPrefix: `quest-nudge:${user.uid}`,
+          persist: true,
+        });
         enqueueToast(copy);
       } catch (error) {
         console.warn('Unable to show daily challenge nudge:', error);
@@ -1067,6 +1263,16 @@ export const HomeScreen: React.FC = () => {
       clearTimeout(timeout);
     };
   }, [authLoading, enqueueToast, onboardingActive, stats.dailyChallenge, statsHydrated, statsLoading, user]);
+
+  useEffect(() => {
+    if (!user || !statsHydrated) {
+      return;
+    }
+
+    backfillUnlockedAchievements(stats).catch(error => {
+      console.warn('Unable to backfill local achievements:', error);
+    });
+  }, [stats, statsHydrated, user]);
 
   const showFirstVoteHint = React.useCallback(async (takeId: string) => {
     if (firstVoteHintMarkedRef.current) {
@@ -1181,7 +1387,7 @@ export const HomeScreen: React.FC = () => {
         if (!streakUpdate.didUpdateToday) {
           applyEngagementUpdate(streakUpdate);
         }
-        enqueueToast(QUEST_COMPLETE_TOAST);
+        enqueueToast(getQuestCompleteToast(streakUpdate.dailyChallenge?.date || statsRef.current.dailyChallenge.date));
         requestStoreReviewAfterQuestCompletion({
           totalVotes: streakUpdate.totalVotes ?? statsRef.current.totalVotes,
           currentStreak: streakUpdate.currentStreak,
@@ -1190,7 +1396,16 @@ export const HomeScreen: React.FC = () => {
       } else if (streakUpdate && !streakUpdate.didUpdateToday) {
         applyEngagementUpdate(streakUpdate);
       }
-      streakUpdate?.achievementToasts?.forEach(enqueueToast);
+      streakUpdate?.achievementToasts?.forEach(achievementToast => {
+        unlockAchievementFromToast(achievementToast).catch(error => {
+          console.warn('Unable to unlock achievement:', error);
+        });
+        enqueueToast({
+          id: `achievement:${achievementToast.id}`,
+          title: achievementToast.title,
+          subtitle: achievementToast.subtitle,
+        });
+      });
       if (streakUpdate?.milestoneReached && user?.uid) {
         scheduleStreakMilestoneNotification(user.uid, streakUpdate.milestoneReached).catch(error => {
           console.warn('Unable to schedule streak milestone notification:', error);
@@ -1360,6 +1575,7 @@ export const HomeScreen: React.FC = () => {
   const openInstructions = React.useCallback(() => setShowInstructionsModal(true), []);
   const openSafety = React.useCallback(() => setShowSafetyModal(true), []);
   const openVotingStyle = React.useCallback(() => setShowVotingStyleModal(true), []);
+  const openAchievements = React.useCallback(() => setShowAchievementsModal(true), []);
 
   const requestAdminTakeRemoval = React.useCallback((take: Take) => {
     setAdminRemovalTake(take);
@@ -1396,8 +1612,10 @@ export const HomeScreen: React.FC = () => {
         setSelectedTakeForStats(null);
       }
       enqueueToast({
+        id: `admin-remove:${adminRemovalTake.id}`,
         title: 'Removed from feed',
         subtitle: 'This take was rejected and will no longer appear for users.',
+        persist: false,
       });
       setAdminRemovalTake(null);
       setAdminRemovalPin('');
@@ -1517,6 +1735,7 @@ export const HomeScreen: React.FC = () => {
         <View style={styles.headerRow}>
           <BurgerMenu
             isDarkMode={isDarkMode}
+            onAchievements={openAchievements}
             onMyTakes={openMyTakes}
             onLeaderboard={openLeaderboard}
             onRecentVotes={openRecentVotes}
@@ -1797,51 +2016,73 @@ export const HomeScreen: React.FC = () => {
       {streakToast && (() => {
         const isQuestCompleteToast = streakToast.variant === 'questComplete';
         const toastBackgroundColor = isQuestCompleteToast
-          ? (isDarkMode ? '#3A2F1E' : '#FFF4D8')
+          ? (isDarkMode ? '#183326' : '#EAF8EF')
           : (isDarkMode ? '#3A3020' : '#FFF6E2');
         const toastBorderColor = isQuestCompleteToast
-          ? (isDarkMode ? 'rgba(255, 165, 2, 0.78)' : '#FFC85A')
+          ? (isDarkMode ? 'rgba(52, 211, 153, 0.78)' : '#69D68A')
           : (isDarkMode ? 'rgba(255, 165, 2, 0.68)' : '#FFD88A');
+        const toastTitleColor = isQuestCompleteToast ? theme.success : theme.text;
         const toastSubtitleColor = isQuestCompleteToast
-          ? (isDarkMode ? '#FFE1A1' : '#745018')
+          ? (isDarkMode ? '#BDF4D0' : '#23633B')
           : (isDarkMode ? '#F3DDB8' : theme.textSecondary);
 
         return (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.streakToast,
-              {
-                backgroundColor: toastBackgroundColor,
-                borderColor: toastBorderColor,
-                borderWidth: isQuestCompleteToast ? 1.5 : 1.25,
-                shadowColor: isQuestCompleteToast ? theme.accent : (isDarkMode ? theme.accent : '#000'),
-                shadowOpacity: isQuestCompleteToast ? (isDarkMode ? 0.42 : 0.26) : 0.28,
-                opacity: streakToastAnim,
-                transform: [
+          <>
+            <Pressable
+              style={styles.toastDismissOverlay}
+              onPress={dismissCurrentToast}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss message"
+            />
+            <Animated.View
+              style={[
+                styles.streakToast,
+                {
+                  backgroundColor: toastBackgroundColor,
+                  borderColor: toastBorderColor,
+                  borderWidth: isQuestCompleteToast ? 1.5 : 1.25,
+                  shadowColor: isQuestCompleteToast ? theme.success : (isDarkMode ? theme.accent : '#000'),
+                  shadowOpacity: isQuestCompleteToast ? (isDarkMode ? 0.42 : 0.26) : 0.28,
+                  opacity: streakToastAnim,
+                  transform: [
+                    {
+                      translateY: streakToastAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [12, 0],
+                      }),
+                    },
+                    {
+                      scale: streakToastAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.96, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Pressable
+                style={[
+                  styles.streakToastCloseButton,
                   {
-                    translateY: streakToastAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [12, 0],
-                    }),
+                    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.13)' : 'rgba(0, 0, 0, 0.08)',
                   },
-                  {
-                    scale: streakToastAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.96, 1],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Text style={[styles.streakToastTitle, { color: isQuestCompleteToast ? theme.accent : theme.text }]}>
-              {streakToast.title}
-            </Text>
-            <Text style={[styles.streakToastSubtitle, { color: toastSubtitleColor }]}>
-              {streakToast.subtitle}
-            </Text>
-          </Animated.View>
+                ]}
+                onPress={dismissCurrentToast}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss message"
+                hitSlop={8}
+              >
+                <Text style={[styles.streakToastCloseText, { color: isDarkMode ? '#FFFFFF' : '#4A4A4A' }]}>×</Text>
+              </Pressable>
+              <Text style={[styles.streakToastTitle, { color: toastTitleColor }]}>
+                {streakToast.title}
+              </Text>
+              <Text style={[styles.streakToastSubtitle, { color: toastSubtitleColor }]}>
+                {streakToast.subtitle}
+              </Text>
+            </Animated.View>
+          </>
         );
       })()}
 
@@ -2128,6 +2369,17 @@ export const HomeScreen: React.FC = () => {
         </FullScreenOverlay>
       )}
 
+      {/* Achievements Modal - Conditional Rendering */}
+      {showAchievementsModal && (
+        <FullScreenOverlay zIndex={1760}>
+          <AchievementsScreen
+            onClose={() => setShowAchievementsModal(false)}
+            isDarkMode={isDarkMode}
+            stats={stats}
+          />
+        </FullScreenOverlay>
+      )}
+
       {/* Safety Standards Modal - Conditional Rendering */}
       {showSafetyModal && (
         <FullScreenOverlay zIndex={1800}>
@@ -2410,10 +2662,32 @@ const createStyles = (responsive: any, insets: any) => {
     shadowOpacity: 0.28,
     shadowRadius: 10,
   },
+  toastDismissOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2999,
+    elevation: 7,
+  },
+  streakToastCloseButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  streakToastCloseText: {
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 20,
+    marginTop: -1,
+  },
   streakToastTitle: {
     fontSize: responsive.fontSize.medium,
     fontWeight: '800',
     textAlign: 'center',
+    paddingHorizontal: responsive.spacing.lg,
   },
   streakToastSubtitle: {
     fontSize: responsive.fontSize.small,

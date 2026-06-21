@@ -72,16 +72,16 @@ const getQuestReminderCopy = (stats: UserStats, seed: string) => {
   const title = challenge.title || "today's quest";
   const variants = [
     {
-      title: '🎯 Daily quest waiting',
-      body: `${remaining} more vote${remaining === 1 ? '' : 's'} finishes ${title}.`,
+      title: '🎯 Quest waiting!',
+      body: `${remaining} vote${remaining === 1 ? '' : 's'} left on ${title}.`,
     },
     {
-      title: '🎯 Finish today strong',
-      body: `${title} is still open. A few votes can close it out.`,
+      title: '🎯 Almost there!',
+      body: `${title} is still on the table.`,
     },
     {
-      title: '🎯 Your quest is close',
-      body: `Jump back in and make progress before tomorrow's reset.`,
+      title: '🎯 Quest check!',
+      body: "You're closer than you think.",
     },
   ];
 
@@ -91,16 +91,16 @@ const getQuestReminderCopy = (stats: UserStats, seed: string) => {
 const getStreakReminderCopy = (stats: UserStats, seed: string) => {
   const variants = [
     {
-      title: '🔥 Keep your streak alive',
-      body: `One vote protects your ${stats.votingStreak}-day streak.`,
+      title: '🔥 Streak on the line!',
+      body: `One vote saves day ${stats.votingStreak + 1}.`,
     },
     {
-      title: '🔥 Your streak is waiting',
-      body: `Vote once today to keep day ${stats.votingStreak + 1} in reach.`,
+      title: `🔥 Day ${stats.votingStreak + 1} is waiting!`,
+      body: 'One vote gets it done.',
     },
     {
-      title: '🔥 Do not lose the run',
-      body: `Your ${stats.votingStreak}-day streak needs one vote today.`,
+      title: "🔥 Don't drop the run!",
+      body: `Your ${stats.votingStreak}-day streak needs one vote.`,
     },
   ];
 
@@ -111,28 +111,28 @@ const getMilestoneCopy = (milestone: number) => {
   switch (milestone) {
     case 7:
       return {
-        title: '🔥 7-day streak',
-        body: 'A full week. The habit is real.',
+        title: '🔥 7-day streak!',
+        body: "A full week. That's real.",
       };
     case 14:
       return {
-        title: '🔥 14-day streak',
-        body: 'Two weeks in. That is a real run.',
+        title: '🔥 14-day streak!',
+        body: "Two weeks. You're locked in.",
       };
     case 30:
       return {
-        title: '🏆 30-day streak',
+        title: '🏆 30-day streak!',
         body: 'A full month. Legendary.',
       };
     case 60:
       return {
-        title: '🏆 60-day streak',
+        title: '🏆 60-day streak!',
         body: 'Two months. Ridiculous in the best way.',
       };
     default:
       return {
-        title: `🔥 ${milestone}-day streak`,
-        body: 'Milestone hit. Keep it rolling tomorrow.',
+        title: `🔥 ${milestone}-day streak!`,
+        body: 'Milestone unlocked.',
       };
   }
 };

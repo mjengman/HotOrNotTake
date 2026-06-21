@@ -20,6 +20,7 @@ export interface DailyChallenge {
 }
 
 export interface AchievementToast {
+  id: string;
   title: string;
   subtitle: string;
 }
@@ -54,6 +55,7 @@ export interface UserStats {
   streakUpdatedToday: boolean;
   dailyChallenge: DailyChallenge;
   favoriteCategories: string[];
+  categoriesVoted?: string[];
   joinedAt: Date;
 }
 
