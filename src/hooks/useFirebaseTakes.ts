@@ -35,7 +35,12 @@ interface UseFirebaseTakesResult {
   submitNewTake: (takeData: TakeSubmission) => Promise<void>;
   getUserVoteForTake: (takeId: string) => Promise<'hot' | 'not' | null>;
   refreshTakes: () => Promise<void>;
-  loadMore: (count?: number, force?: boolean, background?: boolean) => Promise<void>;
+  loadMore: (
+    count?: number,
+    force?: boolean,
+    background?: boolean,
+    freezePrefixCount?: number | 'all'
+  ) => Promise<void>;
   hasMore: boolean;
   prependTake: (take: Take) => void;
   removeTakeLocally: (takeId: string) => void;
@@ -52,6 +57,7 @@ const LIVE_FEED_RECONCILE_DELAY_MS = 2500;
 const LOCAL_ID_HYDRATION_SKELETON_MS = 150;
 const RECENT_TEXT_GUARD_SIZE = 10;
 const RECENT_TEXT_SIMILARITY_THRESHOLD = 0.7;
+const VISIBLE_DECK_STABILITY_COUNT = 2;
 const FEED_CACHE_PREFIX = `feed-cache:${FEED_CACHE_VERSION}`;
 const LOCAL_VOTED_PREFIX = `local-voted:${FEED_CACHE_VERSION}`;
 const LOCAL_SKIPPED_PREFIX = `local-skipped:${FEED_CACHE_VERSION}`;
@@ -672,7 +678,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const loadMore = useCallback(async (
     count: number = 20,
     force: boolean = false,
-    background: boolean = false
+    background: boolean = false,
+    freezePrefixCount: number | 'all' = 'all'
   ) => {
     if (viewingMySkips) {
       setHasMore(false);
@@ -724,13 +731,17 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         const combined = filterUniqueTakes([...prev, ...uniqueFreshTakes], {
           excludedIds: sessionHiddenTakeIdsRef.current,
         });
+        const stablePrefixCount =
+          freezePrefixCount === 'all'
+            ? prev.length
+            : Math.min(prev.length, Math.max(0, freezePrefixCount));
         if (category !== 'all') {
-          const ordered = orderFeedForFreshness(combined, prev.length);
+          const ordered = orderFeedForFreshness(combined, stablePrefixCount);
           writeFeedCache(userId, category, ordered).catch(console.warn);
           return ordered;
         }
-        // Freeze the existing length so we only freshness-shuffle the newly appended tail
-        const ordered = orderFeedForFreshness(combined, prev.length);
+        // Keep visible cards stable; generation refreshes can reorder the tail behind them.
+        const ordered = orderFeedForFreshness(combined, stablePrefixCount);
         writeFeedCache(userId, category, ordered).catch(console.warn);
         return ordered;
       });
@@ -749,6 +760,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
 
   // Return feed directly - variety is applied once during load, not on every render
   const takes = feed;
+  const normalTakeCount = takes.filter(take => !isActiveDeprioritizedTake(take)).length;
 
   useEffect(() => {
     if (!userId || loading || viewingMySkips) {
@@ -756,7 +768,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
 
     const generationKey = `${userId}:${category}`;
-    if (takes.length > 3) {
+    if (normalTakeCount > 3) {
       if (generationTriggeredForRef.current === generationKey) {
         generationTriggeredForRef.current = null;
       }
@@ -777,7 +789,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       .then((result) => {
         if (result.addedCount > 0) {
           resetFeedCursor(category);
-          loadMore(20, true, true).catch((err) => {
+          loadMore(20, true, true, VISIBLE_DECK_STABILITY_COUNT).catch((err) => {
           });
         }
       })
@@ -786,7 +798,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       .finally(() => {
         generationInFlightRef.current = false;
       });
-  }, [category, loadMore, loading, takes.length, userId, viewingMySkips]);
+  }, [category, loadMore, loading, normalTakeCount, userId, viewingMySkips]);
 
   // Submit a vote
   const handleSubmitVote = useCallback(async (

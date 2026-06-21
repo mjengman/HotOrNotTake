@@ -1,9 +1,10 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
 import { HttpsError, onRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 initializeApp();
 
@@ -19,6 +20,18 @@ const MAX_TAKE_LENGTH = 150;
 const GENERATED_TAKE_COUNT = 8;
 const GENERATED_DUPLICATE_SIMILARITY_THRESHOLD = 0.75;
 const DUPLICATE_COMPARISON_LIMIT = 100;
+const CORPUS_HYGIENE_STATE_COLLECTION = 'corpusAuditState';
+const CORPUS_HYGIENE_STATE_DOC_ID = 'ai-corpus';
+const CORPUS_HYGIENE_REPORTS_COLLECTION = 'corpusAuditReports';
+const CORPUS_HYGIENE_GLOBAL_DELTA_THRESHOLD = 100;
+const CORPUS_HYGIENE_CATEGORY_DELTA_THRESHOLD = 25;
+const CORPUS_HYGIENE_DEPRIORITIZE_DAYS = 30;
+const CORPUS_HYGIENE_EXACT_DUPLICATE_THRESHOLD = 0.95;
+const CORPUS_HYGIENE_GRAVITY_MIN_SIMILARITY = 0.7;
+const CORPUS_HYGIENE_GRAVITY_MAX_SIMILARITY = 0.95;
+const CORPUS_HYGIENE_TOPIC_MIN_COUNT = 3;
+const CORPUS_HYGIENE_MAX_TIER2_CANDIDATES = 100;
+const CORPUS_HYGIENE_BATCH_SIZE = 400;
 
 const VALID_CATEGORY_LIST = [
   'food',
@@ -99,10 +112,39 @@ interface GeneratedTakeCandidateOutput {
 
 type GenerationAttempt = 'initial' | 'retry';
 
+type DeprioritizedReason = 'gravity_well' | 'stale_lane' | 'manual';
+
 interface CategoryGravityWellGuidance {
   avoidTopics: string[];
   avoidFrames: string[];
   freshLanes: string[];
+}
+
+interface CorpusTake {
+  id: string;
+  text: string;
+  category: string;
+  totalVotes: number;
+  isAIGenerated: boolean;
+  createdAtMs: number;
+  isApproved: boolean;
+  status?: string;
+  deprioritized?: boolean;
+  deprioritizedUntilMs?: number;
+}
+
+interface CorpusHygieneCandidate {
+  id: string;
+  text: string;
+  category: string;
+  reason: string;
+  matchedId?: string;
+  similarity?: number;
+}
+
+interface CorpusHygieneState {
+  globalApprovedAiCount?: number;
+  categoryApprovedAiCounts?: Partial<Record<Category, number>>;
 }
 
 const db = getFirestore();
@@ -214,6 +256,52 @@ const bannedGenerationFrames = [
   'X is better than Y structures unless highly specific and opinionated',
   'semicolons',
 ];
+
+const corpusTopicStopWords = new Set([
+  'about',
+  'after',
+  'against',
+  'almost',
+  'because',
+  'before',
+  'being',
+  'better',
+  'could',
+  'deserve',
+  'deserves',
+  'every',
+  'from',
+  'have',
+  'into',
+  'just',
+  'less',
+  'make',
+  'makes',
+  'more',
+  'most',
+  'need',
+  'needs',
+  'never',
+  'only',
+  'over',
+  'people',
+  'really',
+  'should',
+  'than',
+  'that',
+  'their',
+  'them',
+  'they',
+  'thing',
+  'this',
+  'those',
+  'through',
+  'under',
+  'when',
+  'with',
+  'without',
+  'would',
+]);
 
 const avoidedGenerationTopics = [
   'open office layouts and productivity',
@@ -852,6 +940,476 @@ const findSimilarTake = (
   return bestMatch;
 };
 
+class UnionFind {
+  private parent: number[];
+
+  constructor(size: number) {
+    this.parent = Array.from({ length: size }, (_value, index) => index);
+  }
+
+  find(index: number): number {
+    if (this.parent[index] !== index) {
+      this.parent[index] = this.find(this.parent[index]);
+    }
+
+    return this.parent[index];
+  }
+
+  union(first: number, second: number): void {
+    const firstRoot = this.find(first);
+    const secondRoot = this.find(second);
+
+    if (firstRoot !== secondRoot) {
+      this.parent[secondRoot] = firstRoot;
+    }
+  }
+}
+
+const getFirestoreDateMs = (value: unknown): number => {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof value.toDate === 'function'
+  ) {
+    return (value.toDate() as Date).getTime();
+  }
+
+  return Number.MAX_SAFE_INTEGER;
+};
+
+const isActiveDeprioritizedCorpusTake = (take: CorpusTake, now = Date.now()): boolean =>
+  take.deprioritized === true &&
+  (!take.deprioritizedUntilMs || take.deprioritizedUntilMs >= now);
+
+const fetchApprovedCorpusTakes = async (): Promise<CorpusTake[]> => {
+  const snapshot = await db
+    .collection('takes')
+    .where('isApproved', '==', true)
+    .select(
+      'text',
+      'category',
+      'totalVotes',
+      'isAIGenerated',
+      'createdAt',
+      'approvedAt',
+      'status',
+      'deprioritized',
+      'deprioritizedUntil'
+    )
+    .get();
+
+  return snapshot.docs
+    .map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        text: typeof data.text === 'string' ? data.text : '',
+        category: typeof data.category === 'string' ? data.category : 'unknown',
+        totalVotes: typeof data.totalVotes === 'number' ? data.totalVotes : 0,
+        isAIGenerated: data.isAIGenerated === true,
+        createdAtMs: getFirestoreDateMs(data.createdAt ?? data.approvedAt),
+        isApproved: data.isApproved === true,
+        status: typeof data.status === 'string' ? data.status : undefined,
+        deprioritized: data.deprioritized === true,
+        deprioritizedUntilMs: getFirestoreDateMs(data.deprioritizedUntil),
+      };
+    })
+    .filter((take) => take.text.trim().length > 0 && take.status !== 'rejected');
+};
+
+const getEmptyAiCategoryCounts = (): Record<Category, number> =>
+  VALID_CATEGORY_LIST.reduce((counts, category) => {
+    counts[category] = 0;
+    return counts;
+  }, {} as Record<Category, number>);
+
+const countApprovedAiTakesByCategory = (takes: CorpusTake[]): Record<Category, number> => {
+  const counts = getEmptyAiCategoryCounts();
+  takes.forEach((take) => {
+    if (take.isAIGenerated && VALID_CATEGORIES.has(take.category)) {
+      counts[take.category as Category] += 1;
+    }
+  });
+  return counts;
+};
+
+const chooseCorpusAIKeeper = (takes: CorpusTake[]): CorpusTake => {
+  const sorted = [...takes].sort((first, second) => {
+    if (second.totalVotes !== first.totalVotes) {
+      return second.totalVotes - first.totalVotes;
+    }
+
+    return first.createdAtMs - second.createdAtMs;
+  });
+
+  return sorted[0];
+};
+
+const buildCorpusDuplicateCandidates = (takes: CorpusTake[]): CorpusHygieneCandidate[] => {
+  const candidates = new Map<string, CorpusHygieneCandidate>();
+  const byCategory = new Map<string, CorpusTake[]>();
+
+  takes.forEach((take) => {
+    byCategory.set(take.category, [...(byCategory.get(take.category) ?? []), take]);
+  });
+
+  byCategory.forEach((categoryTakes) => {
+    const unionFind = new UnionFind(categoryTakes.length);
+    const strongestMatch = new Map<string, { matchedId: string; similarity: number }>();
+
+    for (let first = 0; first < categoryTakes.length; first += 1) {
+      for (let second = first + 1; second < categoryTakes.length; second += 1) {
+        const firstTake = categoryTakes[first];
+        const secondTake = categoryTakes[second];
+        const score = getTakeSimilarity(firstTake.text, secondTake.text);
+
+        if (score < CORPUS_HYGIENE_EXACT_DUPLICATE_THRESHOLD) {
+          continue;
+        }
+
+        unionFind.union(first, second);
+        [
+          { take: firstTake, matched: secondTake },
+          { take: secondTake, matched: firstTake },
+        ].forEach(({ take, matched }) => {
+          const existing = strongestMatch.get(take.id);
+          if (!existing || existing.similarity < score) {
+            strongestMatch.set(take.id, {
+              matchedId: matched.id,
+              similarity: Math.round(score * 1000) / 1000,
+            });
+          }
+        });
+      }
+    }
+
+    const grouped = new Map<number, CorpusTake[]>();
+    categoryTakes.forEach((take, index) => {
+      const root = unionFind.find(index);
+      grouped.set(root, [...(grouped.get(root) ?? []), take]);
+    });
+
+    grouped.forEach((group) => {
+      if (group.length < 2) {
+        return;
+      }
+
+      const aiTakes = group.filter((take) => take.isAIGenerated);
+      if (aiTakes.length === 0) {
+        return;
+      }
+
+      const hasHumanTake = group.some((take) => !take.isAIGenerated);
+      const removals = hasHumanTake
+        ? aiTakes
+        : aiTakes.filter((take) => take.id !== chooseCorpusAIKeeper(aiTakes).id);
+
+      removals.forEach((take) => {
+        const match = strongestMatch.get(take.id);
+        candidates.set(take.id, {
+          id: take.id,
+          text: take.text,
+          category: take.category,
+          reason: hasHumanTake
+            ? 'AI-generated duplicate of human-generated content'
+            : 'AI-generated exact/high-similarity duplicate',
+          matchedId: match?.matchedId,
+          similarity: match?.similarity,
+        });
+      });
+    });
+  });
+
+  return Array.from(candidates.values());
+};
+
+const buildCorpusTier1Candidates = (takes: CorpusTake[]): CorpusHygieneCandidate[] => {
+  const candidates = new Map<string, CorpusHygieneCandidate>();
+
+  buildCorpusDuplicateCandidates(takes).forEach((candidate) => {
+    candidates.set(candidate.id, candidate);
+  });
+
+  takes
+    .filter((take) => take.isAIGenerated && take.text.includes(';'))
+    .forEach((take) => {
+      candidates.set(take.id, {
+        id: take.id,
+        text: take.text,
+        category: take.category,
+        reason: 'AI-generated take contains a semicolon',
+      });
+    });
+
+  takes
+    .filter((take) => take.isAIGenerated && !VALID_CATEGORIES.has(take.category))
+    .forEach((take) => {
+      candidates.set(take.id, {
+        id: take.id,
+        text: take.text,
+        category: take.category,
+        reason: `AI-generated take has invalid category "${take.category}"`,
+      });
+    });
+
+  return Array.from(candidates.values()).sort(
+    (first, second) => first.category.localeCompare(second.category) || first.id.localeCompare(second.id)
+  );
+};
+
+const tokenizeCorpusText = (text: string): string[] =>
+  normalizeTakeForSimilarity(text).split(' ').filter(Boolean);
+
+const getCorpusNgrams = (tokens: string[], size: number): string[] => {
+  const ngrams: string[] = [];
+  for (let index = 0; index <= tokens.length - size; index += 1) {
+    ngrams.push(tokens.slice(index, index + size).join(' '));
+  }
+  return ngrams;
+};
+
+const getCorpusTopicPhrases = (take: CorpusTake): string[] => {
+  const tokens = tokenizeCorpusText(take.text).filter(
+    token => token.length >= 4 && !corpusTopicStopWords.has(token)
+  );
+  return [...getCorpusNgrams(tokens, 2), ...getCorpusNgrams(tokens, 3)];
+};
+
+const buildCorpusSimilarityGravityCandidates = (
+  takes: CorpusTake[],
+  blockedIds: Set<string>
+): CorpusHygieneCandidate[] => {
+  const candidates = new Map<string, CorpusHygieneCandidate>();
+  const byCategory = new Map<string, CorpusTake[]>();
+
+  takes.forEach((take) => {
+    byCategory.set(take.category, [...(byCategory.get(take.category) ?? []), take]);
+  });
+
+  byCategory.forEach((categoryTakes) => {
+    for (let first = 0; first < categoryTakes.length; first += 1) {
+      for (let second = first + 1; second < categoryTakes.length; second += 1) {
+        const firstTake = categoryTakes[first];
+        const secondTake = categoryTakes[second];
+        const score = getTakeSimilarity(firstTake.text, secondTake.text);
+
+        if (
+          score < CORPUS_HYGIENE_GRAVITY_MIN_SIMILARITY ||
+          score >= CORPUS_HYGIENE_GRAVITY_MAX_SIMILARITY
+        ) {
+          continue;
+        }
+
+        [
+          { take: firstTake, matched: secondTake },
+          { take: secondTake, matched: firstTake },
+        ].forEach(({ take, matched }) => {
+          if (
+            !take.isAIGenerated ||
+            blockedIds.has(take.id) ||
+            isActiveDeprioritizedCorpusTake(take)
+          ) {
+            return;
+          }
+
+          const existing = candidates.get(take.id);
+          if (existing && (existing.similarity ?? 0) >= score) {
+            return;
+          }
+
+          candidates.set(take.id, {
+            id: take.id,
+            text: take.text,
+            category: take.category,
+            reason: `Near-duplicate gravity well; similar to ${matched.id}`,
+            matchedId: matched.id,
+            similarity: Math.round(score * 1000) / 1000,
+          });
+        });
+      }
+    }
+  });
+
+  return Array.from(candidates.values());
+};
+
+const buildCorpusTopicGravityCandidates = (
+  takes: CorpusTake[],
+  blockedIds: Set<string>
+): CorpusHygieneCandidate[] => {
+  const candidates = new Map<string, CorpusHygieneCandidate>();
+  const phraseCountsByCategory = new Map<string, Map<string, Set<string>>>();
+  const takesById = new Map(takes.map(take => [take.id, take]));
+
+  takes
+    .filter(take => take.isAIGenerated && !blockedIds.has(take.id) && !isActiveDeprioritizedCorpusTake(take))
+    .forEach((take) => {
+      const categoryPhrases =
+        phraseCountsByCategory.get(take.category) ?? new Map<string, Set<string>>();
+      phraseCountsByCategory.set(take.category, categoryPhrases);
+
+      new Set(getCorpusTopicPhrases(take)).forEach((phrase) => {
+        const takeIds = categoryPhrases.get(phrase) ?? new Set<string>();
+        takeIds.add(take.id);
+        categoryPhrases.set(phrase, takeIds);
+      });
+    });
+
+  phraseCountsByCategory.forEach((phraseCounts, category) => {
+    Array.from(phraseCounts.entries())
+      .filter(([_phrase, takeIds]) => takeIds.size >= CORPUS_HYGIENE_TOPIC_MIN_COUNT)
+      .sort(
+        ([firstPhrase, firstTakeIds], [secondPhrase, secondTakeIds]) =>
+          secondTakeIds.size - firstTakeIds.size || firstPhrase.localeCompare(secondPhrase)
+      )
+      .slice(0, 5)
+      .forEach(([phrase, takeIds]) => {
+        Array.from(takeIds)
+          .slice(0, 5)
+          .forEach((takeId) => {
+            const take = takesById.get(takeId);
+            if (!take || candidates.has(take.id)) {
+              return;
+            }
+
+            candidates.set(take.id, {
+              id: take.id,
+              text: take.text,
+              category,
+              reason: `Topic phrase "${phrase}" appears ${takeIds.size} times in ${category}`,
+            });
+          });
+      });
+  });
+
+  return Array.from(candidates.values());
+};
+
+const buildCorpusTier2Candidates = (
+  takes: CorpusTake[],
+  tier1Ids: Set<string>
+): CorpusHygieneCandidate[] => {
+  const candidates = new Map<string, CorpusHygieneCandidate>();
+
+  buildCorpusSimilarityGravityCandidates(takes, tier1Ids).forEach((candidate) => {
+    candidates.set(candidate.id, candidate);
+  });
+
+  buildCorpusTopicGravityCandidates(takes, tier1Ids).forEach((candidate) => {
+    if (!candidates.has(candidate.id)) {
+      candidates.set(candidate.id, candidate);
+    }
+  });
+
+  return Array.from(candidates.values())
+    .sort(
+      (first, second) =>
+        first.category.localeCompare(second.category) ||
+        first.reason.localeCompare(second.reason) ||
+        first.id.localeCompare(second.id)
+    )
+    .slice(0, CORPUS_HYGIENE_MAX_TIER2_CANDIDATES);
+};
+
+const applyCorpusTier1SoftDeletes = async (
+  candidates: CorpusHygieneCandidate[],
+  auditId: string
+): Promise<void> => {
+  for (let index = 0; index < candidates.length; index += CORPUS_HYGIENE_BATCH_SIZE) {
+    const batch = db.batch();
+    candidates.slice(index, index + CORPUS_HYGIENE_BATCH_SIZE).forEach((candidate) => {
+      batch.update(db.collection('takes').doc(candidate.id), {
+        isApproved: false,
+        status: 'rejected',
+        rejectedAt: FieldValue.serverTimestamp(),
+        rejectionReason: `Auto corpus audit: ${candidate.reason}`,
+        corpusAuditId: auditId,
+      });
+    });
+    await batch.commit();
+  }
+};
+
+const applyCorpusTier2Deprioritization = async (
+  candidates: CorpusHygieneCandidate[],
+  auditId: string,
+  reason: DeprioritizedReason = 'gravity_well'
+): Promise<Date> => {
+  const until = new Date(Date.now() + CORPUS_HYGIENE_DEPRIORITIZE_DAYS * 24 * 60 * 60 * 1000);
+
+  for (let index = 0; index < candidates.length; index += CORPUS_HYGIENE_BATCH_SIZE) {
+    const batch = db.batch();
+    candidates.slice(index, index + CORPUS_HYGIENE_BATCH_SIZE).forEach((candidate) => {
+      batch.update(db.collection('takes').doc(candidate.id), {
+        deprioritized: true,
+        deprioritizedReason: reason,
+        deprioritizedAt: FieldValue.serverTimestamp(),
+        deprioritizedUntil: Timestamp.fromDate(until),
+        deprioritizedAuditId: auditId,
+      });
+    });
+    await batch.commit();
+  }
+
+  return until;
+};
+
+const shouldRunCorpusHygiene = (
+  state: CorpusHygieneState,
+  counts: Record<Category, number>
+): { shouldRun: boolean; reasons: string[]; globalDelta: number; categoryDeltas: Record<Category, number> } => {
+  const previousGlobal = state.globalApprovedAiCount ?? 0;
+  const currentGlobal = VALID_CATEGORY_LIST.reduce((total, category) => total + counts[category], 0);
+  const globalDelta = currentGlobal - previousGlobal;
+  const categoryDeltas = getEmptyAiCategoryCounts();
+  const reasons: string[] = [];
+
+  VALID_CATEGORY_LIST.forEach((category) => {
+    const previousCategoryCount = state.categoryApprovedAiCounts?.[category] ?? 0;
+    const delta = counts[category] - previousCategoryCount;
+    categoryDeltas[category] = delta;
+    if (delta >= CORPUS_HYGIENE_CATEGORY_DELTA_THRESHOLD) {
+      reasons.push(`${category} gained ${delta} approved AI takes`);
+    }
+  });
+
+  if (globalDelta >= CORPUS_HYGIENE_GLOBAL_DELTA_THRESHOLD) {
+    reasons.push(`global AI corpus gained ${globalDelta} approved takes`);
+  }
+
+  return {
+    shouldRun: reasons.length > 0,
+    reasons,
+    globalDelta,
+    categoryDeltas,
+  };
+};
+
+const summarizeCorpusCandidates = (candidates: CorpusHygieneCandidate[]) =>
+  candidates.map((candidate) => ({
+    id: candidate.id,
+    category: candidate.category,
+    reason: candidate.reason,
+    matchedId: candidate.matchedId ?? null,
+    similarity: candidate.similarity ?? null,
+    text: candidate.text,
+  }));
+
+const getAdjustedCategoryCounts = (
+  counts: Record<Category, number>,
+  removedCandidates: CorpusHygieneCandidate[]
+): Record<Category, number> => {
+  const adjusted = { ...counts };
+  removedCandidates.forEach((candidate) => {
+    if (VALID_CATEGORIES.has(candidate.category)) {
+      const category = candidate.category as Category;
+      adjusted[category] = Math.max(0, adjusted[category] - 1);
+    }
+  });
+  return adjusted;
+};
+
 const stripMarkdownFences = (content: string): string => {
   const trimmed = content.trim();
   const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
@@ -1151,6 +1709,142 @@ const verifyFirebaseAuth = async (
     throw new HttpsError('unauthenticated', `You must be signed in to ${action}.`);
   }
 };
+
+export const runCorpusHygiene = onSchedule(
+  {
+    region: 'us-central1',
+    schedule: '0 4 * * *',
+    timeZone: 'America/New_York',
+    timeoutSeconds: 120,
+    memory: '512MiB',
+  },
+  async () => {
+    const stateRef = db
+      .collection(CORPUS_HYGIENE_STATE_COLLECTION)
+      .doc(CORPUS_HYGIENE_STATE_DOC_ID);
+    const reportRef = db.collection(CORPUS_HYGIENE_REPORTS_COLLECTION).doc();
+    const approvedTakes = await fetchApprovedCorpusTakes();
+    const countsBefore = countApprovedAiTakesByCategory(approvedTakes);
+    const stateSnapshot = await stateRef.get();
+    const state = (stateSnapshot.data() ?? {}) as CorpusHygieneState;
+    const currentGlobalCount = VALID_CATEGORY_LIST.reduce(
+      (total, category) => total + countsBefore[category],
+      0
+    );
+
+    if (!stateSnapshot.exists) {
+      await stateRef.set({
+        globalApprovedAiCount: currentGlobalCount,
+        categoryApprovedAiCounts: countsBefore,
+        initializedAt: FieldValue.serverTimestamp(),
+        lastCheckedAt: FieldValue.serverTimestamp(),
+      });
+      await reportRef.set({
+        type: 'corpus_hygiene_baseline_initialized',
+        createdAt: FieldValue.serverTimestamp(),
+        counts: {
+          globalApprovedAiCount: currentGlobalCount,
+          categoryApprovedAiCounts: countsBefore,
+        },
+        thresholds: {
+          categoryDelta: CORPUS_HYGIENE_CATEGORY_DELTA_THRESHOLD,
+          globalDelta: CORPUS_HYGIENE_GLOBAL_DELTA_THRESHOLD,
+        },
+      });
+      logger.info('Initialized AI corpus hygiene baseline.', {
+        reportId: reportRef.id,
+        currentGlobalCount,
+      });
+      return;
+    }
+
+    const thresholdCheck = shouldRunCorpusHygiene(state, countsBefore);
+
+    if (!thresholdCheck.shouldRun) {
+      await stateRef.set({
+        lastCheckedAt: FieldValue.serverTimestamp(),
+        lastSkippedReason: 'threshold_not_met',
+        lastGlobalDelta: thresholdCheck.globalDelta,
+        lastCategoryDeltas: thresholdCheck.categoryDeltas,
+      }, { merge: true });
+      logger.info('AI corpus hygiene skipped; thresholds not met.', {
+        globalDelta: thresholdCheck.globalDelta,
+        categoryDeltas: thresholdCheck.categoryDeltas,
+      });
+      return;
+    }
+
+    const tier1Candidates = buildCorpusTier1Candidates(approvedTakes);
+    const tier1Ids = new Set(tier1Candidates.map(candidate => candidate.id));
+    const tier2Candidates = buildCorpusTier2Candidates(approvedTakes, tier1Ids);
+
+    if (tier1Candidates.length > 0) {
+      await applyCorpusTier1SoftDeletes(tier1Candidates, reportRef.id);
+    }
+
+    const deprioritizedUntil =
+      tier2Candidates.length > 0
+        ? await applyCorpusTier2Deprioritization(tier2Candidates, reportRef.id)
+        : null;
+    const countsAfter = getAdjustedCategoryCounts(countsBefore, tier1Candidates);
+    const globalAfter = VALID_CATEGORY_LIST.reduce(
+      (total, category) => total + countsAfter[category],
+      0
+    );
+
+    await reportRef.set({
+      type: 'corpus_hygiene_applied',
+      createdAt: FieldValue.serverTimestamp(),
+      triggerReasons: thresholdCheck.reasons,
+      thresholds: {
+        categoryDelta: CORPUS_HYGIENE_CATEGORY_DELTA_THRESHOLD,
+        globalDelta: CORPUS_HYGIENE_GLOBAL_DELTA_THRESHOLD,
+        deprioritizeDays: CORPUS_HYGIENE_DEPRIORITIZE_DAYS,
+      },
+      deltas: {
+        global: thresholdCheck.globalDelta,
+        byCategory: thresholdCheck.categoryDeltas,
+      },
+      counts: {
+        before: {
+          globalApprovedAiCount: currentGlobalCount,
+          categoryApprovedAiCounts: countsBefore,
+        },
+        after: {
+          globalApprovedAiCount: globalAfter,
+          categoryApprovedAiCounts: countsAfter,
+        },
+      },
+      tier1: {
+        appliedCount: tier1Candidates.length,
+        candidates: summarizeCorpusCandidates(tier1Candidates),
+      },
+      tier2: {
+        appliedCount: tier2Candidates.length,
+        deprioritizedUntil: deprioritizedUntil ? Timestamp.fromDate(deprioritizedUntil) : null,
+        candidates: summarizeCorpusCandidates(tier2Candidates),
+      },
+    });
+
+    await stateRef.set({
+      globalApprovedAiCount: globalAfter,
+      categoryApprovedAiCounts: countsAfter,
+      lastAuditAt: FieldValue.serverTimestamp(),
+      lastCheckedAt: FieldValue.serverTimestamp(),
+      lastAuditReportId: reportRef.id,
+      lastTriggerReasons: thresholdCheck.reasons,
+      lastTier1AppliedCount: tier1Candidates.length,
+      lastTier2AppliedCount: tier2Candidates.length,
+    }, { merge: true });
+
+    logger.info('AI corpus hygiene applied.', {
+      reportId: reportRef.id,
+      triggerReasons: thresholdCheck.reasons,
+      tier1AppliedCount: tier1Candidates.length,
+      tier2AppliedCount: tier2Candidates.length,
+    });
+  }
+);
 
 export const submitTake = onRequest(
   {

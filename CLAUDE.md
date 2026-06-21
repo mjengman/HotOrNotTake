@@ -81,9 +81,14 @@ Default `deprioritizedUntil` is 30 days from audit date. Categories running thin
 Automation boundary, current:
 
 - Tier 1, objective failures: automatic soft-delete, no human review required.
-- Tier 2, gravity wells: audit script produces a classified report, human applies deprioritization manually. Will automate after 2–3 audit cycles demonstrate consistent, trustworthy reports.
+- Tier 2, gravity wells: automatic deprioritization is allowed for AI-generated takes. This is reversible because `deprioritizedUntil` restores normal feed eligibility automatically.
 
-Audit cadence: see Corpus Audit Baselines section.
+Audit cadence:
+
+- `runCorpusHygiene` runs daily at 4 AM America/New_York.
+- The function only mutates content when a category has gained at least 25 approved AI-generated takes since the last baseline, or the global approved AI corpus has gained at least 100.
+- If no baseline exists, the first run initializes one and does not mutate content.
+- Each applied run writes a report to `corpusAuditReports` and updates `corpusAuditState/ai-corpus`.
 
 ## AI and Moderation
 

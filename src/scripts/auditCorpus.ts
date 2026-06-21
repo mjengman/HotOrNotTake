@@ -473,7 +473,8 @@ const findSimilarityCandidatesInRange = (
   takes: CorpusTake[],
   minSimilarity: number,
   maxSimilarity: number,
-  scorer: (firstText: string, secondText: string) => number = similarityScore
+  scorer: (firstText: string, secondText: string) => number = similarityScore,
+  candidateFilter: (take: CorpusTake) => boolean = () => true
 ): ClassifiedAuditCandidate[] => {
   const candidates = new Map<string, ClassifiedAuditCandidate>();
   const byCategory = new Map<string, CorpusTake[]>();
@@ -494,6 +495,10 @@ const findSimilarityCandidatesInRange = (
         }
 
         [firstTake, secondTake].forEach((candidate, candidateIndex) => {
+          if (!candidateFilter(candidate)) {
+            return;
+          }
+
           const matched = candidateIndex === 0 ? secondTake : firstTake;
           const existing = candidates.get(candidate.id);
           if (existing && (existing.similarity ?? 0) >= score) {
@@ -589,22 +594,25 @@ const findClassifiedAuditCandidates = (
 ): CorpusAuditReport['classifiedCandidates'] => {
   const tier1 = new Map<string, ClassifiedAuditCandidate>();
   const tier2 = new Map<string, ClassifiedAuditCandidate>();
+  const aiGeneratedTakes = takes.filter((take) => take.isAIGenerated);
+  const aiOnly = (take: CorpusTake) => take.isAIGenerated;
 
   findSimilarityCandidatesInRange(
     takes,
     EXACT_DUPLICATE_THRESHOLD,
     1.01,
-    trigramSimilarityScore
+    trigramSimilarityScore,
+    aiOnly
   ).forEach((candidate) => {
     tier1.set(candidate.id, {
       ...candidate,
       tier: 'tier_1',
-      reason: `Exact/high-similarity duplicate candidate; similar to ${candidate.matchedId}`,
+      reason: `AI-generated exact/high-similarity duplicate candidate; similar to ${candidate.matchedId}`,
     });
   });
 
-  takes
-    .filter((take) => take.isAIGenerated && take.text.includes(';'))
+  aiGeneratedTakes
+    .filter((take) => take.text.includes(';'))
     .forEach((take) => {
       tier1.set(take.id, {
         tier: 'tier_1',
@@ -615,7 +623,7 @@ const findClassifiedAuditCandidates = (
       });
     });
 
-  takes
+  aiGeneratedTakes
     .filter((take) => !validCategories.has(take.category))
     .forEach((take) => {
       tier1.set(take.id, {
@@ -631,14 +639,15 @@ const findClassifiedAuditCandidates = (
     takes,
     GRAVITY_WELL_MIN_SIMILARITY,
     GRAVITY_WELL_MAX_SIMILARITY,
-    trigramSimilarityScore
+    trigramSimilarityScore,
+    aiOnly
   ).forEach((candidate) => {
     if (!tier1.has(candidate.id)) {
       tier2.set(candidate.id, candidate);
     }
   });
 
-  findTopicGravityWellCandidates(takes).forEach((candidate) => {
+  findTopicGravityWellCandidates(aiGeneratedTakes).forEach((candidate) => {
     if (!tier1.has(candidate.id) && !tier2.has(candidate.id)) {
       tier2.set(candidate.id, candidate);
     }
@@ -852,9 +861,9 @@ const printReport = (report: CorpusAuditReport) => {
     });
   }
 
-  printSection('Tier 1 candidates (safe to soft-delete)');
+  printSection('Tier 1 AI candidates (safe to soft-delete)');
   if (report.classifiedCandidates.tier1.length === 0) {
-    console.log('No Tier 1 candidates found.');
+    console.log('No Tier 1 AI candidates found.');
   } else {
     report.classifiedCandidates.tier1.forEach((candidate) => {
       const similarity = candidate.similarity === undefined
@@ -867,9 +876,9 @@ const printReport = (report: CorpusAuditReport) => {
     });
   }
 
-  printSection('Tier 2 candidates (gravity well — deprioritize, do not delete)');
+  printSection('Tier 2 AI candidates (gravity well — deprioritize, do not delete)');
   if (report.classifiedCandidates.tier2.length === 0) {
-    console.log('No Tier 2 candidates found.');
+    console.log('No Tier 2 AI candidates found.');
   } else {
     report.classifiedCandidates.tier2.forEach((candidate) => {
       const similarity = candidate.similarity === undefined
