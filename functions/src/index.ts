@@ -213,7 +213,7 @@ const categoryVoiceExamples: Record<Category, string[]> = {
     'Most streaming shows would be stronger as two-hour movies.',
   ],
   environment: [
-    'Reusable bags are theater if the grocery store still wraps everything in plastic.',
+    'Outdoor cats are an environmental problem people ignore because the victims are too small to notice.',
     'Cities should make driving inconvenient before begging people to take transit.',
   ],
   wellness: [
@@ -250,6 +250,11 @@ const bannedGenerationFrames = [
   'is a scam',
   'should be mandatory',
   'we need to',
+  'you should not feel bad for',
+  "you shouldn't feel bad for",
+  'we are just playing pretend',
+  "we're just playing pretend",
+  'X creates unnecessary guilt',
   'X is nice, but Y is the real issue',
   'generic advice or safe consensus statements',
   'obvious virtue statements',
@@ -325,7 +330,7 @@ const categoryGravityWellGuidance: Record<Category, CategoryGravityWellGuidance>
     ],
     freshLanes: [
       'restaurant etiquette',
-      'delivery app guilt',
+      'delivery app fees, driver treatment, and convenience tradeoffs',
       'kids menus',
       'splitting appetizers',
       'tipping at counter service',
@@ -623,6 +628,60 @@ const categoryGravityWellGuidance: Record<Category, CategoryGravityWellGuidance>
     ],
   },
 };
+
+const failedBrunchTestExamples = [
+  {
+    take: "Changing light bulbs is a cute gesture, but without real policy, we're just playing pretend.",
+    reason:
+      '"X is nice but Y is the real issue" frame. Uses "we" framing. No real friction because most people already agree individual actions are not enough.',
+  },
+  {
+    take: "Delivery apps create unnecessary guilt. You shouldn't feel bad for wanting convenience, it's modern dining.",
+    reason:
+      'Generic reassurance, not a take. Nobody is arguing the opposite. Zero friction. Fails the brunch test immediately.',
+  },
+  {
+    take: 'Open office layouts kill productivity and creativity.',
+    reason:
+      'Overrepresented category trope. Recycled internet argument. The room has already heard this one a hundred times.',
+  },
+  {
+    take: 'We need to talk more about mental health in the workplace.',
+    reason:
+      '"We need to" frame. Obvious virtue statement. No one disagrees, so no one debates it.',
+  },
+] as const;
+
+const passedBrunchTestExamples = [
+  {
+    take: 'Diet identities have made eating with friends more exhausting than enjoyable.',
+    reason:
+      'Specific social friction. Someone at brunch will defend their diet identity. Real debate.',
+  },
+  {
+    take: 'Air conditioning is one of the most environmentally damaging luxuries people refuse to question because it is too comfortable.',
+    reason:
+      'Names a real hypocrisy. Puts the reader on the defensive in an interesting way.',
+  },
+  {
+    take: 'Performance reviews exist mainly to protect companies from lawsuits, not to help employees grow.',
+    reason:
+      'Specific, cynical, arguable. Someone in HR will push back hard.',
+  },
+  {
+    take: 'People who split every dinner bill down to the cent are worse guests than people who show up late.',
+    reason:
+      'Funny, specific, socially charged. Two people at brunch will have opposite reactions.',
+  },
+] as const;
+
+const formatGenerationExamples = (
+  heading: string,
+  examples: readonly { take: string; reason: string }[]
+): string =>
+  `${heading}: ${examples
+    .map((example) => `"${example.take}" Why: ${example.reason}`)
+    .join(' ')} `;
 
 const localRejectionRules: Array<{ pattern: RegExp; reason: string }> = [
   {
@@ -1513,6 +1572,14 @@ const generationPromptForAttempt = (category: Category, attempt: GenerationAttem
     `Keep every take between ${MIN_TAKE_LENGTH} and ${MAX_TAKE_LENGTH} characters. ` +
     'For each candidate, self-evaluate honestly. categoryFit must be "no" if the take could fit any generic category. ' +
     'Reject candidates that are generic advice, obvious virtue statements, safe consensus opinions, recycled category tropes, common internet arguments, "X is nice, but Y is the real issue" scaffolding, "we need to" framing, or "X should be mandatory" framing. ' +
+    formatGenerationExamples(
+      'Examples of takes that MUST be rejected. Do not generate takes like these',
+      failedBrunchTestExamples
+    ) +
+    formatGenerationExamples(
+      'Examples of takes that PASS. Aim for this quality',
+      passedBrunchTestExamples
+    ) +
     'Use qualityScore 5 only for specific, opinionated takes rooted in real social friction that would genuinely split a room. ' +
     'Use qualityScore 4 only for a clear opinion with recognizable conflict that is not a trope or cliche. ' +
     'Use qualityScore 3 for plausible but generic, safe, or weakly opinionated takes. Use 2 for virtue statements, advice, or obvious consensus. Use 1 for harmful, off-category, or incoherent takes. ' +
