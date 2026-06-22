@@ -18,6 +18,19 @@ import {
   getUnlockedAchievements,
 } from '../services/achievementService';
 import { UserStats } from '../types/User';
+import RNShare from 'react-native-share';
+
+const APP_STORE_SHARE_URL = 'https://apps.apple.com/us/app/hot-or-not-takes/id6751363365';
+const ACHIEVEMENT_SHARE_FLAVOR: Partial<Record<UnlockedAchievement['id'], string>> = {
+  votes_10: "I'm warming up.",
+  votes_100: "I'm officially a regular.",
+  votes_500: "I'm deep in the takes.",
+  votes_1000: "I'm basically the app now.",
+  shares_5: "I'm spreading the heat.",
+  saves_10: "I've got a greatest-hits list.",
+  contrarian_10: "I'm not here to blend in.",
+  all_categories: "I've got range.",
+};
 
 interface AchievementsScreenProps {
   onClose: () => void;
@@ -55,17 +68,20 @@ const AchievementRow = ({
   rightLabel,
   locked = false,
   isDarkMode,
+  onPress,
 }: {
   achievement: Pick<UnlockedAchievement, 'emoji' | 'title' | 'flavor'>;
   rightLabel: string;
   locked?: boolean;
   isDarkMode: boolean;
+  onPress?: () => void;
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
   const rowOpacity = locked ? 0.62 : 1;
+  const RowComponent = onPress ? AnimatedPressable : View;
 
   return (
-    <View
+    <RowComponent
       style={[
         styles.achievementRow,
         {
@@ -74,6 +90,15 @@ const AchievementRow = ({
           opacity: rowOpacity,
         },
       ]}
+      {...(onPress
+        ? {
+            onPress,
+            hapticFeedback: false,
+            scaleValue: 0.985,
+            accessibilityRole: 'button' as const,
+            accessibilityLabel: `Share ${achievement.title} achievement`,
+          }
+        : {})}
     >
       <Text style={styles.achievementEmoji}>{locked ? '🔒' : achievement.emoji}</Text>
       <View style={styles.achievementCopy}>
@@ -81,17 +106,17 @@ const AchievementRow = ({
           <Text style={[styles.achievementTitle, { color: theme.text }]} numberOfLines={1}>
             {achievement.title}
           </Text>
-        <Text style={[styles.achievementMeta, { color: theme.textSecondary }]}>
-          {rightLabel}
-        </Text>
-      </View>
+          <Text style={[styles.achievementMeta, { color: theme.textSecondary }]}>
+            {onPress ? `${rightLabel} ↗` : rightLabel}
+          </Text>
+        </View>
         {!locked && (
           <Text style={[styles.achievementFlavor, { color: theme.textSecondary }]}>
             {achievement.flavor}
           </Text>
         )}
       </View>
-    </View>
+    </RowComponent>
   );
 };
 
@@ -153,6 +178,21 @@ export const AchievementsScreen: React.FC<AchievementsScreenProps> = ({
     loadAchievements();
   }, [loadAchievements]);
 
+  const shareAchievement = React.useCallback(async (achievement: UnlockedAchievement) => {
+    const shareFlavor = ACHIEVEMENT_SHARE_FLAVOR[achievement.id] || achievement.flavor;
+    const message = `${achievement.emoji} ${achievement.title} — ${shareFlavor}\n\nI'm voting on Hot or Not Takes. Come argue with me.\n${APP_STORE_SHARE_URL}`;
+
+    try {
+      await RNShare.open({
+        title: 'Hot or Not Takes',
+        message,
+        failOnCancel: false,
+      });
+    } catch (error) {
+      console.warn('Unable to share achievement:', error);
+    }
+  }, []);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
@@ -213,6 +253,7 @@ export const AchievementsScreen: React.FC<AchievementsScreenProps> = ({
                   achievement={achievement}
                   rightLabel={formatUnlockDate(achievement.unlockedAt)}
                   isDarkMode={isDarkMode}
+                  onPress={() => shareAchievement(achievement)}
                 />
               ))
             )}

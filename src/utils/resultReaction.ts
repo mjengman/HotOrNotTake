@@ -43,7 +43,12 @@ const lowSignalHeadlines = [
   '👀 Early read',
   '🌱 Fresh take',
   '🧪 First signals',
-  '👂 The room is warming up',
+  '👂 The room is listening',
+  '🫧 Too early to tell',
+  '🧭 First few votes are in',
+  '🔎 Fresh read forming',
+  '✨ New take energy',
+  '📡 Signal just started',
 ] as const;
 
 const splitHeadlines = [
@@ -51,6 +56,11 @@ const splitHeadlines = [
   '⚖️ Too close to call',
   '🤜🤛 Dead heat',
   '🔥❄️ Split room',
+  '🎭 Nobody agrees yet',
+  '🪓 Right down the middle',
+  '🧩 This one split people',
+  '🥊 Neck and neck',
+  '🫨 The room can’t decide',
 ] as const;
 
 const consensusHeadlines = [
@@ -58,6 +68,11 @@ const consensusHeadlines = [
   '🧠 Rare consensus',
   '📣 Basically unanimous',
   '✅ The room aligned',
+  '🫡 The room has spoken',
+  '🏛️ Consensus landed',
+  '📌 No real debate here',
+  '🧲 Everyone pulled the same way',
+  '🎯 Clean consensus',
 ] as const;
 
 const tinyMinorityHeadlines = [
@@ -65,6 +80,11 @@ const tinyMinorityHeadlines = [
   '🧭 Lone-wolf read',
   '🫣 You found the tiny camp',
   '🎯 Against the avalanche',
+  '⚡ Rare dissent detected',
+  '🪐 Way outside orbit',
+  '🕳️ Deep minority take',
+  '🚩 You broke from the pack',
+  '🧨 Bold little faction',
 ] as const;
 
 const unseenLandslideHeadlines: Record<VoteChoice, readonly string[]> = {
@@ -73,35 +93,58 @@ const unseenLandslideHeadlines: Record<VoteChoice, readonly string[]> = {
     '🌶️ Spicy consensus',
     '📈 HOT is running away',
     '🔥 The room is heating up',
+    '🚒 This one is blazing',
+    '🏁 HOT took off',
+    '📣 Big HOT majority',
+    '🔥 The crowd went HOT',
+    '🌡️ Temperature is rising',
   ],
   not: [
     '❄️ Ice cold verdict',
     '🧊 Frozen out',
     '📉 NOT is running away',
     '❄️ The room cooled it off',
+    '🥶 Cold front came in',
+    '🏁 NOT took off',
+    '📣 Big NOT majority',
+    '🧊 The crowd went NOT',
+    '🌬️ This one got chilly',
   ],
 };
 
 const unseenLeanHeadlines: Record<VoteChoice, readonly string[]> = {
   hot: [
     '🔥 Community leans HOT',
-    '🔥 The room is warming up',
+    '🔥 HOT is gaining ground',
     '🌶️ HOT has the edge',
     '📈 HOT is pulling ahead',
+    '👀 HOT has momentum',
+    '🧲 The room tilts HOT',
+    '🔥 Slight HOT advantage',
+    '📊 HOT is ahead for now',
   ],
   not: [
     '❄️ Community leans NOT',
     '❄️ The room is cooling off',
     '🧊 NOT has the edge',
     '📉 NOT is pulling ahead',
+    '👀 NOT has momentum',
+    '🧲 The room tilts NOT',
+    '❄️ Slight NOT advantage',
+    '📊 NOT is ahead for now',
   ],
 };
 
 const strongContrarianHeadlines = [
   '😈 Contrarian moment',
-  '🧭 Lone-wolf read',
+  '🧭 You charted your own course',
   '🫣 Tiny camp energy',
   '🎯 You split from the room',
+  '⚡ Rare disagreement',
+  '🧨 You went bold',
+  '🚧 Crowd did not follow',
+  '🕶️ Minority report',
+  '🪩 Different frequency',
 ] as const;
 
 const contrarianHeadlines = [
@@ -109,6 +152,11 @@ const contrarianHeadlines = [
   '🧭 You took the other side',
   '🌶️ Spicy disagreement',
   '👀 Not the crowd pick',
+  '⚡ You broke from the room',
+  '🫡 Respectfully outnumbered',
+  '🎲 You played the long shot',
+  '🥊 You took the tougher side',
+  '🚦 Different read from the room',
 ] as const;
 
 const agreementLandslideHeadlines: Record<VoteChoice, readonly string[]> = {
@@ -117,12 +165,22 @@ const agreementLandslideHeadlines: Record<VoteChoice, readonly string[]> = {
     '🔥 The room backed you',
     '🌶️ Strong HOT energy',
     '📣 HOT by a mile',
+    '🏆 HOT won big',
+    '🚒 You joined the blaze',
+    '📈 Big HOT agreement',
+    '🔥 Crowd went with you',
+    '🌡️ You felt the heat',
   ],
   not: [
     '❄️ Ice cold agreement',
     '❄️ The room backed you',
     '🧊 Strong NOT energy',
     '📣 NOT by a mile',
+    '🏆 NOT won big',
+    '🥶 You joined the chill',
+    '📉 Big NOT agreement',
+    '❄️ Crowd went with you',
+    '🌬️ You called the cold',
   ],
 };
 
@@ -132,12 +190,22 @@ const agreementHeadlines: Record<VoteChoice, readonly string[]> = {
     '🤝 You read the room',
     '🔥 HOT side has backup',
     '✅ You called it',
+    '📣 You had company',
+    '🧭 Your read matched the room',
+    '🔥 Same heat as the crowd',
+    '👀 The room saw it too',
+    '🎯 You landed with the majority',
   ],
   not: [
     '❄️ The crowd is with you',
     '🤝 You read the room',
     '❄️ NOT side has backup',
     '✅ You called it',
+    '📣 You had company',
+    '🧭 Your read matched the room',
+    '❄️ Same chill as the crowd',
+    '👀 The room saw it too',
+    '🎯 You landed with the majority',
   ],
 };
 

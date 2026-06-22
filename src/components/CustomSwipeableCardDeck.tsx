@@ -29,6 +29,7 @@ import { AnimatedPressable } from './transitions/AnimatedPressable';
 import { dimensions, colors, motion } from '../constants';
 import { useResponsive } from '../hooks/useResponsive';
 import { vibrate } from '../utils/haptics';
+import { type UnlockedAchievement } from '../services/achievementService';
 
 interface CustomSwipeableCardDeckProps {
   takes: Take[];
@@ -54,6 +55,7 @@ interface CustomSwipeableCardDeckProps {
   firstVoteHintTakeId?: string | null;
   onFirstVoteHintDismiss?: () => void;
   onAdminRemoveRequest?: (take: Take) => void;
+  onAchievementUnlocked?: (achievement: UnlockedAchievement) => void;
 }
 
 // Safe flip for Android - no 3D to avoid compositor crashes
@@ -87,6 +89,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   firstVoteHintTakeId = null,
   onFirstVoteHintDismiss,
   onAdminRemoveRequest,
+  onAchievementUnlocked,
 }) => {
   const responsive = useResponsive();
   const screenWidth = responsive.screen.width;
@@ -1207,6 +1210,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
                     : null
                 }
                 onFirstVoteHintDismiss={onFirstVoteHintDismiss}
+                trackResultAchievements={!externalStatsCard}
+                onAchievementUnlocked={onAchievementUnlocked}
               />
             </Animated.View>
           )}

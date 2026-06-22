@@ -17,6 +17,12 @@ import { useAuth } from '../hooks/useAuth';
 import { addToFavorites, removeFromFavorites, isInFavorites } from '../services/favoritesService';
 import { VisualShareCard } from './VisualShareCard';
 import { getResultReaction, type ResultReactionTone } from '../utils/resultReaction';
+import {
+  recordContrarianVote,
+  recordSaveAction,
+  recordShareAction,
+  type UnlockedAchievement,
+} from '../services/achievementService';
 
 interface TakeCardProps {
   take: Take;
@@ -35,6 +41,8 @@ interface TakeCardProps {
   firstVoteHint?: string | null;
   onFirstVoteHintDismiss?: () => void;
   onAdminRemoveRequest?: (take: Take) => void;
+  trackResultAchievements?: boolean;
+  onAchievementUnlocked?: (achievement: UnlockedAchievement) => void;
 }
 
 const getReactionToneColor = (tone: ResultReactionTone, theme: Colors) => {
@@ -74,6 +82,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   firstVoteHint = null,
   onFirstVoteHintDismiss,
   onAdminRemoveRequest,
+  trackResultAchievements = false,
+  onAchievementUnlocked,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
   const responsive = useResponsive();
@@ -83,6 +93,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   const visualShareRef = useRef<ViewShot>(null);
   const categoryTapCountRef = useRef(0);
   const categoryTapResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trackedContrarianTakeIdsRef = useRef<Set<string>>(new Set());
   const shouldEnableResultActions = isFlipped && showStats;
   const initialResultCountProgress = isFlipped && holdResultCountAtZero && !animateResults ? 0 : 1;
   const resultCountAnim = useRef(new Animated.Value(initialResultCountProgress)).current;
@@ -182,6 +193,36 @@ export const TakeCard: React.FC<TakeCardProps> = ({
     flex: isCompactResultCard ? 0.35 : 1.25,
     minHeight: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.md,
   };
+
+  useEffect(() => {
+    if (
+      !trackResultAchievements ||
+      !shouldEnableResultActions ||
+      !userVote ||
+      !isContrarianShareMoment ||
+      trackedContrarianTakeIdsRef.current.has(take.id)
+    ) {
+      return;
+    }
+
+    trackedContrarianTakeIdsRef.current.add(take.id);
+    recordContrarianVote(take.id)
+      .then(achievement => {
+        if (achievement) {
+          onAchievementUnlocked?.(achievement);
+        }
+      })
+      .catch(error => {
+        console.warn('Unable to record contrarian achievement progress:', error);
+      });
+  }, [
+    isContrarianShareMoment,
+    onAchievementUnlocked,
+    shouldEnableResultActions,
+    take.id,
+    trackResultAchievements,
+    userVote,
+  ]);
   const percentageItemHeight = isCompactResultCard ? 58 : 74;
 
   useEffect(() => {
@@ -285,6 +326,16 @@ export const TakeCard: React.FC<TakeCardProps> = ({
   }, [shouldEnableResultActions, user, take.id]);
 
   const handleShare = async () => {
+    recordShareAction()
+      .then(achievement => {
+        if (achievement) {
+          onAchievementUnlocked?.(achievement);
+        }
+      })
+      .catch(error => {
+        console.warn('Unable to record share achievement progress:', error);
+      });
+
     try {
       const SMART_LINK = 'https://hot-or-not-takes.web.app/download';
       const shareCta = `What's YOUR take?\n${SMART_LINK}`;
@@ -339,6 +390,15 @@ export const TakeCard: React.FC<TakeCardProps> = ({
       } else {
         await addToFavorites(user.uid, take.id);
         setIsFavorited(true);
+        recordSaveAction()
+          .then(achievement => {
+            if (achievement) {
+              onAchievementUnlocked?.(achievement);
+            }
+          })
+          .catch(error => {
+            console.warn('Unable to record save achievement progress:', error);
+          });
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);

@@ -7,6 +7,9 @@ export type AchievementId =
   | 'votes_100'
   | 'votes_500'
   | 'votes_1000'
+  | 'shares_5'
+  | 'saves_10'
+  | 'contrarian_10'
   | 'streak_7'
   | 'streak_14'
   | 'streak_30'
@@ -18,7 +21,7 @@ export type AchievementDefinition = {
   emoji: string;
   title: string;
   flavor: string;
-  kind: 'votes' | 'streak' | 'categories';
+  kind: 'votes' | 'streak' | 'categories' | 'shares' | 'saves' | 'contrarian';
   threshold?: number;
 };
 
@@ -31,6 +34,9 @@ export type UnlockedAchievement = {
 };
 
 const ACHIEVEMENTS_STORAGE_KEY = 'achievements:unlocked';
+export const SHARE_COUNT_STORAGE_KEY = 'share-count:v1';
+export const SAVE_COUNT_STORAGE_KEY = 'save-count:v1';
+const CONTRARIAN_VOTE_IDS_STORAGE_KEY = 'contrarian-vote-ids:v1';
 
 export const ACHIEVEMENTS: AchievementDefinition[] = [
   {
@@ -64,6 +70,30 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     flavor: "You're basically the app now.",
     kind: 'votes',
     threshold: 1000,
+  },
+  {
+    id: 'shares_5',
+    emoji: '📣',
+    title: '5 takes shared',
+    flavor: "You're spreading the heat.",
+    kind: 'shares',
+    threshold: 5,
+  },
+  {
+    id: 'saves_10',
+    emoji: '⭐',
+    title: '10 takes saved',
+    flavor: "You've got a greatest-hits list.",
+    kind: 'saves',
+    threshold: 10,
+  },
+  {
+    id: 'contrarian_10',
+    emoji: '⚡',
+    title: '10 unpopular votes',
+    flavor: "You're not here to blend in.",
+    kind: 'contrarian',
+    threshold: 10,
   },
   {
     id: 'streak_7',
@@ -165,6 +195,58 @@ const writeUnlockedAchievements = async (achievements: UnlockedAchievement[]) =>
   await AsyncStorage.setItem(ACHIEVEMENTS_STORAGE_KEY, JSON.stringify(achievements));
 };
 
+const readNumberFromStorage = async (key: string) => {
+  const raw = await AsyncStorage.getItem(key);
+  const value = raw ? Number.parseInt(raw, 10) : 0;
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
+
+const writeNumberToStorage = async (key: string, value: number) => {
+  await AsyncStorage.setItem(key, String(Math.max(0, value)));
+};
+
+const incrementStoredCount = async (key: string) => {
+  const nextValue = (await readNumberFromStorage(key)) + 1;
+  await writeNumberToStorage(key, nextValue);
+  return nextValue;
+};
+
+const readStringArrayFromStorage = async (key: string) => {
+  const raw = await AsyncStorage.getItem(key);
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const unlockActionAchievement = async (
+  achievementId: AchievementId,
+  currentCount: number
+): Promise<UnlockedAchievement | null> => {
+  const definition = ACHIEVEMENT_BY_ID[achievementId];
+  if (!definition?.threshold || currentCount < definition.threshold) {
+    return null;
+  }
+
+  const wasAlreadyUnlocked = (await getUnlockedAchievements()).some(
+    achievement => achievement.id === achievementId
+  );
+  if (wasAlreadyUnlocked) {
+    return null;
+  }
+
+  const unlocked = await unlockAchievements([achievementId]);
+  return unlocked.find(achievement => achievement.id === achievementId) ?? null;
+};
+
 export const unlockAchievements = async (
   achievementIds: AchievementId[],
   unlockedAt = new Date().toISOString()
@@ -213,6 +295,27 @@ export const unlockAchievementFromToast = async (toast: AchievementToast) => {
   await unlockAchievements([toast.id as AchievementId]);
 };
 
+export const recordShareAction = async () => {
+  const shareCount = await incrementStoredCount(SHARE_COUNT_STORAGE_KEY);
+  return unlockActionAchievement('shares_5', shareCount);
+};
+
+export const recordSaveAction = async () => {
+  const saveCount = await incrementStoredCount(SAVE_COUNT_STORAGE_KEY);
+  return unlockActionAchievement('saves_10', saveCount);
+};
+
+export const recordContrarianVote = async (takeId: string) => {
+  const votedTakeIds = await readStringArrayFromStorage(CONTRARIAN_VOTE_IDS_STORAGE_KEY);
+  if (votedTakeIds.includes(takeId)) {
+    return null;
+  }
+
+  const nextTakeIds = [...votedTakeIds, takeId];
+  await AsyncStorage.setItem(CONTRARIAN_VOTE_IDS_STORAGE_KEY, JSON.stringify(nextTakeIds));
+  return unlockActionAchievement('contrarian_10', nextTakeIds.length);
+};
+
 export const getBackfillableAchievementIds = (stats: UserStats): AchievementId[] => {
   const unlockedIds: AchievementId[] = [];
   const totalVotes = stats.totalVotes || 0;
@@ -241,5 +344,18 @@ export const getBackfillableAchievementIds = (stats: UserStats): AchievementId[]
 
 export const backfillUnlockedAchievements = async (stats: UserStats) => {
   const earnedIds = getBackfillableAchievementIds(stats);
+
+  if ((await readNumberFromStorage(SHARE_COUNT_STORAGE_KEY)) >= 5) {
+    earnedIds.push('shares_5');
+  }
+
+  if ((await readNumberFromStorage(SAVE_COUNT_STORAGE_KEY)) >= 10) {
+    earnedIds.push('saves_10');
+  }
+
+  if ((await readStringArrayFromStorage(CONTRARIAN_VOTE_IDS_STORAGE_KEY)).length >= 10) {
+    earnedIds.push('contrarian_10');
+  }
+
   return unlockAchievements(earnedIds);
 };

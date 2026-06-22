@@ -53,7 +53,11 @@ import { adminRemoveTake } from '../services/takeService';
 import { buildOptimisticVoteEngagementUpdate, getCommunityStats } from '../services/userService';
 import { prefetchLeaderboardCache } from '../services/leaderboardCacheService';
 import { prefetchUserFavoritesCache } from '../services/favoritesService';
-import { backfillUnlockedAchievements, unlockAchievementFromToast } from '../services/achievementService';
+import {
+  backfillUnlockedAchievements,
+  unlockAchievementFromToast,
+  type UnlockedAchievement,
+} from '../services/achievementService';
 import {
   requestNotificationsAfterQuestCompletion,
   scheduleStreakMilestoneNotification,
@@ -1183,6 +1187,14 @@ export const HomeScreen: React.FC = () => {
     });
   }, [enqueueToast]);
 
+  const showUnlockedAchievementToast = React.useCallback((achievement: UnlockedAchievement) => {
+    enqueueToast({
+      id: `achievement:${achievement.id}`,
+      title: `${achievement.emoji} ${achievement.title}!`,
+      subtitle: achievement.flavor,
+    });
+  }, [enqueueToast]);
+
   const showStreakInfo = React.useCallback(() => {
     if (stats.votingStreak <= 0) {
       enqueueToast({
@@ -1823,6 +1835,7 @@ export const HomeScreen: React.FC = () => {
             firstVoteHintTakeId={firstVoteHintTakeId}
             onFirstVoteHintDismiss={() => setFirstVoteHintTakeId(null)}
             onAdminRemoveRequest={requestAdminTakeRemoval}
+            onAchievementUnlocked={showUnlockedAchievementToast}
           />
         )}
       </View>
