@@ -213,7 +213,9 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   deprioritizedAuditId:
     typeof data.deprioritizedAuditId === 'string' ? data.deprioritizedAuditId : undefined,
   contentSource: getContentSource(data.contentSource),
-  sourceTakeId: typeof data.sourceTakeId === 'string' ? data.sourceTakeId : undefined,
+  sourceTakeIds: Array.isArray(data.sourceTakeIds)
+    ? data.sourceTakeIds.filter((id: unknown): id is string => typeof id === 'string')
+    : undefined,
   featured: data.featured === true ? true : undefined,
   starterDeckRank: typeof data.starterDeckRank === 'number' ? data.starterDeckRank : undefined,
   editorialTier: getEditorialTier(data.editorialTier),

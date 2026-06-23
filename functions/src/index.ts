@@ -18,6 +18,12 @@ const AI_SYSTEM_USER_ID = 'ai-system';
 const MIN_TAKE_LENGTH = 10;
 const MAX_TAKE_LENGTH = 150;
 const GENERATED_TAKE_COUNT = 8;
+const GENERATED_TAKE_WRITE_CAP = 5;
+const SEED_FETCH_LIMIT = 100;
+const SEED_MIN_QUALIFIED_COUNT = 8;
+const SEED_MIN_VOTES = 5;
+const SEED_RELAXED_MIN_VOTES = 1;
+const SEED_MAX_USED = 12;
 const GENERATED_DUPLICATE_SIMILARITY_THRESHOLD = 0.75;
 const DUPLICATE_COMPARISON_LIMIT = 100;
 const CORPUS_HYGIENE_STATE_COLLECTION = 'corpusAuditState';
@@ -55,6 +61,16 @@ const VALID_CATEGORIES = new Set<string>(VALID_CATEGORY_LIST);
 
 type TakeStatus = 'pending' | 'approved';
 type ContentSource = 'user' | 'ai_blank' | 'ai_seeded_user' | 'manual_seed';
+
+const CONTENT_SOURCES = new Set<ContentSource>([
+  'user',
+  'ai_blank',
+  'ai_seeded_user',
+  'manual_seed',
+]);
+
+const isContentSource = (value: unknown): value is ContentSource =>
+  typeof value === 'string' && CONTENT_SOURCES.has(value as ContentSource);
 
 interface SubmitTakeRequest {
   text?: unknown;
@@ -112,6 +128,7 @@ interface GeneratedTakeCandidateOutput {
 }
 
 type GenerationAttempt = 'initial' | 'retry';
+type GenerationMode = 'seeded' | 'blank';
 
 type DeprioritizedReason = 'gravity_well' | 'stale_lane' | 'manual';
 
@@ -132,6 +149,25 @@ interface CorpusTake {
   status?: string;
   deprioritized?: boolean;
   deprioritizedUntilMs?: number;
+}
+
+interface SeedTakeCandidate {
+  id: string;
+  text: string;
+  hotVotes: number;
+  notVotes: number;
+  totalVotes: number;
+  isAIGenerated: boolean;
+  contentSource?: ContentSource;
+  deprioritized?: boolean;
+}
+
+interface SeedSelection {
+  mode: GenerationMode;
+  seedsFetched: number;
+  seedsQualified: number;
+  seedsUsed: SeedTakeCandidate[];
+  seedVoteThreshold?: number;
 }
 
 interface CorpusHygieneCandidate {
@@ -983,6 +1019,115 @@ const getRecentApprovedTakeTextsByCategory = async (category: Category): Promise
     .slice(0, DUPLICATE_COMPARISON_LIMIT);
 };
 
+const getSeedScore = (take: SeedTakeCandidate): number => {
+  if (!take.totalVotes || take.totalVotes < SEED_RELAXED_MIN_VOTES) {
+    return 0;
+  }
+
+  const hotShare = (take.hotVotes ?? 0) / take.totalVotes;
+  const split = Math.abs(hotShare - 0.5);
+  return take.totalVotes * (1 - split * 2);
+};
+
+const fetchSeedCandidatesByCategory = async (category: Category): Promise<SeedTakeCandidate[]> => {
+  try {
+    const snapshot = await db
+      .collection('takes')
+      .where('category', '==', category)
+      .where('isApproved', '==', true)
+      .orderBy('createdAt', 'desc')
+      .limit(SEED_FETCH_LIMIT)
+      .select(
+        'text',
+        'hotVotes',
+        'notVotes',
+        'totalVotes',
+        'isAIGenerated',
+        'contentSource',
+        'deprioritized',
+        'createdAt'
+      )
+      .get();
+
+    return snapshot.docs
+      .map((doc): SeedTakeCandidate | null => {
+        const data = doc.data();
+        const text = typeof data.text === 'string' ? data.text.trim() : '';
+        if (!text) {
+          return null;
+        }
+
+        return {
+          id: doc.id,
+          text,
+          hotVotes: typeof data.hotVotes === 'number' ? data.hotVotes : 0,
+          notVotes: typeof data.notVotes === 'number' ? data.notVotes : 0,
+          totalVotes: typeof data.totalVotes === 'number' ? data.totalVotes : 0,
+          isAIGenerated: data.isAIGenerated === true,
+          contentSource: isContentSource(data.contentSource) ? data.contentSource : undefined,
+          deprioritized: data.deprioritized === true,
+        };
+      })
+      .filter((take): take is SeedTakeCandidate => take !== null);
+  } catch (error) {
+    logger.warn('Seed candidate fetch failed; falling back to blank generation.', {
+      category,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+};
+
+const qualifySeedCandidates = (
+  candidates: SeedTakeCandidate[],
+  minVotes: number
+): SeedTakeCandidate[] =>
+  candidates
+    .filter((take) => {
+      if (take.deprioritized === true) {
+        return false;
+      }
+
+      if (!(take.contentSource === 'user' || take.isAIGenerated === false)) {
+        return false;
+      }
+
+      return take.totalVotes >= minVotes;
+    })
+    .sort((first, second) => getSeedScore(second) - getSeedScore(first));
+
+const selectSeedsForGeneration = async (category: Category): Promise<SeedSelection> => {
+  const fetched = await fetchSeedCandidatesByCategory(category);
+  let qualified = qualifySeedCandidates(fetched, SEED_MIN_VOTES);
+  let seedVoteThreshold = SEED_MIN_VOTES;
+
+  if (qualified.length < SEED_MIN_QUALIFIED_COUNT) {
+    const relaxed = qualifySeedCandidates(fetched, SEED_RELAXED_MIN_VOTES);
+    if (relaxed.length >= SEED_MIN_QUALIFIED_COUNT) {
+      qualified = relaxed;
+      seedVoteThreshold = SEED_RELAXED_MIN_VOTES;
+    }
+  }
+
+  if (qualified.length < SEED_MIN_QUALIFIED_COUNT) {
+    return {
+      mode: 'blank',
+      seedsFetched: fetched.length,
+      seedsQualified: qualified.length,
+      seedsUsed: [],
+      seedVoteThreshold,
+    };
+  }
+
+  return {
+    mode: 'seeded',
+    seedsFetched: fetched.length,
+    seedsQualified: qualified.length,
+    seedsUsed: qualified.slice(0, SEED_MAX_USED),
+    seedVoteThreshold,
+  };
+};
+
 const findSimilarTake = (
   text: string,
   comparisonTexts: string[],
@@ -1546,16 +1691,36 @@ const parseGeneratedTakes = (data: OpenAIChatCompletionResponse): GeneratedTakeC
   return takes.slice(0, 10);
 };
 
-const generationPromptForAttempt = (category: Category, attempt: GenerationAttempt): string => {
+const formatSeededGenerationExamples = (category: Category, seeds: SeedTakeCandidate[]): string => {
+  if (seeds.length === 0) {
+    return '';
+  }
+
+  return (
+    `Seeded generation category: "${category}". ` +
+    'Here are examples of takes that real users submitted in this category and that generated genuine disagreement:\n' +
+    `${seeds.map((seed) => seed.text).join('\n')}\n` +
+    'Study what makes these work: they are specific, they take a real stance, and reasonable people would genuinely disagree at dinner. ' +
+    'Do not copy the exact wording, premise, or specific angle of any example. Adjacent topics are allowed only if the new take introduces a clearly different conflict. '
+  );
+};
+
+const generationPromptForAttempt = (
+  category: Category,
+  attempt: GenerationAttempt,
+  seeds: SeedTakeCandidate[] = []
+): string => {
   const retryInstruction = attempt === 'retry'
     ? 'This is a retry because the previous batch had low-quality, mismatched, duplicated, or policy-rejected candidates. Be more specific, more varied, and more category-grounded. '
     : '';
   const gravityWellGuidance = categoryGravityWellGuidance[category];
+  const seededGenerationExamples = formatSeededGenerationExamples(category, seeds);
 
   return (
     retryInstruction +
     `Generate ${GENERATED_TAKE_COUNT} fresh hot-or-not takes for the "${category}" category. ` +
     `Category scope: ${categoryGenerationGuidance[category]} ` +
+    seededGenerationExamples +
     `Voice examples for tone and range only: ${categoryVoiceExamples[category].map(example => `"${example}"`).join(' / ')} ` +
     `Known repeated topics to avoid for this category: ${gravityWellGuidance.avoidTopics.join(' | ')}. ` +
     `Known repeated rhetorical frames to avoid for this category: ${gravityWellGuidance.avoidFrames.join(' | ')}. ` +
@@ -1591,7 +1756,8 @@ const generationPromptForAttempt = (category: Category, attempt: GenerationAttem
 
 const generateTakeCandidates = async (
   category: Category,
-  attempt: GenerationAttempt = 'initial'
+  attempt: GenerationAttempt = 'initial',
+  seeds: SeedTakeCandidate[] = []
 ): Promise<GeneratedTakeCandidate[]> => {
   const response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
     method: 'POST',
@@ -1610,7 +1776,7 @@ const generateTakeCandidates = async (
         },
         {
           role: 'user',
-          content: generationPromptForAttempt(category, attempt),
+          content: generationPromptForAttempt(category, attempt, seeds),
         },
       ],
       response_format: {
@@ -1668,13 +1834,16 @@ const generateTakeCandidates = async (
 
 const tryGenerateTakeCandidates = async (
   category: Category,
-  attempt: GenerationAttempt
+  attempt: GenerationAttempt,
+  seeds: SeedTakeCandidate[] = []
 ): Promise<GeneratedTakeCandidate[]> => {
   try {
-    const candidates = await generateTakeCandidates(category, attempt);
+    const candidates = await generateTakeCandidates(category, attempt, seeds);
     logger.info('OpenAI generated evaluated candidates.', {
       category,
       attempt,
+      mode: seeds.length > 0 ? 'seeded' : 'blank',
+      sourceTakeIds: seeds.map((seed) => seed.id),
       candidates,
     });
     return candidates;
@@ -1695,6 +1864,7 @@ const createTake = async ({
   status,
   isAIGenerated = false,
   contentSource,
+  sourceTakeIds,
 }: {
   text: string;
   category: Category;
@@ -1702,6 +1872,7 @@ const createTake = async ({
   status: TakeStatus;
   isAIGenerated?: boolean;
   contentSource: ContentSource;
+  sourceTakeIds?: string[];
 }): Promise<string> => {
   const isApproved = status === 'approved';
   const takeData: FirebaseFirestore.DocumentData = {
@@ -1720,6 +1891,10 @@ const createTake = async ({
     isAIGenerated,
     contentSource,
   };
+
+  if (sourceTakeIds && sourceTakeIds.length > 0) {
+    takeData.sourceTakeIds = sourceTakeIds;
+  }
 
   if (isApproved) {
     takeData.approvedAt = FieldValue.serverTimestamp();
@@ -2037,6 +2212,22 @@ export const generateTakes = onRequest(
       const data = extractRequestData<GenerateTakesRequest>(request.body);
       const requestedCategory = sanitizeGenerationCategory(data?.category);
       const category = requestedCategory === 'all' ? await chooseLeastSuppliedCategory() : requestedCategory;
+      const seedSelection = await selectSeedsForGeneration(category);
+      const generationMode = seedSelection.mode;
+      const sourceTakeIds = seedSelection.seedsUsed.map((seed) => seed.id);
+
+      logger.info(
+        `[generateTakes] category=${category} mode=${generationMode} seedsFetched=${seedSelection.seedsFetched} seedsQualified=${seedSelection.seedsQualified} seedsUsed=${seedSelection.seedsUsed.length} approved=0 rejected=0`,
+        {
+          phase: 'start',
+          requestedBy: userId,
+          requestedCategory,
+          category,
+          mode: generationMode,
+          seedVoteThreshold: seedSelection.seedVoteThreshold,
+          sourceTakeIds,
+        }
+      );
 
       if (typeof data.requestingUserId === 'string' && data.requestingUserId !== userId) {
         logger.warn('generateTakes ignored mismatched requestingUserId.', {
@@ -2045,7 +2236,11 @@ export const generateTakes = onRequest(
         });
       }
 
-      const firstBatchCandidates = await tryGenerateTakeCandidates(category, 'initial');
+      const firstBatchCandidates = await tryGenerateTakeCandidates(
+        category,
+        'initial',
+        seedSelection.seedsUsed
+      );
       let generatedCandidateCount = firstBatchCandidates.length;
       const comparisonTexts = await getRecentApprovedTakeTextsByCategory(category);
       let addedCount = 0;
@@ -2069,7 +2264,7 @@ export const generateTakes = onRequest(
         }
 
         for (const candidate of candidates) {
-          if (addedCount >= GENERATED_TAKE_COUNT) {
+          if (addedCount >= GENERATED_TAKE_WRITE_CAP) {
             break;
           }
 
@@ -2160,7 +2355,8 @@ export const generateTakes = onRequest(
             userId: AI_SYSTEM_USER_ID,
             status: 'approved',
             isAIGenerated: true,
-            contentSource: 'ai_blank',
+            contentSource: generationMode === 'seeded' ? 'ai_seeded_user' : 'ai_blank',
+            sourceTakeIds: generationMode === 'seeded' ? sourceTakeIds : undefined,
           });
           takeIds.push(takeId);
           comparisonTexts.push(text);
@@ -2178,7 +2374,10 @@ export const generateTakes = onRequest(
         skipped.duplicate +
         skipped.localPolicy +
         skipped.moderation;
-      const shouldRegenerate = firstAttemptSkipped > 0 && addedCount < GENERATED_TAKE_COUNT;
+      const shouldRegenerate =
+        generationMode === 'blank' &&
+        firstAttemptSkipped > 0 &&
+        addedCount < GENERATED_TAKE_WRITE_CAP;
 
       if (shouldRegenerate) {
         const skippedBeforeRetry = { ...skipped };
@@ -2203,10 +2402,41 @@ export const generateTakes = onRequest(
         }
       }
 
+      const rejectedCount =
+        skipped.generation +
+        skipped.categoryMismatch +
+        skipped.lowQuality +
+        skipped.punctuation +
+        skipped.duplicate +
+        skipped.localPolicy +
+        skipped.moderation;
+
+      logger.info(
+        `[generateTakes] category=${category} mode=${generationMode} seedsFetched=${seedSelection.seedsFetched} seedsQualified=${seedSelection.seedsQualified} seedsUsed=${seedSelection.seedsUsed.length} approved=${addedCount} rejected=${rejectedCount}`,
+        {
+          phase: 'complete',
+          requestedBy: userId,
+          requestedCategory,
+          category,
+          mode: generationMode,
+          seedVoteThreshold: seedSelection.seedVoteThreshold,
+          sourceTakeIds,
+          addedCount,
+          rejectedCount,
+          skipped,
+          takeIds,
+        }
+      );
+
       logger.info('Generated takes request completed.', {
         requestedBy: userId,
         requestedCategory,
         category,
+        mode: generationMode,
+        seedsFetched: seedSelection.seedsFetched,
+        seedsQualified: seedSelection.seedsQualified,
+        seedsUsed: seedSelection.seedsUsed.length,
+        sourceTakeIds,
         generatedCount: generatedCandidateCount,
         addedCount,
         takeIds,

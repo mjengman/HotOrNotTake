@@ -31,7 +31,7 @@ export interface Take {
   deprioritizedUntil?: Date;
   deprioritizedAuditId?: string;
   contentSource?: ContentSource;
-  sourceTakeId?: string;
+  sourceTakeIds?: string[];
   featured?: boolean;
   starterDeckRank?: number;
   editorialTier?: EditorialTier;
@@ -72,7 +72,7 @@ export interface TakeFirestore {
   deprioritizedUntil?: Date;
   deprioritizedAuditId?: string;
   contentSource?: ContentSource;
-  sourceTakeId?: string;
+  sourceTakeIds?: string[];
   featured?: boolean;
   starterDeckRank?: number;
   editorialTier?: EditorialTier;
