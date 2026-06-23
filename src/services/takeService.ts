@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Take, TakeSubmission, TakeStatus, DeprioritizedReason } from '../types/Take';
+import { orderTakesByCommunityWeight } from '../utils/feedOrdering';
 
 // Collection references
 const TAKES_COLLECTION = 'takes';
@@ -947,12 +948,12 @@ export const fetchMoreTakesFilled = async ({
     }
 
     
-    // Shuffle the results to randomize order for each user
-    const shuffledResults = [...results].sort(() => Math.random() - 0.5);
+    // Weighted shuffle: established takes surface more often, but fresh takes still appear.
+    const weightedResults = orderTakesByCommunityWeight(results);
     
-    return { 
-      items: shuffledResults.slice(0, targetCount), 
-      gotAny: shuffledResults.length > 0 
+    return {
+      items: weightedResults.slice(0, targetCount),
+      gotAny: weightedResults.length > 0,
     };
   } catch (error) {
     console.error('Error in fetchMoreTakesFilled:', error);

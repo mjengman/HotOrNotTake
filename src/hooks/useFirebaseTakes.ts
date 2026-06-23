@@ -21,6 +21,7 @@ import { enqueueVoteWrite, getQueuedVoteTakeIds } from '../services/voteOutboxSe
 import { useAuth } from './useAuth';
 import { StreakUpdateResult } from '../types/User';
 import { MY_SKIPS_CATEGORY, isMySkipsCategory } from '../constants';
+import { orderTakesByCommunityWeight } from '../utils/feedOrdering';
 
 interface UseFirebaseTakesResult {
   takes: Take[];
@@ -445,8 +446,9 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     if (tail.length <= 1) return takesArray;
 
     const now = Date.now();
-    const normalTail = tail.filter(take => !isActiveDeprioritizedTake(take, now));
-    const lastResortTail = tail.filter(take => isActiveDeprioritizedTake(take, now));
+    const weightedTail = orderTakesByCommunityWeight(tail, 'soft');
+    const normalTail = weightedTail.filter(take => !isActiveDeprioritizedTake(take, now));
+    const lastResortTail = weightedTail.filter(take => isActiveDeprioritizedTake(take, now));
     const result: Take[] = [...prefix];
     let recentTexts = sessionRecentTextFingerprintsRef.current.slice(-RECENT_TEXT_GUARD_SIZE);
     let lastCategory: string | null = prefix.length ? prefix[prefix.length - 1]?.category ?? null : null;
