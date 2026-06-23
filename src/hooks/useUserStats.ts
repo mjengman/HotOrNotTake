@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StreakUpdateResult, UserStats } from '../types/User';
-import { getFreshDailyChallenge, getUserStats } from '../services/userService';
+import { getFreshDailyChallenge, getUserStats, updateUserDisplayName } from '../services/userService';
 import { useAuth } from './useAuth';
 
 interface UseUserStatsResult {
@@ -11,6 +11,7 @@ interface UseUserStatsResult {
   error: string | null;
   refreshStats: () => Promise<void>;
   applyEngagementUpdate: (update: StreakUpdateResult) => void;
+  updateDisplayName: (displayName: string) => Promise<void>;
 }
 
 const getTodayKey = () => {
@@ -30,6 +31,7 @@ const USER_STATS_CACHE_PREFIX = `user-stats-cache:${USER_STATS_CACHE_VERSION}`;
 const getUserStatsCacheKey = (userId: string) => `${USER_STATS_CACHE_PREFIX}:${userId}`;
 
 const getDefaultStats = (userId?: string): UserStats => ({
+  displayName: undefined,
   totalVotes: 0,
   hotVotesGiven: 0,
   notVotesGiven: 0,
@@ -170,6 +172,18 @@ export const useUserStats = (): UseUserStatsResult => {
         statsRef.current = userStats;
         setStats(userStats);
         writeCachedStats(user.uid, userStats);
+      } else if (
+        userStats.displayName &&
+        statsRef.current.displayName !== userStats.displayName
+      ) {
+        const mergedStats: UserStats = {
+          ...statsRef.current,
+          displayName: userStats.displayName,
+        };
+
+        statsRef.current = mergedStats;
+        setStats(mergedStats);
+        writeCachedStats(user.uid, mergedStats);
       }
       setHydrated(true);
     } catch (err) {
@@ -204,6 +218,26 @@ export const useUserStats = (): UseUserStatsResult => {
     });
   }, [user]);
 
+  const updateDisplayName = useCallback(async (displayName: string) => {
+    if (!user) {
+      throw new Error('No signed-in user');
+    }
+
+    await updateUserDisplayName(user.uid, displayName);
+
+    setStats(prevStats => {
+      const nextStats: UserStats = {
+        ...prevStats,
+        displayName,
+      };
+
+      statsRef.current = nextStats;
+      writeCachedStats(user.uid, nextStats);
+
+      return nextStats;
+    });
+  }, [user]);
+
   // Load stats when user changes
   useEffect(() => {
     loadStats();
@@ -216,5 +250,6 @@ export const useUserStats = (): UseUserStatsResult => {
     error,
     refreshStats: loadStats,
     applyEngagementUpdate,
+    updateDisplayName,
   };
 };

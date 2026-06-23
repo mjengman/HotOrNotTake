@@ -28,6 +28,7 @@ export interface AchievementToast {
 // Firestore user document interface
 export interface User {
   id: string;
+  displayName?: string;
   isAnonymous: boolean;
   totalVotes: number;
   totalSubmissions: number;
@@ -44,6 +45,7 @@ export interface User {
 }
 
 export interface UserStats {
+  displayName?: string;
   totalVotes: number;
   hotVotesGiven: number;
   notVotesGiven: number;
@@ -82,6 +84,7 @@ export interface VoteEngagementContext {
 
 // Firestore data transfer object for user
 export interface UserFirestore {
+  displayName?: string;
   isAnonymous: boolean;
   totalVotes: number;
   totalSubmissions: number;

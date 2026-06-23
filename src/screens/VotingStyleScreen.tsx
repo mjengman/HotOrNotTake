@@ -9,10 +9,11 @@ import {
   Text,
   View,
 } from 'react-native';
-import { ScrollView } from 'react-native-gesture-handler';
+import { ScrollView, TouchableOpacity } from 'react-native-gesture-handler';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { colors, dimensions, motion, type Colors } from '../constants';
 import { CategoryVotingProfile, VotingProfile, VotingProfileTone } from '../hooks/useVotingProfile';
+import { generateDisplayName } from '../utils/nameGenerator';
 
 const VOTING_STYLE_COUNT_UP_DURATION = 650;
 
@@ -23,6 +24,8 @@ interface VotingStyleScreenProps {
   loading: boolean;
   error: string | null;
   onRefresh: () => Promise<void>;
+  displayName?: string;
+  onDisplayNameChange: (displayName: string) => Promise<void>;
 }
 
 const getToneColor = (tone: VotingProfileTone, theme: Colors) => {
@@ -198,11 +201,44 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
   loading,
   error,
   onRefresh,
+  displayName,
+  onDisplayNameChange,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
   const toneColor = getToneColor(profile.tone, theme);
   const unlockCopy = getUnlockCopy(profile.totalVotes);
   const progressToFirstUnlock = Math.min(1, profile.totalVotes / 10);
+  const [visibleDisplayName, setVisibleDisplayName] = React.useState(displayName);
+  const [isRenaming, setIsRenaming] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isRenaming) {
+      setVisibleDisplayName(displayName);
+    }
+  }, [displayName, isRenaming]);
+
+  const handleTryAnotherName = React.useCallback(async () => {
+    if (isRenaming) {
+      return;
+    }
+
+    const previousName = visibleDisplayName || displayName;
+    const nextName = generateDisplayName();
+
+    setVisibleDisplayName(nextName);
+    setIsRenaming(true);
+
+    try {
+      await onDisplayNameChange(nextName);
+    } catch (error) {
+      console.warn('Unable to save generated display name:', error);
+      setVisibleDisplayName(previousName);
+    } finally {
+      setIsRenaming(false);
+    }
+  }, [displayName, isRenaming, onDisplayNameChange, visibleDisplayName]);
+
+  const identityName = visibleDisplayName || displayName || 'AnonymousVoter';
 
   const renderBody = () => {
     if (loading && profile.sampledVotes === 0) {
@@ -413,6 +449,35 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
           />
         }
       >
+        <View style={styles.identityHeader}>
+          <Text style={[styles.identityName, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+            {identityName}
+          </Text>
+          <Text style={[styles.identitySubtitle, { color: theme.textSecondary }]}>
+            Your anonymous identity
+          </Text>
+          <TouchableOpacity
+            style={styles.renameButton}
+            onPress={handleTryAnotherName}
+            disabled={isRenaming}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Try another anonymous name"
+          >
+            <Text
+              style={[
+                styles.renameButtonText,
+                {
+                  color: theme.primary,
+                  opacity: isRenaming ? 0.48 : 1,
+                },
+              ]}
+            >
+              {isRenaming ? 'Saving...' : 'Try another name'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {renderBody()}
 
         <Text style={[styles.privacyFooter, { color: theme.textSecondary }]}>
@@ -461,6 +526,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: dimensions.spacing.lg,
     paddingBottom: dimensions.spacing.xxl,
     gap: dimensions.spacing.md,
+  },
+  identityHeader: {
+    alignItems: 'center',
+    gap: 4,
+    paddingTop: dimensions.spacing.xs,
+    paddingBottom: dimensions.spacing.sm,
+  },
+  identityName: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  identitySubtitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  renameButton: {
+    minHeight: motion.touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: 2,
+  },
+  renameButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
   },
   centerState: {
     minHeight: 260,

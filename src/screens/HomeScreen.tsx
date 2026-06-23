@@ -465,7 +465,14 @@ export const HomeScreen: React.FC = () => {
   const { takes, loading: takesLoading, error: takesError, submitVote, skipTake, refreshTakes, loadMore, hasMore, prependTake, removeTakeLocally } = useFirebaseTakes({
     category: selectedCategory
   });
-  const { stats, loading: statsLoading, hydrated: statsHydrated, refreshStats, applyEngagementUpdate } = useUserStats();
+  const {
+    stats,
+    loading: statsLoading,
+    hydrated: statsHydrated,
+    refreshStats,
+    applyEngagementUpdate,
+    updateDisplayName,
+  } = useUserStats();
   const votingProfileState = useVotingProfile(user?.uid, stats.totalVotes, showVotingStyleModal);
   const statsRef = useRef(stats);
 
@@ -2378,6 +2385,8 @@ export const HomeScreen: React.FC = () => {
             loading={votingProfileState.loading}
             error={votingProfileState.error}
             onRefresh={votingProfileState.refreshProfile}
+            displayName={stats.displayName}
+            onDisplayNameChange={updateDisplayName}
           />
         </FullScreenOverlay>
       )}

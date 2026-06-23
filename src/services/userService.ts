@@ -24,6 +24,7 @@ import {
   UserStats,
   VoteEngagementContext,
 } from '../types/User';
+import { generateDisplayName } from '../utils/nameGenerator';
 
 // Collection references
 const USERS_COLLECTION = 'users';
@@ -391,6 +392,7 @@ const getBackfilledAchievements = ({
 // Convert Firestore user to app format
 const convertFirestoreUser = (id: string, data: any): User => ({
   id,
+  displayName: typeof data.displayName === 'string' ? data.displayName : undefined,
   isAnonymous: data.isAnonymous || true,
   totalVotes: data.totalVotes || 0,
   totalSubmissions: data.totalSubmissions || 0,
@@ -405,6 +407,51 @@ const convertFirestoreUser = (id: string, data: any): User => ({
   achievements: Array.isArray(data.achievements) ? data.achievements : undefined,
   categoriesVoted: Array.isArray(data.categoriesVoted) ? data.categoriesVoted : [],
 });
+
+export const ensureUserDisplayName = async (userId: string): Promise<string | undefined> => {
+  const userRef = doc(db, USERS_COLLECTION, userId);
+  const generatedName = generateDisplayName();
+
+  try {
+    return await runTransaction(db, async (transaction) => {
+      const userSnap = await transaction.get(userRef);
+      const existingDisplayName = userSnap.exists() ? userSnap.data().displayName : undefined;
+
+      if (typeof existingDisplayName === 'string' && existingDisplayName.trim().length > 0) {
+        return existingDisplayName;
+      }
+
+      transaction.set(
+        userRef,
+        {
+          displayName: generatedName,
+          lastActiveAt: Timestamp.fromDate(new Date()),
+        },
+        { merge: true }
+      );
+
+      return generatedName;
+    });
+  } catch (error) {
+    console.warn('Unable to persist generated display name:', error);
+    return generatedName;
+  }
+};
+
+export const updateUserDisplayName = async (
+  userId: string,
+  displayName: string
+): Promise<void> => {
+  try {
+    const userRef = doc(db, USERS_COLLECTION, userId);
+    await updateDoc(userRef, {
+      displayName,
+    });
+  } catch (error) {
+    console.warn('Unable to update display name:', error);
+    throw error;
+  }
+};
 
 // Sign in anonymously
 export const signInAnonymous = async (): Promise<FirebaseUser> => {
@@ -854,6 +901,7 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
     if (!user) {
       return {
         totalVotes: 0,
+        displayName: undefined,
         hotVotesGiven: 0,
         notVotesGiven: 0,
         takesSubmitted: 0,
@@ -868,6 +916,7 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
       };
     }
 
+    const displayName = user.displayName || await ensureUserDisplayName(userId);
     const lastStreakDate = user.lastStreakDate;
     const todayKey = getLocalDateKey();
     const storedStreakDistance =
@@ -901,6 +950,7 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
 
     return {
       totalVotes: user.totalVotes,
+      displayName,
       hotVotesGiven: 0,
       notVotesGiven: 0,
       takesSubmitted: user.totalSubmissions,
@@ -918,6 +968,7 @@ export const getUserStats = async (userId: string): Promise<UserStats> => {
     console.error('Error getting user stats:', error);
     return {
       totalVotes: 0,
+      displayName: undefined,
       hotVotesGiven: 0,
       notVotesGiven: 0,
       takesSubmitted: 0,
