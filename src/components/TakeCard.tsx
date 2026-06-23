@@ -189,9 +189,13 @@ export const TakeCard: React.FC<TakeCardProps> = ({
     flex: isCompactResultCard ? 0.55 : 1,
     minHeight: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.sm,
   };
+  const resultActionBottomInset = isCompactResultCard ? responsive.spacing.xs : responsive.spacing.sm;
+  const resultActionHorizontalInset = isCompactResultCard ? responsive.spacing.xs : responsive.spacing.md;
+  const resultActionReserveHeight =
+    motion.touchTarget.minimum + resultActionBottomInset + responsive.spacing.sm;
   const resultActionSpacerStyle = {
-    flex: isCompactResultCard ? 0.35 : 1.25,
-    minHeight: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.md,
+    height: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.sm,
+    minHeight: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.sm,
   };
 
   useEffect(() => {
@@ -572,7 +576,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
             {
               backgroundColor: cardSurface,
               paddingTop: responsive.spacing.sm,
-              paddingBottom: isCompactResultCard ? 0 : responsive.spacing.xs,
+              paddingBottom: resultActionReserveHeight,
             }
           ]}>
             <View style={[
@@ -826,10 +830,18 @@ export const TakeCard: React.FC<TakeCardProps> = ({
             <View style={[styles.resultActionSpacer, resultActionSpacerStyle]} />
 
             {/* Action Buttons */}
-            <View style={styles.resultActionsGroup}>
+            <View
+              style={[
+                styles.resultActionsGroup,
+                {
+                  bottom: resultActionBottomInset,
+                  paddingHorizontal: resultActionHorizontalInset,
+                },
+              ]}
+            >
               <View style={styles.actionButtonsRow}>
                 <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: theme.accent + '20' }]}
+                  style={[styles.actionButton, styles.saveActionButton, { backgroundColor: theme.accent + '20' }]}
                   onPress={handleFavoriteToggle}
                   activeOpacity={0.7}
                   disabled={favoriteLoading}
@@ -1112,24 +1124,34 @@ const styles = StyleSheet.create({
   },
   actionButtonsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
     gap: 12,
   },
   resultActionsGroup: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     width: '100%',
-    alignItems: 'center',
+    alignItems: 'stretch',
     paddingBottom: 0,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
     paddingHorizontal: 12,
     paddingVertical: 6,
     minHeight: motion.touchTarget.minimum,
     borderRadius: 20,
     gap: 4,
   },
+  saveActionButton: {
+    maxWidth: '42%',
+  },
   shareActionButton: {
+    maxWidth: '58%',
     paddingHorizontal: 16,
   },
   contrarianShareActionButton: {
