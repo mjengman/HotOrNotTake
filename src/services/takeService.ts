@@ -17,7 +17,14 @@ import {
   startAfter,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { Take, TakeSubmission, TakeStatus, DeprioritizedReason } from '../types/Take';
+import {
+  ContentSource,
+  DeprioritizedReason,
+  EditorialTier,
+  Take,
+  TakeSubmission,
+  TakeStatus,
+} from '../types/Take';
 import { orderTakesByCommunityWeight } from '../utils/feedOrdering';
 
 // Collection references
@@ -158,10 +165,25 @@ const deprioritizedReasons = new Set<DeprioritizedReason>([
   'stale_lane',
   'manual',
 ]);
+const contentSources = new Set<ContentSource>([
+  'user',
+  'ai_blank',
+  'ai_seeded_user',
+  'manual_seed',
+]);
+const editorialTiers = new Set<EditorialTier>(['starter', 'normal']);
 
 const getDeprioritizedReason = (value: unknown): DeprioritizedReason | undefined =>
   typeof value === 'string' && deprioritizedReasons.has(value as DeprioritizedReason)
     ? (value as DeprioritizedReason)
+    : undefined;
+const getContentSource = (value: unknown): ContentSource | undefined =>
+  typeof value === 'string' && contentSources.has(value as ContentSource)
+    ? (value as ContentSource)
+    : undefined;
+const getEditorialTier = (value: unknown): EditorialTier | undefined =>
+  typeof value === 'string' && editorialTiers.has(value as EditorialTier)
+    ? (value as EditorialTier)
     : undefined;
 
 // Convert Take from Firestore format to app format
@@ -190,6 +212,12 @@ const convertFirestoreTake = (id: string, data: any): Take => ({
   deprioritizedUntil: data.deprioritizedUntil ? convertTimestampToDate(data.deprioritizedUntil) : undefined,
   deprioritizedAuditId:
     typeof data.deprioritizedAuditId === 'string' ? data.deprioritizedAuditId : undefined,
+  contentSource: getContentSource(data.contentSource),
+  sourceTakeId: typeof data.sourceTakeId === 'string' ? data.sourceTakeId : undefined,
+  featured: data.featured === true ? true : undefined,
+  starterDeckRank: typeof data.starterDeckRank === 'number' ? data.starterDeckRank : undefined,
+  editorialTier: getEditorialTier(data.editorialTier),
+  curatedAt: data.curatedAt ? convertTimestampToDate(data.curatedAt) : undefined,
 });
 
 const isPermissionDeniedError = (error: unknown) =>
@@ -674,6 +702,55 @@ export const getUserSkippedTakes = async (
     return skippedTakes.filter((take): take is Take => take !== null);
   } catch (error) {
     console.error('Error fetching skipped takes:', error);
+    return [];
+  }
+};
+
+export const getStarterDeckTakes = async ({
+  category,
+  interactedIds,
+  maxCount = 150,
+}: {
+  category?: string;
+  interactedIds: Set<string>;
+  maxCount?: number;
+}): Promise<Take[]> => {
+  try {
+    const starterQuery = query(
+      collection(db, TAKES_COLLECTION),
+      where('isApproved', '==', true),
+      where('editorialTier', '==', 'starter'),
+      limit(maxCount)
+    );
+
+    const snapshot = await getDocs(starterQuery);
+    const normalizedCategory = category?.toLowerCase();
+
+    return snapshot.docs
+      .map(doc => convertFirestoreTake(doc.id, doc.data()))
+      .filter(take => {
+        if (interactedIds.has(take.id)) {
+          return false;
+        }
+
+        if (normalizedCategory && normalizedCategory !== 'all') {
+          return take.category === normalizedCategory;
+        }
+
+        return true;
+      })
+      .sort((first, second) => {
+        const firstRank = typeof first.starterDeckRank === 'number'
+          ? first.starterDeckRank
+          : Number.POSITIVE_INFINITY;
+        const secondRank = typeof second.starterDeckRank === 'number'
+          ? second.starterDeckRank
+          : Number.POSITIVE_INFINITY;
+
+        return firstRank - secondRank || first.id.localeCompare(second.id);
+      });
+  } catch (error) {
+    console.warn('Starter deck unavailable:', error);
     return [];
   }
 };

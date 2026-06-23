@@ -79,6 +79,20 @@
       ]
     },
     {
+      "collectionGroup": "takes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isApproved",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "editorialTier",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "votes",
       "queryScope": "COLLECTION",
       "fields": [

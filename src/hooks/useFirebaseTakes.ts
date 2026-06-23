@@ -7,6 +7,7 @@ import {
   requestGeneratedTakes,
   getUserVotedAndSkippedTakeIds,
   getUserSkippedTakes,
+  getStarterDeckTakes,
   skipTake,
   fetchMoreTakesFilled,
   resetFeedCursor,
@@ -16,6 +17,7 @@ import {
 } from '../services/voteService';
 import { 
   incrementUserSubmissionCount,
+  getUserStats,
 } from '../services/userService';
 import { enqueueVoteWrite, getQueuedVoteTakeIds } from '../services/voteOutboxService';
 import { useAuth } from './useAuth';
@@ -59,13 +61,20 @@ const LOCAL_ID_HYDRATION_SKELETON_MS = 150;
 const RECENT_TEXT_GUARD_SIZE = 10;
 const RECENT_TEXT_SIMILARITY_THRESHOLD = 0.7;
 const VISIBLE_DECK_STABILITY_COUNT = 2;
+const STARTER_DECK_PRIORITY_TOTAL_VOTE_LIMIT = 50;
 const FEED_CACHE_PREFIX = `feed-cache:${FEED_CACHE_VERSION}`;
 const LOCAL_VOTED_PREFIX = `local-voted:${FEED_CACHE_VERSION}`;
 const LOCAL_SKIPPED_PREFIX = `local-skipped:${FEED_CACHE_VERSION}`;
 
 type CachedTake = Omit<
   Take,
-  'createdAt' | 'submittedAt' | 'approvedAt' | 'rejectedAt' | 'deprioritizedAt' | 'deprioritizedUntil'
+  | 'createdAt'
+  | 'submittedAt'
+  | 'approvedAt'
+  | 'rejectedAt'
+  | 'deprioritizedAt'
+  | 'deprioritizedUntil'
+  | 'curatedAt'
 > & {
   createdAt: string;
   submittedAt: string;
@@ -73,6 +82,7 @@ type CachedTake = Omit<
   rejectedAt?: string;
   deprioritizedAt?: string;
   deprioritizedUntil?: string;
+  curatedAt?: string;
 };
 
 interface FeedCacheRecord {
@@ -158,6 +168,22 @@ const isActiveDeprioritizedTake = (take: Take, now: number = Date.now()): boolea
   take.deprioritized === true &&
   (!take.deprioritizedUntil || take.deprioritizedUntil.getTime() >= now);
 
+const isStarterDeckTake = (take: Take): boolean => take.editorialTier === 'starter';
+
+const getStarterDeckRank = (take: Take): number =>
+  typeof take.starterDeckRank === 'number'
+    ? take.starterDeckRank
+    : Number.POSITIVE_INFINITY;
+
+const orderStarterDeckTakes = (takes: Take[]): Take[] =>
+  [...takes].sort((first, second) => {
+    const rankDelta = getStarterDeckRank(first) - getStarterDeckRank(second);
+    return rankDelta || first.id.localeCompare(second.id);
+  });
+
+const shouldPrioritizeStarterDeck = (totalVotes: number): boolean =>
+  totalVotes < STARTER_DECK_PRIORITY_TOTAL_VOTE_LIMIT;
+
 const filterUniqueTakes = (
   takes: Take[],
   options: {
@@ -196,6 +222,7 @@ const serializeTake = (take: Take): CachedTake => ({
   rejectedAt: take.rejectedAt?.toISOString(),
   deprioritizedAt: take.deprioritizedAt?.toISOString(),
   deprioritizedUntil: take.deprioritizedUntil?.toISOString(),
+  curatedAt: take.curatedAt?.toISOString(),
 });
 
 const parseDate = (value?: string): Date | undefined => {
@@ -212,6 +239,7 @@ const deserializeTake = (take: CachedTake): Take => ({
   rejectedAt: parseDate(take.rejectedAt),
   deprioritizedAt: parseDate(take.deprioritizedAt),
   deprioritizedUntil: parseDate(take.deprioritizedUntil),
+  curatedAt: parseDate(take.curatedAt),
 });
 
 const readLocalVotedIds = async (userId: string): Promise<string[]> => {
@@ -419,6 +447,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const sessionHiddenTakeIdsRef = useRef<Set<string>>(new Set());
   const sessionHiddenFromMySkipsRef = useRef<Set<string>>(new Set());
   const sessionRecentTextFingerprintsRef = useRef<string[]>([]);
+  const userTotalVotesRef = useRef(0);
+  const starterDeckPriorityEnabledRef = useRef(false);
 
   useEffect(() => {
     sessionHiddenTakeIdsRef.current.clear();
@@ -440,7 +470,11 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     }
   }, []);
 
-  const orderFeedForFreshness = useCallback((takesArray: Take[], freezePrefixCount: number = 0): Take[] => {
+  const orderFeedForFreshness = useCallback((
+    takesArray: Take[],
+    freezePrefixCount: number = 0,
+    options: { prioritizeStarterDeck?: boolean } = {}
+  ): Take[] => {
     const prefix = takesArray.slice(0, freezePrefixCount);
     const tail = takesArray.slice(freezePrefixCount);
     if (tail.length <= 1) return takesArray;
@@ -449,6 +483,12 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
     const weightedTail = orderTakesByCommunityWeight(tail, 'soft');
     const normalTail = weightedTail.filter(take => !isActiveDeprioritizedTake(take, now));
     const lastResortTail = weightedTail.filter(take => isActiveDeprioritizedTake(take, now));
+    const starterTail = options.prioritizeStarterDeck
+      ? orderStarterDeckTakes(normalTail.filter(isStarterDeckTake))
+      : [];
+    const standardTail = options.prioritizeStarterDeck
+      ? normalTail.filter(take => !isStarterDeckTake(take))
+      : normalTail;
     const result: Take[] = [...prefix];
     let recentTexts = sessionRecentTextFingerprintsRef.current.slice(-RECENT_TEXT_GUARD_SIZE);
     let lastCategory: string | null = prefix.length ? prefix[prefix.length - 1]?.category ?? null : null;
@@ -491,7 +531,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       }
     };
 
-    appendBucket(normalTail);
+    appendBucket(starterTail);
+    appendBucket(standardTail);
     appendBucket(lastResortTail);
 
     return result;
@@ -529,16 +570,21 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           }
         }, LOCAL_ID_HYDRATION_SKELETON_MS);
 
-        const [localVotedIds, localSkippedIds, queuedVoteIds] = await Promise.all([
+        const [localVotedIds, localSkippedIds, queuedVoteIds, userStats] = await Promise.all([
           readLocalVotedIds(userId),
           readLocalSkippedIds(userId),
           getQueuedVoteTakeIds(userId),
+          getUserStats(userId),
         ]);
         clearTimeout(hydrationTimer);
 
         if (!isCurrentRequest()) {
           return;
         }
+
+        userTotalVotesRef.current = userStats.totalVotes;
+        starterDeckPriorityEnabledRef.current = shouldPrioritizeStarterDeck(userStats.totalVotes);
+        const prioritizeStarterDeck = starterDeckPriorityEnabledRef.current;
 
         const localHiddenSet = new Set([
           ...localVotedIds,
@@ -558,7 +604,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         }
 
         if (cachedTakes.length > 0) {
-          const orderedCached = orderFeedForFreshness(cachedTakes, 0);
+          const orderedCached = orderFeedForFreshness(cachedTakes, 0, { prioritizeStarterDeck });
 
           setFeed(orderedCached);
           setInteractedTakeIds(Array.from(localHiddenSet));
@@ -618,12 +664,17 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         ]);
         setInteractedTakeIds(Array.from(freshInteractedIds));
 
-        const { items, gotAny } = await fetchMoreTakesFilled({
-          category,
-          targetCount: 30,
-          pageSize: 50,
-          interactedIds: freshInteractedIds,
-        });
+        const [{ items, gotAny }, starterTakes] = await Promise.all([
+          fetchMoreTakesFilled({
+            category,
+            targetCount: 30,
+            pageSize: 50,
+            interactedIds: freshInteractedIds,
+          }),
+          prioritizeStarterDeck
+            ? getStarterDeckTakes({ category, interactedIds: freshInteractedIds })
+            : Promise.resolve([]),
+        ]);
         if (!isCurrentRequest()) {
           return;
         }
@@ -638,10 +689,10 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         });
         
         // Apply variety once on initial load
-        const orderedItems = filterUniqueTakes(doubleFiltered, {
+        const orderedItems = filterUniqueTakes([...starterTakes, ...doubleFiltered], {
           excludedIds: freshInteractedIds,
         });
-        const ordered = orderFeedForFreshness(orderedItems, 0);
+        const ordered = orderFeedForFreshness(orderedItems, 0, { prioritizeStarterDeck });
         setFeed(prev => {
           const merged = renderedCache
             ? mergeLiveFeedWithVisibleDeck(prev, ordered, freshInteractedIds)
@@ -649,7 +700,11 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           const uniqueMerged = filterUniqueTakes(merged, {
             excludedIds: freshInteractedIds,
           });
-          const finalFeed = orderFeedForFreshness(uniqueMerged, renderedCache ? prev.length : 0);
+          const finalFeed = orderFeedForFreshness(
+            uniqueMerged,
+            renderedCache ? prev.length : 0,
+            { prioritizeStarterDeck }
+          );
           writeFeedCache(userId, category, finalFeed).catch(console.warn);
           return finalFeed;
         });
@@ -709,15 +764,21 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         }
       }
 
-      const { items, gotAny } = await fetchMoreTakesFilled({
-        category,
-        targetCount: count,
-        pageSize: 50,
-        interactedIds: interacted,
-      });
+      const prioritizeStarterDeck = starterDeckPriorityEnabledRef.current;
+      const [{ items, gotAny }, starterTakes] = await Promise.all([
+        fetchMoreTakesFilled({
+          category,
+          targetCount: count,
+          pageSize: 50,
+          interactedIds: interacted,
+        }),
+        prioritizeStarterDeck
+          ? getStarterDeckTakes({ category, interactedIds: interacted })
+          : Promise.resolve([]),
+      ]);
 
       // Double-check filtering: ensure no interacted takes made it through
-      const doubleFiltered = items.filter(take => {
+      const doubleFiltered = [...starterTakes, ...items].filter(take => {
         const isInteracted = interacted.has(take.id);
         if (isInteracted) {
           console.warn(`⚠️ LoadMore: Filtering out already-interacted take that slipped through: ${take.id}`);
@@ -738,12 +799,16 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
             ? prev.length
             : Math.min(prev.length, Math.max(0, freezePrefixCount));
         if (category !== 'all') {
-          const ordered = orderFeedForFreshness(combined, stablePrefixCount);
+          const ordered = orderFeedForFreshness(combined, stablePrefixCount, {
+            prioritizeStarterDeck,
+          });
           writeFeedCache(userId, category, ordered).catch(console.warn);
           return ordered;
         }
         // Keep visible cards stable; generation refreshes can reorder the tail behind them.
-        const ordered = orderFeedForFreshness(combined, stablePrefixCount);
+        const ordered = orderFeedForFreshness(combined, stablePrefixCount, {
+          prioritizeStarterDeck,
+        });
         writeFeedCache(userId, category, ordered).catch(console.warn);
         return ordered;
       });
@@ -870,6 +935,10 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       await addLocalVotedId(userId, takeId);
       await removeLocalSkippedId(userId, takeId);
       await removeTakeFromFeedCache(userId, MY_SKIPS_CATEGORY, takeId);
+      if (options.countDailyEngagement !== false) {
+        userTotalVotesRef.current += 1;
+        starterDeckPriorityEnabledRef.current = shouldPrioritizeStarterDeck(userTotalVotesRef.current);
+      }
       
       // Auto-load more if getting low
       if (!viewingMySkips && feed.length < 10 && hasMore) {
@@ -1034,12 +1103,16 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setHasMore(!viewingMySkips);
       resetFeedCursor(category);
 
-      const [{ voted, skipped }, queuedVoteIds] = await Promise.all([
+      const [{ voted, skipped }, queuedVoteIds, userStats] = await Promise.all([
         getUserVotedAndSkippedTakeIds(userId),
         getQueuedVoteTakeIds(userId),
+        getUserStats(userId),
       ]);
       writeLocalVotedIds(userId, voted).catch(console.warn);
       writeLocalSkippedIds(userId, skipped).catch(console.warn);
+      userTotalVotesRef.current = userStats.totalVotes;
+      starterDeckPriorityEnabledRef.current = shouldPrioritizeStarterDeck(userStats.totalVotes);
+      const prioritizeStarterDeck = starterDeckPriorityEnabledRef.current;
 
       if (viewingMySkips) {
         const skippedTakes = filterUniqueTakes(
@@ -1073,18 +1146,23 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
       setInteractedTakeIds(Array.from(freshInteractedIds));
       
       // Load fresh content
-      const { items, gotAny } = await fetchMoreTakesFilled({
-        category,
-        targetCount: 30,
-        pageSize: 50,
-        interactedIds: freshInteractedIds,
-      });
+      const [{ items, gotAny }, starterTakes] = await Promise.all([
+        fetchMoreTakesFilled({
+          category,
+          targetCount: 30,
+          pageSize: 50,
+          interactedIds: freshInteractedIds,
+        }),
+        prioritizeStarterDeck
+          ? getStarterDeckTakes({ category, interactedIds: freshInteractedIds })
+          : Promise.resolve([]),
+      ]);
       
       // Apply variety once to the fresh list
-      const uniqueItems = filterUniqueTakes(items, {
+      const uniqueItems = filterUniqueTakes([...starterTakes, ...items], {
         excludedIds: freshInteractedIds,
       });
-      const ordered = orderFeedForFreshness(uniqueItems, 0);
+      const ordered = orderFeedForFreshness(uniqueItems, 0, { prioritizeStarterDeck });
       setFeed(ordered);
       writeFeedCache(userId, category, ordered).catch(console.warn);
       setHasMore(gotAny && ordered.length > 0);

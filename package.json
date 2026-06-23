@@ -12,6 +12,7 @@
     "build:functions": "npm --prefix functions run build",
     "audit:corpus": "tsx src/scripts/auditCorpus.ts",
     "hygiene:corpus": "tsx src/scripts/applyCorpusHygiene.ts",
+    "mark:starter": "tsx src/scripts/markStarterDeck.ts",
     "cleanup:ai-duplicates": "tsx src/scripts/cleanupAIDuplicates.ts",
     "generate": "node scripts/generateTakes-simple.js",
     "generate:all": "node scripts/generateTakes-simple.js all 10"

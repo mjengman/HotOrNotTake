@@ -54,6 +54,7 @@ type Category = (typeof VALID_CATEGORY_LIST)[number];
 const VALID_CATEGORIES = new Set<string>(VALID_CATEGORY_LIST);
 
 type TakeStatus = 'pending' | 'approved';
+type ContentSource = 'user' | 'ai_blank' | 'ai_seeded_user' | 'manual_seed';
 
 interface SubmitTakeRequest {
   text?: unknown;
@@ -1693,12 +1694,14 @@ const createTake = async ({
   userId,
   status,
   isAIGenerated = false,
+  contentSource,
 }: {
   text: string;
   category: Category;
   userId: string;
   status: TakeStatus;
   isAIGenerated?: boolean;
+  contentSource: ContentSource;
 }): Promise<string> => {
   const isApproved = status === 'approved';
   const takeData: FirebaseFirestore.DocumentData = {
@@ -1715,6 +1718,7 @@ const createTake = async ({
     status,
     reportCount: 0,
     isAIGenerated,
+    contentSource,
   };
 
   if (isApproved) {
@@ -1957,7 +1961,13 @@ export const submitTake = onRequest(
           );
         }
 
-        const takeId = await createTake({ text, category, userId, status: 'approved' });
+        const takeId = await createTake({
+          text,
+          category,
+          userId,
+          status: 'approved',
+          contentSource: 'user',
+        });
         response.status(200).json({ result: { takeId, status: 'approved' } });
       } catch (error) {
         if (error instanceof HttpsError) {
@@ -1970,7 +1980,13 @@ export const submitTake = onRequest(
           error: error instanceof Error ? error.message : String(error),
         });
 
-        const takeId = await createTake({ text, category, userId, status: 'pending' });
+        const takeId = await createTake({
+          text,
+          category,
+          userId,
+          status: 'pending',
+          contentSource: 'user',
+        });
         response.status(200).json({
           result: {
             takeId,
@@ -2144,6 +2160,7 @@ export const generateTakes = onRequest(
             userId: AI_SYSTEM_USER_ID,
             status: 'approved',
             isAIGenerated: true,
+            contentSource: 'ai_blank',
           });
           takeIds.push(takeId);
           comparisonTexts.push(text);
