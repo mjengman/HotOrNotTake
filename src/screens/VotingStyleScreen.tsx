@@ -9,13 +9,27 @@ import {
   Text,
   View,
 } from 'react-native';
-import { ScrollView, TouchableOpacity } from 'react-native-gesture-handler';
+import { ScrollView } from 'react-native-gesture-handler';
 import { AnimatedPressable } from '../components/transitions/AnimatedPressable';
 import { colors, dimensions, motion, type Colors } from '../constants';
 import { CategoryVotingProfile, VotingProfile, VotingProfileTone } from '../hooks/useVotingProfile';
 import { generateDisplayName } from '../utils/nameGenerator';
 
 const VOTING_STYLE_COUNT_UP_DURATION = 650;
+const MONTH_LABELS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 interface VotingStyleScreenProps {
   onClose: () => void;
@@ -25,6 +39,8 @@ interface VotingStyleScreenProps {
   error: string | null;
   onRefresh: () => Promise<void>;
   displayName?: string;
+  joinedAt?: Date;
+  longestVotingStreak?: number;
   onDisplayNameChange: (displayName: string) => Promise<void>;
 }
 
@@ -71,6 +87,14 @@ const getUnlockCopy = (totalVotes: number) => {
   }
 
   return null;
+};
+
+const formatMemberSince = (joinedAt?: Date) => {
+  if (!joinedAt || Number.isNaN(joinedAt.getTime())) {
+    return 'Today';
+  }
+
+  return `${MONTH_LABELS[joinedAt.getMonth()]} ${joinedAt.getFullYear()}`;
 };
 
 const CountUpText = ({
@@ -202,6 +226,8 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
   error,
   onRefresh,
   displayName,
+  joinedAt,
+  longestVotingStreak = 0,
   onDisplayNameChange,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
@@ -239,6 +265,9 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
   }, [displayName, isRenaming, onDisplayNameChange, visibleDisplayName]);
 
   const identityName = visibleDisplayName || displayName || 'AnonymousVoter';
+  const memberSince = formatMemberSince(joinedAt);
+  const longestStreakLabel = `${Math.max(longestVotingStreak || 0, 0)}d`;
+  const renameRingColor = isDarkMode ? '#A78BFA' : '#8B5CF6';
 
   const renderBody = () => {
     if (loading && profile.sampledVotes === 0) {
@@ -285,11 +314,6 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
           <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
             Every HOT or NOT vote helps the app learn what kind of chaos you enjoy.
           </Text>
-          <View style={[styles.voteCounterPill, { backgroundColor: theme.background, borderColor: theme.border }]}>
-            <Text style={[styles.voteCounterText, { color: theme.textSecondary }]}>
-              🗳️ Your votes: {profile.totalVotes.toLocaleString()}
-            </Text>
-          </View>
           <View style={[styles.progressTrack, { backgroundColor: theme.border }]}>
             <View
               style={[
@@ -333,12 +357,6 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
               </Text>
             </>
           )}
-
-          <View style={[styles.voteCounterPill, { backgroundColor: theme.background, borderColor: theme.border }]}>
-            <Text style={[styles.voteCounterText, { color: theme.textSecondary }]}>
-              🗳️ Your votes: {profile.totalVotes.toLocaleString()}
-            </Text>
-          </View>
 
           <View style={styles.statGrid}>
             <View style={[styles.statTile, { backgroundColor: theme.background }]}>
@@ -449,33 +467,71 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
           />
         }
       >
-        <View style={styles.identityHeader}>
-          <Text style={[styles.identityName, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
-            {identityName}
-          </Text>
-          <Text style={[styles.identitySubtitle, { color: theme.textSecondary }]}>
-            Your anonymous identity
-          </Text>
-          <TouchableOpacity
-            style={styles.renameButton}
-            onPress={handleTryAnotherName}
-            disabled={isRenaming}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Try another anonymous name"
-          >
-            <Text
-              style={[
-                styles.renameButtonText,
-                {
-                  color: theme.primary,
-                  opacity: isRenaming ? 0.48 : 1,
-                },
-              ]}
-            >
-              {isRenaming ? 'Saving...' : 'Try another name'}
-            </Text>
-          </TouchableOpacity>
+        <View style={[styles.profileCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={styles.profileNameBlock}>
+            <View style={styles.identityNameRow}>
+              <Text style={[styles.identityName, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                {identityName}
+              </Text>
+              <AnimatedPressable
+                style={[
+                  styles.renameIconButton,
+                  {
+                    backgroundColor: isDarkMode ? theme.surface : theme.background,
+                    borderColor: renameRingColor,
+                    shadowColor: renameRingColor,
+                  },
+                ]}
+                onPress={handleTryAnotherName}
+                disabled={isRenaming}
+                scaleValue={0.9}
+                hapticFeedback={false}
+                accessibilityRole="button"
+                accessibilityLabel="Try another anonymous name"
+                accessibilityState={{ disabled: isRenaming }}
+              >
+                <Text
+                  style={[
+                    styles.renameIcon,
+                    {
+                      opacity: isRenaming ? 0.42 : 0.86,
+                    },
+                  ]}
+                >
+                  🎲
+                </Text>
+              </AnimatedPressable>
+            </View>
+          </View>
+
+          <View style={[styles.profileMetaRow, { borderColor: theme.border }]}>
+            <View style={styles.profileMetaItem}>
+              <Text style={[styles.profileMetaLabel, { color: theme.textSecondary }]}>
+                Member since
+              </Text>
+              <Text style={[styles.profileMetaValue, { color: theme.text }]}>
+                {memberSince}
+              </Text>
+            </View>
+            <View style={[styles.profileMetaDivider, { backgroundColor: theme.border }]} />
+            <View style={styles.profileMetaItem}>
+              <Text style={[styles.profileMetaLabel, { color: theme.textSecondary }]}>
+                Longest streak
+              </Text>
+              <Text style={[styles.profileMetaValue, { color: theme.text }]}>
+                {longestStreakLabel}
+              </Text>
+            </View>
+            <View style={[styles.profileMetaDivider, { backgroundColor: theme.border }]} />
+            <View style={styles.profileMetaItem}>
+              <Text style={[styles.profileMetaLabel, { color: theme.textSecondary }]}>
+                Your votes
+              </Text>
+              <Text style={[styles.profileMetaValue, { color: theme.text }]}>
+                {profile.totalVotes.toLocaleString()}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {renderBody()}
@@ -527,34 +583,80 @@ const styles = StyleSheet.create({
     paddingBottom: dimensions.spacing.xxl,
     gap: dimensions.spacing.md,
   },
-  identityHeader: {
+  profileCard: {
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: dimensions.spacing.lg,
+    gap: dimensions.spacing.md,
+  },
+  profileNameBlock: {
+    width: '100%',
     alignItems: 'center',
-    gap: 4,
-    paddingTop: dimensions.spacing.xs,
-    paddingBottom: dimensions.spacing.sm,
+  },
+  identityNameRow: {
+    width: '100%',
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 52,
+    position: 'relative',
   },
   identityName: {
-    fontSize: 28,
-    lineHeight: 34,
+    flexShrink: 1,
+    fontSize: 30,
+    lineHeight: 36,
     fontWeight: '900',
     textAlign: 'center',
   },
-  identitySubtitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  renameButton: {
-    minHeight: motion.touchTarget.minimum,
+  renameIconButton: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1.75,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: 2,
+    marginLeft: dimensions.spacing.sm,
+    elevation: 4,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.24,
+    shadowRadius: 5.5,
   },
-  renameButtonText: {
-    fontSize: 14,
+  renameIcon: {
+    fontSize: 21,
+  },
+  profileMetaRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: dimensions.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  profileMetaItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 4,
+  },
+  profileMetaDivider: {
+    width: StyleSheet.hairlineWidth,
+  },
+  profileMetaLabel: {
+    fontSize: 11,
     fontWeight: '800',
-    textDecorationLine: 'underline',
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  profileMetaValue: {
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   centerState: {
     minHeight: 260,
@@ -618,18 +720,6 @@ const styles = StyleSheet.create({
     lineHeight: 25,
     textAlign: 'center',
     fontWeight: '700',
-  },
-  voteCounterPill: {
-    alignSelf: 'center',
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.xs,
-  },
-  voteCounterText: {
-    fontSize: 13,
-    fontWeight: '800',
-    textAlign: 'center',
   },
   statGrid: {
     flexDirection: 'row',

@@ -189,13 +189,17 @@ export const TakeCard: React.FC<TakeCardProps> = ({
     flex: isCompactResultCard ? 0.55 : 1,
     minHeight: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.sm,
   };
-  const resultActionBottomInset = isCompactResultCard ? responsive.spacing.xs : responsive.spacing.sm;
+  const resultActionBottomInset = 0;
   const resultActionHorizontalInset = isCompactResultCard ? responsive.spacing.xs : responsive.spacing.md;
+  const resultActionGap = responsive.spacing.sm;
+  const resultActionContentWidth = responsive.card.width - resultActionHorizontalInset * 2;
+  const saveActionWidth = Math.round(Math.min(120, Math.max(106, resultActionContentWidth * 0.32)));
+  const shareActionWidth = Math.round(Math.min(94, Math.max(84, resultActionContentWidth * 0.22)));
   const resultActionReserveHeight =
-    motion.touchTarget.minimum + resultActionBottomInset + responsive.spacing.sm;
+    motion.touchTarget.minimum + responsive.fontSize.small + responsive.spacing.md;
   const resultActionSpacerStyle = {
-    height: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.sm,
-    minHeight: isCompactResultCard ? responsive.spacing.xs : responsive.spacing.sm,
+    height: resultActionReserveHeight,
+    minHeight: resultActionReserveHeight,
   };
 
   useEffect(() => {
@@ -576,7 +580,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
             {
               backgroundColor: cardSurface,
               paddingTop: responsive.spacing.sm,
-              paddingBottom: resultActionReserveHeight,
+              paddingBottom: 0,
             }
           ]}>
             <View style={[
@@ -813,18 +817,6 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 ) : null}
               </View>
 
-              <View style={styles.totalVotesRow}>
-                <Text style={[
-                  styles.totalVotes,
-                  {
-                    color: theme.textSecondary,
-                    fontSize: responsive.fontSize.small,
-                    textAlign: 'center'
-                  }
-                ]}>
-                  {totalVotes.toLocaleString()} total votes
-                </Text>
-              </View>
             </View>
 
             <View style={[styles.resultActionSpacer, resultActionSpacerStyle]} />
@@ -839,9 +831,28 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                 },
               ]}
             >
-              <View style={styles.actionButtonsRow}>
+              <View style={styles.totalVotesRow}>
+                <Text style={[
+                  styles.totalVotes,
+                  {
+                    color: theme.textSecondary,
+                    fontSize: responsive.fontSize.small,
+                    textAlign: 'center'
+                  }
+                ]}>
+                  {totalVotes.toLocaleString()} total votes
+                </Text>
+              </View>
+              <View style={[styles.actionButtonsRow, { gap: resultActionGap }]}>
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.saveActionButton, { backgroundColor: theme.accent + '20' }]}
+                  style={[
+                    styles.actionButton,
+                    styles.saveActionButton,
+                    {
+                      backgroundColor: theme.accent + '20',
+                      width: saveActionWidth,
+                    },
+                  ]}
                   onPress={handleFavoriteToggle}
                   activeOpacity={0.7}
                   disabled={favoriteLoading}
@@ -849,8 +860,13 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                   <Text style={[styles.actionIcon, { color: theme.accent }]}>
                     {isFavorited ? '⭐' : '☆'}
                   </Text>
-                  <Text style={[styles.actionText, { color: theme.accent, fontSize: responsive.fontSize.small }]}>
-                    {isFavorited ? 'Saved' : 'Save'}
+                  <Text
+                    style={[styles.actionText, { color: theme.accent, fontSize: responsive.fontSize.small }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.82}
+                  >
+                    {isFavorited ? 'Favorited' : 'Favorite'}
                   </Text>
                 </TouchableOpacity>
 
@@ -860,6 +876,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                     styles.shareActionButton,
                     isContrarianShareMoment && styles.contrarianShareActionButton,
                     {
+                      width: shareActionWidth,
                       backgroundColor: reactionColor + (isContrarianShareMoment ? '32' : '24'),
                       borderColor: isContrarianShareMoment ? reactionColor + '66' : 'transparent',
                     },
@@ -874,7 +891,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                     adjustsFontSizeToFit
                     minimumFontScale={0.82}
                   >
-                    {isContrarianShareMoment ? 'Share this result' : 'Share result'}
+                    Share
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1089,8 +1106,7 @@ const styles = StyleSheet.create({
     minHeight: dimensions.spacing.sm,
   },
   resultActionSpacer: {
-    flex: 1.25,
-    minHeight: dimensions.spacing.md,
+    flex: 0,
   },
   percentageItem: {
     alignItems: 'center',
@@ -1127,7 +1143,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
-    gap: 12,
   },
   resultActionsGroup: {
     position: 'absolute',
@@ -1136,27 +1151,30 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'stretch',
     paddingBottom: 0,
+    gap: dimensions.spacing.xs,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    justifyContent: 'center',
+    flexShrink: 0,
+    overflow: 'hidden',
+    paddingHorizontal: 4,
+    paddingVertical: 5,
     minHeight: motion.touchTarget.minimum,
     borderRadius: 20,
-    gap: 4,
+    gap: 2,
   },
   saveActionButton: {
-    maxWidth: '42%',
+    alignSelf: 'flex-start',
   },
   shareActionButton: {
-    maxWidth: '58%',
-    paddingHorizontal: 16,
+    alignSelf: 'flex-end',
+    paddingHorizontal: 4,
   },
   contrarianShareActionButton: {
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 18,
+    paddingHorizontal: 4,
   },
   changeVoteUtility: {
     minHeight: motion.touchTarget.minimum,

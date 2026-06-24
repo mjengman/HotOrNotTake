@@ -2386,6 +2386,8 @@ export const HomeScreen: React.FC = () => {
             error={votingProfileState.error}
             onRefresh={votingProfileState.refreshProfile}
             displayName={stats.displayName}
+            joinedAt={stats.joinedAt}
+            longestVotingStreak={stats.longestVotingStreak}
             onDisplayNameChange={updateDisplayName}
           />
         </FullScreenOverlay>
