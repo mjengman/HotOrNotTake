@@ -52,7 +52,7 @@ Main Firestore collections:
 - `users`: anonymous user profile/stats documents
 - `users/{userId}/favorites`: saved takes
 
-The feed filters out voted takes. Skipped takes can reappear by design.
+The feed filters out both voted and skipped takes. Skipping is user-specific: a skipped take should leave the main feed for that user and only reappear intentionally in the **My Skips** category. The `skips` collection still serves analytics and My Skips retrieval, but skipped takes are not shuffled back into normal gameplay.
 
 ## Corpus Management
 
