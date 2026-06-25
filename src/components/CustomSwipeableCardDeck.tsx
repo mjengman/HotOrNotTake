@@ -61,6 +61,7 @@ interface CustomSwipeableCardDeckProps {
 // Safe flip for Android - no 3D to avoid compositor crashes
 const ANDROID_SAFE_FLIP = Platform.OS === 'android';
 const VOTE_COMMIT_ARC_Y = 18;
+const TRANSITION_WATCHDOG_MS = 2400;
 
 // Stable style object to avoid reparenting during 3D flips
 const absoluteFill = StyleSheet.absoluteFillObject;
@@ -110,6 +111,26 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   // Track if we should end after dismissing stats (when there's no next card)
   const endAfterDismissRef = React.useRef(false);
   const landingResetTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transitionWatchdogRef = React.useRef<{
+    token: number;
+    reason: string;
+    timeout: ReturnType<typeof setTimeout>;
+  } | null>(null);
+  const transitionTokenRef = React.useRef(0);
+  const voteRevealRef = React.useRef<{
+    key: string;
+    takeId: string;
+    vote: 'hot' | 'not';
+    completed: boolean;
+  } | null>(null);
+  const skipCommitRef = React.useRef<{
+    takeId: string;
+    completed: boolean;
+  } | null>(null);
+  const resultDismissRef = React.useRef<{
+    token: number;
+    completed: boolean;
+  } | null>(null);
   
   // Debounce loadMore to prevent hammering
   const lastLoadTsRef = React.useRef(0);
@@ -159,6 +180,49 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   useEffect(() => { frozenSV.value = useFrozen ? 1 : 0; }, [useFrozen]);
   useEffect(() => { flippedSV.value = isCardFlipped ? 1 : 0; }, [isCardFlipped]);
 
+  const clearTransitionWatchdog = React.useCallback((token?: number) => {
+    const active = transitionWatchdogRef.current;
+    if (!active || (typeof token === 'number' && active.token !== token)) {
+      return;
+    }
+
+    clearTimeout(active.timeout);
+    transitionWatchdogRef.current = null;
+  }, []);
+
+  const resetTransitionVisuals = React.useCallback(() => {
+    translateX.value = 0;
+    translateY.value = 0;
+    scale.value = 1;
+    gestureVoteSV.value = 0;
+    animatingSV.value = 0;
+    isAnimating.value = false;
+  }, [animatingSV, gestureVoteSV, isAnimating, scale, translateX, translateY]);
+
+  const startTransitionWatchdog = React.useCallback((
+    reason: string,
+    recover: () => void,
+    timeoutMs = TRANSITION_WATCHDOG_MS
+  ) => {
+    const token = transitionTokenRef.current + 1;
+    transitionTokenRef.current = token;
+    clearTransitionWatchdog();
+
+    const timeout = setTimeout(() => {
+      const active = transitionWatchdogRef.current;
+      if (!active || active.token !== token) {
+        return;
+      }
+
+      transitionWatchdogRef.current = null;
+      console.warn(`[CardDeck watchdog] Self-healing stuck transition: ${reason}`);
+      recover();
+    }, timeoutMs);
+
+    transitionWatchdogRef.current = { token, reason, timeout };
+    return token;
+  }, [clearTransitionWatchdog]);
+
   // Cleanup auto-dismiss timeout on unmount
   useEffect(() => {
     return () => {
@@ -170,6 +234,12 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       }
     };
   }, [autoDismissTimeout]);
+
+  useEffect(() => {
+    return () => {
+      clearTransitionWatchdog();
+    };
+  }, [clearTransitionWatchdog]);
 
   useEffect(() => {
     if (autoAdvanceResults || !autoDismissTimeout) return;
@@ -338,11 +408,35 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }, 1200);
     setAutoDismissTimeout(timeout);
   };
+
+  const completeVoteReveal = React.useCallback((takeId: string, vote: 'hot' | 'not') => {
+    const key = `${takeId}:${vote}`;
+    const activeVote = voteRevealRef.current;
+    if (!activeVote || activeVote.key !== key || activeVote.completed) {
+      return;
+    }
+
+    activeVote.completed = true;
+    clearTransitionWatchdog();
+    setResultsRevealActive(true);
+    onVote(takeId, vote);
+    jsSetAutoDismiss();
+  }, [clearTransitionWatchdog, jsSetAutoDismiss, onVote]);
+
   const completeSkip = React.useCallback((takeId: string) => {
+    const activeSkip = skipCommitRef.current;
+    if (!activeSkip || activeSkip.takeId !== takeId || activeSkip.completed) {
+      return;
+    }
+
+    activeSkip.completed = true;
+    clearTransitionWatchdog();
     onSkip(takeId);
     jsSetVote(null);
     setUseFrozen(false);
-  }, [onSkip]);
+    resetTransitionVisuals();
+  }, [clearTransitionWatchdog, onSkip, resetTransitionVisuals]);
+
   const finishCardDismiss = React.useCallback(() => {
     const shouldEnd = endAfterDismissRef.current;
     endAfterDismissRef.current = false;
@@ -363,10 +457,27 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     finishFrozenReset();
     resultExitSV.value = 0;
   }, [finishFrozenReset, resultExitSV]);
+
+  const completeResultDismiss = React.useCallback((token: number) => {
+    const activeDismiss = resultDismissRef.current;
+    if (!activeDismiss || activeDismiss.token !== token || activeDismiss.completed) {
+      return;
+    }
+
+    activeDismiss.completed = true;
+    clearTransitionWatchdog();
+    finishCardDismiss();
+    resetTransitionVisuals();
+  }, [clearTransitionWatchdog, finishCardDismiss, resetTransitionVisuals]);
   
   // Flip the card to reveal stats
   const flipCard = (vote: 'hot' | 'not') => {
     if (!renderCurrent) return; // Safety check
+    const voteKey = `${renderCurrent.id}:${vote}`;
+    const activeVote = voteRevealRef.current;
+    if (activeVote?.key === voteKey) {
+      return;
+    }
 
     isAnimating.value = true;
     animatingSV.value = 1;
@@ -400,17 +511,29 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     
     // Store the vote details but DON'T submit yet
     const voteToSubmit = { id: renderCurrent.id, vote };
+    voteRevealRef.current = {
+      key: voteKey,
+      takeId: voteToSubmit.id,
+      vote: voteToSubmit.vote,
+      completed: false,
+    };
+    startTransitionWatchdog(`vote-reveal:${voteToSubmit.vote}:${voteToSubmit.id}`, () => {
+      resetTransitionVisuals();
+      flipSV.value = 1;
+      promoteSV.value = 1;
+      resultExitSV.value = 0;
+      resultBaseSV.value = frozenNext.current ? 1 : 0;
+      setLastVote(voteToSubmit.vote);
+      setIsCardFlipped(true);
+      completeVoteReveal(voteToSubmit.id, voteToSubmit.vote);
+    });
     
     // Set animating flag and bounce micro-scale then flip
     scale.value = withSpring(0.96, {}, () => {
       'worklet';
       flipSV.value = withTiming(1, { duration: motion.duration.cardFlip, easing: Easing.out(Easing.cubic) }, (finished) => {
         if (finished) {
-          runOnJS(setResultsRevealActive)(true);
-          // NOW submit the vote after the flip is complete and stats are showing
-          runOnJS(onVote)(voteToSubmit.id, voteToSubmit.vote);
-          // Auto-advance stats card only when Results Autoplay is enabled.
-          runOnJS(jsSetAutoDismiss)();
+          runOnJS(completeVoteReveal)(voteToSubmit.id, voteToSubmit.vote);
         }
         isAnimating.value = false;
         animatingSV.value = 0; // Clear animation flag
@@ -418,6 +541,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       scale.value = withSpring(1);
     });
   };
+
+  const startVoteNudgeWatchdog = React.useCallback((vote: 'hot' | 'not', takeId: string) => {
+    startTransitionWatchdog(`vote-nudge:${vote}:${takeId}`, () => {
+      resetTransitionVisuals();
+      flipCard(vote);
+    }, 1200);
+  }, [resetTransitionVisuals, startTransitionWatchdog]);
   
   // Handle change vote - dismiss stats card and trigger the change vote callback
   const handleChangeVote = (take: Take, currentVote?: 'hot' | 'not' | null) => {
@@ -457,6 +587,8 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       setResultsRevealActive(false);
       setLastVote(null);
       setCurrentVote(null);
+      voteRevealRef.current = null;
+      resultDismissRef.current = null;
       setLandingTake(null);
       frozenThird.current = null;
       
@@ -471,6 +603,16 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }
     
     isAnimating.value = true;
+    let dismissToken = 0;
+    dismissToken = startTransitionWatchdog('result-dismiss', () => {
+      resultExitSV.value = 0;
+      flipSV.value = 0;
+      completeResultDismiss(dismissToken);
+    });
+    resultDismissRef.current = {
+      token: dismissToken,
+      completed: false,
+    };
 
     const hasPromotedTake = Boolean(useFrozen && frozenNext.current && !endAfterDismissRef.current);
     
@@ -480,7 +622,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       translateY.value = 0;
       scale.value = 1;
       flipSV.value = 0;
-      runOnJS(finishCardDismiss)();
+      runOnJS(completeResultDismiss)(dismissToken);
       isAnimating.value = false;
     };
 
@@ -524,6 +666,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     const direction = vote === 'hot' ? 1 : -1;
     const swipeDistance = swipeThreshold * 0.8;
     const arcY = vote === 'hot' ? -VOTE_COMMIT_ARC_Y : VOTE_COMMIT_ARC_Y;
+    startVoteNudgeWatchdog(vote, currentTake.id);
     
     // Quick leap to edge with timing (no lingering)
     translateX.value = withTiming(swipeDistance * direction, { 
@@ -553,6 +696,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
     setCurrentVote('skip');
     const skippedTakeId = currentTake.id;
+    skipCommitRef.current = {
+      takeId: skippedTakeId,
+      completed: false,
+    };
     
     // 🧊 FREEZE: Capture current state immediately when skip is triggered
     if (renderCurrent) {
@@ -574,6 +721,10 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     isAnimating.value = true;
     animatingSV.value = 1;
     vibrate(motion.haptic.medium);
+    startTransitionWatchdog(`skip:${direction}:${skippedTakeId}`, () => {
+      promoteSV.value = 1;
+      completeSkip(skippedTakeId);
+    });
     
     // Animate up or down based on direction
     const targetY = direction === 'up' ? -screenHeight * 0.8 : screenHeight * 0.8;
@@ -720,6 +871,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         // Front side: Bounce back and flip to reveal
         isAnimating.value = true;
         animatingSV.value = 1;
+        runOnJS(startVoteNudgeWatchdog)('hot', id);
         runOnJS(vibrate)(motion.haptic.vote);
         translateX.value = withTiming(0, {
           duration: 80,
@@ -748,6 +900,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         // Front side: Bounce back and flip to reveal
         isAnimating.value = true;
         animatingSV.value = 1;
+        runOnJS(startVoteNudgeWatchdog)('not', id);
         runOnJS(vibrate)(motion.haptic.vote);
         translateX.value = withTiming(0, {
           duration: 80,
