@@ -235,6 +235,7 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
   const unlockCopy = getUnlockCopy(profile.totalVotes);
   const progressToFirstUnlock = Math.min(1, profile.totalVotes / 10);
   const [visibleDisplayName, setVisibleDisplayName] = React.useState(displayName);
+  const [pendingDisplayName, setPendingDisplayName] = React.useState<string | null>(null);
   const [isRenaming, setIsRenaming] = React.useState(false);
 
   React.useEffect(() => {
@@ -243,26 +244,51 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
     }
   }, [displayName, isRenaming]);
 
-  const handleTryAnotherName = React.useCallback(async () => {
+  const createDisplayNameCandidate = React.useCallback(() => {
+    const currentName = visibleDisplayName || displayName;
+    let nextName = generateDisplayName();
+
+    for (let attempt = 0; attempt < 5 && nextName === currentName; attempt += 1) {
+      nextName = generateDisplayName();
+    }
+
+    return nextName;
+  }, [displayName, visibleDisplayName]);
+
+  const handleTryAnotherName = React.useCallback(() => {
     if (isRenaming) {
       return;
     }
 
-    const previousName = visibleDisplayName || displayName;
-    const nextName = generateDisplayName();
+    setPendingDisplayName(createDisplayNameCandidate());
+  }, [createDisplayNameCandidate, isRenaming]);
 
+  const handleKeepCurrentName = React.useCallback(() => {
+    if (!isRenaming) {
+      setPendingDisplayName(null);
+    }
+  }, [isRenaming]);
+
+  const handleUsePendingName = React.useCallback(async () => {
+    if (isRenaming || !pendingDisplayName) {
+      return;
+    }
+
+    const previousName = visibleDisplayName || displayName;
+    const nextName = pendingDisplayName;
     setVisibleDisplayName(nextName);
     setIsRenaming(true);
 
     try {
       await onDisplayNameChange(nextName);
+      setPendingDisplayName(null);
     } catch (error) {
       console.warn('Unable to save generated display name:', error);
       setVisibleDisplayName(previousName);
     } finally {
       setIsRenaming(false);
     }
-  }, [displayName, isRenaming, onDisplayNameChange, visibleDisplayName]);
+  }, [displayName, isRenaming, onDisplayNameChange, pendingDisplayName, visibleDisplayName]);
 
   const identityName = visibleDisplayName || displayName || 'AnonymousVoter';
   const memberSince = formatMemberSince(joinedAt);
@@ -502,6 +528,63 @@ export const VotingStyleScreen: React.FC<VotingStyleScreenProps> = ({
                 </Text>
               </AnimatedPressable>
             </View>
+            {pendingDisplayName ? (
+              <View
+                style={[
+                  styles.nameConfirmPanel,
+                  {
+                    backgroundColor: isDarkMode ? 'rgba(167, 139, 250, 0.10)' : 'rgba(139, 92, 246, 0.08)',
+                    borderColor: isDarkMode ? 'rgba(167, 139, 250, 0.38)' : 'rgba(139, 92, 246, 0.26)',
+                  },
+                ]}
+              >
+                <Text style={[styles.nameConfirmTitle, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                  Try {pendingDisplayName}?
+                </Text>
+                <View style={styles.nameConfirmActions}>
+                  <AnimatedPressable
+                    style={[
+                      styles.nameConfirmButton,
+                      styles.nameConfirmSecondary,
+                      { borderColor: theme.border },
+                    ]}
+                    onPress={handleKeepCurrentName}
+                    disabled={isRenaming}
+                    scaleValue={0.96}
+                    hapticFeedback={false}
+                    accessibilityRole="button"
+                    accessibilityLabel="Keep current anonymous name"
+                    accessibilityState={{ disabled: isRenaming }}
+                  >
+                    <Text style={[styles.nameConfirmSecondaryText, { color: theme.textSecondary }]}>
+                      Keep current
+                    </Text>
+                  </AnimatedPressable>
+                  <AnimatedPressable
+                    style={[
+                      styles.nameConfirmButton,
+                      styles.nameConfirmPrimary,
+                      {
+                        backgroundColor: isDarkMode ? 'rgba(167, 139, 250, 0.18)' : 'rgba(139, 92, 246, 0.13)',
+                        borderColor: renameRingColor,
+                        opacity: isRenaming ? 0.62 : 1,
+                      },
+                    ]}
+                    onPress={handleUsePendingName}
+                    disabled={isRenaming}
+                    scaleValue={0.96}
+                    hapticFeedback={false}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Use ${pendingDisplayName} as anonymous name`}
+                    accessibilityState={{ disabled: isRenaming }}
+                  >
+                    <Text style={[styles.nameConfirmPrimaryText, { color: renameRingColor }]}>
+                      {isRenaming ? 'Saving...' : 'Use new name'}
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+              </View>
+            ) : null}
           </View>
 
           <View style={[styles.profileMetaRow, { borderColor: theme.border }]}>
@@ -630,6 +713,53 @@ const styles = StyleSheet.create({
   },
   renameIcon: {
     fontSize: 21,
+  },
+  nameConfirmPanel: {
+    width: '100%',
+    marginTop: dimensions.spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: dimensions.borderRadius.md,
+    padding: dimensions.spacing.sm,
+    gap: dimensions.spacing.sm,
+  },
+  nameConfirmTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  nameConfirmActions: {
+    flexDirection: 'row',
+    gap: dimensions.spacing.sm,
+  },
+  nameConfirmButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: dimensions.spacing.sm,
+  },
+  nameConfirmSecondary: {
+    backgroundColor: 'transparent',
+  },
+  nameConfirmPrimary: {
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  nameConfirmSecondaryText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  nameConfirmPrimaryText: {
+    fontSize: 13,
+    fontWeight: '900',
   },
   profileMetaRow: {
     borderTopWidth: StyleSheet.hairlineWidth,
