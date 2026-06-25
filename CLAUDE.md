@@ -8,7 +8,7 @@ Hot or Not Takes is live in production on both mobile stores.
 
 - Google Play package: `com.anonymous.HotOrNotTakes`
 - Apple bundle identifier: `com.hotornottakes.app`
-- Current app version in Expo config: `1.0.8`
+- Current app version in Expo config: `1.1.0`
 - Firebase project: `hot-or-not-takes`
 - EAS project ID: `7d390f1c-4d9b-4414-a359-2d8fd3f3ed43`
 
@@ -28,7 +28,7 @@ The repo has checked-in `ios/` and `android/` folders. Because this is not a pur
 
 Local notifications are intentionally local-only. The app uses `expo-notifications`, Android notification icon/color metadata is synced in `android/`, and iOS should not add an `aps-environment` entitlement unless the product explicitly moves to push notifications/APNs.
 
-As of the 1.0.8 local-notifications release prep, `app.config.js`, Android native `versionName`, and iOS native `CFBundleShortVersionString` have been synced to `1.0.8`. EAS remote app-version source currently owns the monotonically increasing Android `versionCode` and iOS build number; confirm `eas build:version:get --platform all --non-interactive` before production builds.
+As of the 1.1.0 release prep, `app.config.js`, Android native `versionName`, and iOS native `CFBundleShortVersionString` have been synced to `1.1.0`. EAS remote app-version source owns the monotonically increasing Android `versionCode` and iOS build number; confirm `eas build:version:get --platform all --non-interactive` before production builds.
 
 ## App Shape
 

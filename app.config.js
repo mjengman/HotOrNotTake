@@ -10,7 +10,7 @@ export default () => ({
   expo: {
     name: isDevelopmentBuild ? "Hot or Not Takes Dev" : "Hot or Not Takes",
     slug: "HotOrNotTakes",
-    version: "1.0.8",
+    version: "1.1.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
