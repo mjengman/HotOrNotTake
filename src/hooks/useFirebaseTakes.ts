@@ -184,6 +184,12 @@ const orderStarterDeckTakes = (takes: Take[]): Take[] =>
 const shouldPrioritizeStarterDeck = (totalVotes: number): boolean =>
   totalVotes < STARTER_DECK_PRIORITY_TOTAL_VOTE_LIMIT;
 
+const cacheCanLeadStarterDeck = (
+  cachedTakes: Take[],
+  prioritizeStarterDeck: boolean
+): boolean =>
+  !prioritizeStarterDeck || cachedTakes.some(isStarterDeckTake);
+
 const filterUniqueTakes = (
   takes: Take[],
   options: {
@@ -603,7 +609,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           return;
         }
 
-        if (cachedTakes.length > 0) {
+        if (cachedTakes.length > 0 && cacheCanLeadStarterDeck(cachedTakes, prioritizeStarterDeck)) {
           const orderedCached = orderFeedForFreshness(cachedTakes, 0, { prioritizeStarterDeck });
 
           setFeed(orderedCached);

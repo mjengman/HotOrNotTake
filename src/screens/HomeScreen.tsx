@@ -1178,18 +1178,19 @@ export const HomeScreen: React.FC = () => {
 
     const isMilestone = Boolean(streakUpdate.milestoneReached);
     const isFirstDay = streakUpdate.currentStreak === 1;
+    const streakTitle = isMilestone
+      ? `🔥 ${streakUpdate.currentStreak}-day streak!`
+      : isFirstDay
+        ? '🔥 Streak started!'
+        : `🔥 ${streakUpdate.currentStreak} days straight!`;
 
     enqueueToast({
       id: `streak:${streakUpdate.lastStreakDate}:${streakUpdate.currentStreak}`,
-      title: isMilestone
-        ? `🔥 ${streakUpdate.currentStreak}-day streak!`
-        : isFirstDay
-          ? '🔥 Streak started!'
-          : `🔥 ${streakUpdate.currentStreak} days straight!`,
+      title: streakTitle,
       subtitle: isMilestone
         ? "That's commitment."
         : isFirstDay
-          ? 'Day one is locked.'
+          ? 'Day one is locked in.'
           : "You're on a roll.",
     });
   }, [enqueueToast]);
@@ -1213,13 +1214,17 @@ export const HomeScreen: React.FC = () => {
       return;
     }
 
+    const streakTitle = stats.votingStreak === 1
+      ? '🔥 1 day streak'
+      : stats.streakUpdatedToday
+        ? `🔥 ${stats.votingStreak} days straight!`
+        : `🔥 ${stats.votingStreak}-day streak`;
+
     enqueueToast({
       id: `streak-info:${stats.lastStreakDate || 'none'}:${stats.streakUpdatedToday ? 'done' : 'open'}`,
-      title: stats.streakUpdatedToday
-        ? `🔥 ${stats.votingStreak} days straight!`
-        : `🔥 ${stats.votingStreak}-day streak`,
+      title: streakTitle,
       subtitle: stats.streakUpdatedToday
-        ? 'Today is locked.'
+        ? 'Today is locked in.'
         : 'One vote keeps it alive.',
       persist: false,
     });
