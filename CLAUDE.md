@@ -54,6 +54,8 @@ Main Firestore collections:
 
 The feed filters out both voted and skipped takes. Skipping is user-specific: a skipped take should leave the main feed for that user and only reappear intentionally in the **My Skips** category. The `skips` collection still serves analytics and My Skips retrieval, but skipped takes are not shuffled back into normal gameplay.
 
+Detailed feed rules live in `docs/FEED_SPEC.md`. Update that spec whenever feed eligibility, ordering, caching, voting, skipping, generation, deprioritization, or My Skips behavior changes.
+
 ## Corpus Management
 
 Three content states:
