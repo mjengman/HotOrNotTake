@@ -45,3 +45,7 @@ yarn-error.*
 assets-expo/
 *Debug.ts
 *Fixed.ts
+
+# Local analysis output
+graphify-out/
+src/graphify-out/
