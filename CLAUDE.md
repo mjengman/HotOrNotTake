@@ -114,6 +114,9 @@ AI content generation is server-side only:
 - Approved generated takes are written with `status: approved`, `isApproved: true`, `isAIGenerated: true`, and `userId: ai-system`.
 - Generation failures are swallowed by the client; the user should never see an error or spinner because background generation failed.
 
+Detailed AI content rules, rate limits, duplicate thresholds, and hygiene
+boundaries live in `docs/AI_CONTENT_SPEC.md`.
+
 ## Build and Release Guardrails
 
 Before merging release-affecting changes:

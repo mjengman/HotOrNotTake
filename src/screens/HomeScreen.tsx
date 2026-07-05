@@ -423,6 +423,7 @@ export const HomeScreen: React.FC = () => {
   const [showOnboardingCard, setShowOnboardingCard] = useState(false);
   const [firstVoteHintTakeId, setFirstVoteHintTakeId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [deckTransitionActive, setDeckTransitionActive] = useState(false);
   const [myTakesRefreshTrigger, setMyTakesRefreshTrigger] = useState<number>(0);
   const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
   const [communityTotalVotes, setCommunityTotalVotes] = useState<number>(0);
@@ -1658,6 +1659,10 @@ export const HomeScreen: React.FC = () => {
   ]);
 
   const handleCategoryChange = (newCategory: string) => {
+    if (deckTransitionActive) {
+      return;
+    }
+
     // Trigger ad on category change (session end)
     onSessionEnd();
     setSelectedCategory(newCategory);
@@ -1791,6 +1796,7 @@ export const HomeScreen: React.FC = () => {
             selectedCategory={selectedCategory}
             onCategoryChange={handleCategoryChange}
             isDarkMode={isDarkMode}
+            disabled={deckTransitionActive}
           />
         </View>
       </View>
@@ -1848,6 +1854,7 @@ export const HomeScreen: React.FC = () => {
             onFirstVoteHintDismiss={() => setFirstVoteHintTakeId(null)}
             onAdminRemoveRequest={requestAdminTakeRemoval}
             onAchievementUnlocked={showUnlockedAchievementToast}
+            onTransitionActiveChange={setDeckTransitionActive}
           />
         )}
       </View>

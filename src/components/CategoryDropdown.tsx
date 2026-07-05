@@ -18,12 +18,14 @@ interface CategoryDropdownProps {
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
   isDarkMode: boolean;
+  disabled?: boolean;
 }
 
 export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
   selectedCategory,
   onCategoryChange,
   isDarkMode,
+  disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const theme = isDarkMode ? colors.dark : colors.light;
@@ -57,12 +59,18 @@ export const CategoryDropdown: React.FC<CategoryDropdownProps> = ({
         style={[styles.dropdown, { 
           backgroundColor: isDarkMode ? theme.surface : '#F0F0F1',
           borderColor: theme.border,
+          opacity: disabled ? 0.55 : 1,
         }]}
-        onPress={() => setIsOpen(true)}
+        onPress={() => {
+          if (!disabled) {
+            setIsOpen(true);
+          }
+        }}
         scaleValue={0.98}
         hapticIntensity={motion.haptic.light}
         accessibilityRole="button"
         accessibilityLabel={`Selected category: ${getCategoryName(selectedCategoryData.label)}`}
+        accessibilityState={{ disabled }}
       >
         <Text 
           style={[styles.dropdownText, { color: theme.text }]}

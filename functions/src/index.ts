@@ -26,6 +26,9 @@ const SEED_RELAXED_MIN_VOTES = 1;
 const SEED_MAX_USED = 12;
 const GENERATED_DUPLICATE_SIMILARITY_THRESHOLD = 0.75;
 const DUPLICATE_COMPARISON_LIMIT = 100;
+const RATE_LIMIT_COLLECTION = 'functionRateLimits';
+const SUBMIT_TAKE_DAILY_LIMIT = 25;
+const GENERATE_TAKES_DAILY_LIMIT = 30;
 const CORPUS_HYGIENE_STATE_COLLECTION = 'corpusAuditState';
 const CORPUS_HYGIENE_STATE_DOC_ID = 'ai-corpus';
 const CORPUS_HYGIENE_REPORTS_COLLECTION = 'corpusAuditReports';
@@ -1007,16 +1010,16 @@ const getTakeSimilarity = (firstText: string, secondText: string): number => {
 const getRecentApprovedTakeTextsByCategory = async (category: Category): Promise<string[]> => {
   const snapshot = await db
     .collection('takes')
+    .where('category', '==', category)
     .where('isApproved', '==', true)
-    .select('text', 'category')
-    .limit(1000)
+    .orderBy('createdAt', 'desc')
+    .limit(DUPLICATE_COMPARISON_LIMIT)
+    .select('text')
     .get();
 
   return snapshot.docs
-    .filter((doc) => doc.get('category') === category)
     .map((doc) => doc.get('text'))
-    .filter((text): text is string => typeof text === 'string' && text.trim().length > 0)
-    .slice(0, DUPLICATE_COMPARISON_LIMIT);
+    .filter((text): text is string => typeof text === 'string' && text.trim().length > 0);
 };
 
 const getSeedScore = (take: SeedTakeCandidate): number => {
@@ -1916,9 +1919,48 @@ const httpStatusForError = (code: string): number => {
       return 404;
     case 'failed-precondition':
       return 412;
+    case 'resource-exhausted':
+      return 429;
     default:
       return 500;
   }
+};
+
+const getUtcDateKey = () => new Date().toISOString().slice(0, 10);
+
+const assertDailyUserLimit = async (
+  action: 'submitTake' | 'generateTakes',
+  userId: string,
+  limit: number
+) => {
+  const dateKey = getUtcDateKey();
+  const limitRef = db
+    .collection(RATE_LIMIT_COLLECTION)
+    .doc(`${action}:${dateKey}:${userId}`);
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(limitRef);
+    const currentCount = typeof snapshot.get('count') === 'number'
+      ? snapshot.get('count') as number
+      : 0;
+
+    if (currentCount >= limit) {
+      throw new HttpsError(
+        'resource-exhausted',
+        'Daily limit reached. Please try again tomorrow.'
+      );
+    }
+
+    transaction.set(limitRef, {
+      action,
+      userId,
+      dateKey,
+      count: currentCount + 1,
+      limit,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snapshot.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge: true });
+  });
 };
 
 const extractRequestData = <T extends object>(body: unknown): T => {
@@ -2115,6 +2157,7 @@ export const submitTake = onRequest(
       }
 
       const userId = await verifyFirebaseAuth(request.header('X-Firebase-Auth'), 'submit takes');
+      await assertDailyUserLimit('submitTake', userId, SUBMIT_TAKE_DAILY_LIMIT);
       const data = extractRequestData<SubmitTakeRequest>(request.body);
       const text = sanitizeText(data?.text);
       const category = sanitizeCategory(data?.category);
@@ -2209,6 +2252,7 @@ export const generateTakes = onRequest(
       }
 
       const userId = await verifyFirebaseAuth(request.header('X-Firebase-Auth'), 'generate takes');
+      await assertDailyUserLimit('generateTakes', userId, GENERATE_TAKES_DAILY_LIMIT);
       const data = extractRequestData<GenerateTakesRequest>(request.body);
       const requestedCategory = sanitizeGenerationCategory(data?.category);
       const category = requestedCategory === 'all' ? await chooseLeastSuppliedCategory() : requestedCategory;
@@ -2375,13 +2419,16 @@ export const generateTakes = onRequest(
         skipped.localPolicy +
         skipped.moderation;
       const shouldRegenerate =
-        generationMode === 'blank' &&
         firstAttemptSkipped > 0 &&
         addedCount < GENERATED_TAKE_WRITE_CAP;
 
       if (shouldRegenerate) {
         const skippedBeforeRetry = { ...skipped };
-        const retryCandidates = await tryGenerateTakeCandidates(category, 'retry');
+        const retryCandidates = await tryGenerateTakeCandidates(
+          category,
+          'retry',
+          generationMode === 'seeded' ? seedSelection.seedsUsed : []
+        );
         generatedCandidateCount += retryCandidates.length;
         await processCandidateBatch(retryCandidates, 'retry');
 

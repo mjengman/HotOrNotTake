@@ -56,6 +56,7 @@ interface CustomSwipeableCardDeckProps {
   onFirstVoteHintDismiss?: () => void;
   onAdminRemoveRequest?: (take: Take) => void;
   onAchievementUnlocked?: (achievement: UnlockedAchievement) => void;
+  onTransitionActiveChange?: (active: boolean) => void;
 }
 
 // Safe flip for Android - no 3D to avoid compositor crashes
@@ -91,6 +92,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   onFirstVoteHintDismiss,
   onAdminRemoveRequest,
   onAchievementUnlocked,
+  onTransitionActiveChange,
 }) => {
   const responsive = useResponsive();
   const screenWidth = responsive.screen.width;
@@ -179,6 +181,16 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   useEffect(() => { frozenSV.value = useFrozen ? 1 : 0; }, [useFrozen]);
   useEffect(() => { flippedSV.value = isCardFlipped ? 1 : 0; }, [isCardFlipped]);
+
+  useEffect(() => {
+    onTransitionActiveChange?.(
+      isCardFlipped || resultsRevealActive || useFrozen || currentVote !== null
+    );
+  }, [currentVote, isCardFlipped, onTransitionActiveChange, resultsRevealActive, useFrozen]);
+
+  useEffect(() => () => {
+    onTransitionActiveChange?.(false);
+  }, [onTransitionActiveChange]);
 
   const clearTransitionWatchdog = React.useCallback((token?: number) => {
     const active = transitionWatchdogRef.current;
@@ -445,6 +457,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     setResultsRevealActive(false);
     setLastVote(null);
     setCurrentVote(null);
+    // The vote for the dismissed card is fully settled; clearing this allows a
+    // re-vote in the same direction after "Change vote" restores the card.
+    voteRevealRef.current = null;
 
     const promotedTake = !shouldEnd ? frozenNext.current : null;
     if (promotedTake) {
@@ -692,7 +707,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
   // Handle skip with animation (for both button press and swipe up/down)
   const handleSkipWithAnimation = (direction: 'up' | 'down' = 'down') => {
-    if (!currentTake || isAnimating.value || externalStatsCard) return;
+    // While the result card is showing, takes[0] is the unseen next card;
+    // skipping here would silently discard it, so ignore skip requests.
+    if (!currentTake || isAnimating.value || externalStatsCard || isCardFlipped) return;
 
     setCurrentVote('skip');
     const skippedTakeId = currentTake.id;
@@ -1234,7 +1251,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     );
   }
 
-  // If at end but still has more or loading, show empty container (loading happens in background)
+  // If at end but still has more or loading, show an intentional loading state.
   if (nothingToRender && (loading || hasMore) && !useFrozen && !isCardFlipped) {
     if (loadMore && !loading) {
       const now = Date.now();
@@ -1243,7 +1260,17 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
         loadMore(20).catch(console.error);
       }
     }
-    return <View style={styles.container} />;
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingEmoji}>🔎</Text>
+        <Text style={[styles.loadingTitle, { color: theme.text }]}>
+          Finding fresh takes…
+        </Text>
+        <Text style={[styles.loadingMessage, { color: theme.textSecondary }]}>
+          Hang tight while we look for more debates.
+        </Text>
+      </View>
+    );
   }
   
   // The cleanup effect handles the frozen state - no need for fallback here
@@ -1440,6 +1467,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: dimensions.spacing.lg,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: dimensions.spacing.xl,
+  },
+  loadingEmoji: {
+    fontSize: 48,
+    marginBottom: dimensions.spacing.md,
+  },
+  loadingTitle: {
+    fontSize: dimensions.fontSize.xlarge,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: dimensions.spacing.sm,
+  },
+  loadingMessage: {
+    fontSize: dimensions.fontSize.medium,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   communityBadge: {
     borderRadius: 18,

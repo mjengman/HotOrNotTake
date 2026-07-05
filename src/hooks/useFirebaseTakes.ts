@@ -19,7 +19,11 @@ import {
   incrementUserSubmissionCount,
   getUserStats,
 } from '../services/userService';
-import { enqueueVoteWrite, getQueuedVoteTakeIds } from '../services/voteOutboxService';
+import {
+  enqueueVoteWrite,
+  getQueuedVoteTakeIds,
+  removeQueuedVotesForTake,
+} from '../services/voteOutboxService';
 import { useAuth } from './useAuth';
 import { StreakUpdateResult } from '../types/User';
 import { MY_SKIPS_CATEGORY, isMySkipsCategory } from '../constants';
@@ -61,6 +65,7 @@ const LOCAL_ID_HYDRATION_SKELETON_MS = 150;
 const RECENT_TEXT_GUARD_SIZE = 10;
 const RECENT_TEXT_SIMILARITY_THRESHOLD = 0.7;
 const VISIBLE_DECK_STABILITY_COUNT = 2;
+const LIVE_RECONCILE_VISIBLE_PREFIX_COUNT = 2;
 const STARTER_DECK_PRIORITY_TOTAL_VOTE_LIMIT = 50;
 const FEED_CACHE_PREFIX = `feed-cache:${FEED_CACHE_VERSION}`;
 const LOCAL_VOTED_PREFIX = `local-voted:${FEED_CACHE_VERSION}`;
@@ -404,28 +409,29 @@ const writeFeedCache = async (userId: string, category: string, takes: Take[]) =
 const mergeLiveFeedWithVisibleDeck = (
   visibleTakes: Take[],
   liveTakes: Take[],
-  votedIds: Set<string>
+  hiddenIds: Set<string>,
+  preservePrefixCount: number = LIVE_RECONCILE_VISIBLE_PREFIX_COUNT
 ): Take[] => {
   const liveById = new Map(liveTakes.map(take => [take.id, take]));
   const merged: Take[] = [];
   const usedIds = new Set<string>();
 
   visibleTakes.forEach((take) => {
-    if (votedIds.has(take.id) || usedIds.has(take.id)) {
+    if (hiddenIds.has(take.id) || usedIds.has(take.id)) {
       return;
     }
 
     const refreshedTake = liveById.get(take.id);
-    if (!refreshedTake) {
+    if (!refreshedTake && merged.length >= preservePrefixCount) {
       return;
     }
 
-    merged.push(refreshedTake);
+    merged.push(refreshedTake ?? take);
     usedIds.add(take.id);
   });
 
   liveTakes.forEach((take) => {
-    if (!votedIds.has(take.id) && !usedIds.has(take.id)) {
+    if (!hiddenIds.has(take.id) && !usedIds.has(take.id)) {
       merged.push(take);
       usedIds.add(take.id);
     }
@@ -632,8 +638,14 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         if (!isCurrentRequest()) {
           return;
         }
+        const reconciledSkipped = viewingMySkips
+          ? skipped
+          : Array.from(new Set([
+              ...skipped,
+              ...localSkippedIds,
+            ]));
         writeLocalVotedIds(userId, voted).catch(console.warn);
-        writeLocalSkippedIds(userId, skipped).catch(console.warn);
+        writeLocalSkippedIds(userId, reconciledSkipped).catch(console.warn);
 
         if (viewingMySkips) {
           const skippedTakes = filterUniqueTakes(
@@ -664,7 +676,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
 
         const freshInteractedIds = new Set([
           ...voted,
-          ...skipped,
+          ...reconciledSkipped,
           ...queuedVoteIds,
           ...sessionHiddenTakeIdsRef.current,
         ]);
@@ -708,7 +720,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           });
           const finalFeed = orderFeedForFreshness(
             uniqueMerged,
-            renderedCache ? prev.length : 0,
+            renderedCache ? Math.min(prev.length, LIVE_RECONCILE_VISIBLE_PREFIX_COUNT) : 0,
             { prioritizeStarterDeck }
           );
           writeFeedCache(userId, category, finalFeed).catch(console.warn);
@@ -802,7 +814,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         });
         const stablePrefixCount =
           freezePrefixCount === 'all'
-            ? prev.length
+            ? Math.min(prev.length, VISIBLE_DECK_STABILITY_COUNT)
             : Math.min(prev.length, Math.max(0, freezePrefixCount));
         if (category !== 'all') {
           const ordered = orderFeedForFreshness(combined, stablePrefixCount, {
@@ -864,6 +876,8 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
           resetFeedCursor(category);
           loadMore(20, true, true, VISIBLE_DECK_STABILITY_COUNT).catch((err) => {
           });
+        } else if (generationTriggeredForRef.current === generationKey) {
+          generationTriggeredForRef.current = null;
         }
       })
       .catch((err) => {
@@ -1115,7 +1129,14 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
         getUserStats(userId),
       ]);
       writeLocalVotedIds(userId, voted).catch(console.warn);
-      writeLocalSkippedIds(userId, skipped).catch(console.warn);
+      const localSkippedIds = await readLocalSkippedIds(userId);
+      const reconciledSkipped = viewingMySkips
+        ? skipped
+        : Array.from(new Set([
+            ...skipped,
+            ...localSkippedIds,
+          ]));
+      writeLocalSkippedIds(userId, reconciledSkipped).catch(console.warn);
       userTotalVotesRef.current = userStats.totalVotes;
       starterDeckPriorityEnabledRef.current = shouldPrioritizeStarterDeck(userStats.totalVotes);
       const prioritizeStarterDeck = starterDeckPriorityEnabledRef.current;
@@ -1145,7 +1166,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
 
       const freshInteractedIds = new Set([
         ...voted,
-        ...skipped,
+        ...reconciledSkipped,
         ...queuedVoteIds,
         ...sessionHiddenTakeIdsRef.current,
       ]);
@@ -1183,6 +1204,7 @@ export const useFirebaseTakes = (options: UseFirebaseTakesOptions = {}): UseFire
   const prependTake = useCallback((take: Take) => {
     if (userId) {
       removeLocalVotedId(userId, take.id).catch(console.warn);
+      removeQueuedVotesForTake(userId, take.id).catch(console.warn);
     }
 
     // Remove the take from interacted IDs so it can be voted on again

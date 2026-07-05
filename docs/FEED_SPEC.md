@@ -106,6 +106,12 @@ Feed cache is local, per user, per category, versioned, and time-limited.
 The local voted/skipped ID caches are also versioned and are used as an immediate
 trust layer before slower server reconciliation completes.
 
+Skipped-ID reconciliation is intentionally conservative: normal-feed server
+reconciliation unions server skipped IDs with durable local skipped IDs and
+current session-hidden IDs. This is an interim trust guard so an offline or
+failed skip write does not resurrect a take in the normal feed. A dedicated skip
+outbox would be the fuller durable-offline design.
+
 ## Vote Rules
 
 Voting is optimistic:
@@ -129,7 +135,9 @@ Skipping is user-specific and optimistic:
 - In the normal feed, the take is added to the local skipped ID list.
 - In the normal feed, the skipped take is prepended into the `My Skips` cache.
 - The skip is recorded in Firestore for analytics and `My Skips` retrieval.
-- Skip write failures are surfaced as skip failures in the hook.
+- Skip writes are currently best-effort analytics writes in `takeService`; the
+  normal feed still preserves the local skip through local skipped IDs and
+  reconciliation unioning.
 - In `My Skips`, skipping only hides the take from that review lane for the
   current session.
 
@@ -146,6 +154,9 @@ The client asks the server to generate more takes only when:
 When generation adds content, the category cursor resets and the hook loads more
 behind the first visible cards. Generation failures are intentionally swallowed;
 the user should not see an error or spinner because background generation failed.
+If generation returns no added takes, the client clears its generation latch so a
+future low-feed state can try again instead of wedging the category for the
+session.
 
 ## Deprioritization
 
@@ -153,6 +164,15 @@ Deprioritized takes remain approved inventory. They are not deleted and are stil
 valid for non-feed surfaces. In the normal feed, active deprioritized takes are
 ranked after normal takes and should function as last-resort inventory when a
 category is thin.
+
+When loading or reconciling more content, visible deck stability wins only for
+the active/visible prefix. After that prefix, normal takes should outrank active
+deprioritized takes. This prevents old deprioritized inventory from staying
+ahead of freshly available normal inventory.
+
+During cache-first live reconciliation, truly visible cached cards are preserved
+when they are absent from the fresh live page. They may still be removed when
+they are interacted, explicitly hidden, or otherwise known ineligible.
 
 ## Change Guardrails
 
@@ -175,3 +195,5 @@ Before changing feed behavior:
   ordering concern in the hook.
 - Decide whether starter-deck priority should be represented in product copy so
   new users understand why early cards may feel curated.
+- Replace the skipped-ID union interim guard with a real skip outbox if offline
+  skip durability becomes a first-class requirement.
