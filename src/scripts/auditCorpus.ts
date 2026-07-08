@@ -22,9 +22,31 @@ interface CorpusTake {
   text: string;
   category: string;
   totalVotes: number;
+  hotVotes: number;
+  notVotes: number;
   isAIGenerated: boolean;
+  contentSource?: string;
+  promptVersion?: string;
+  voiceRegister?: string;
   createdAt?: string;
   approvedAt?: string;
+}
+
+interface CohortScoreboardEntry {
+  cohort: string;
+  takeCount: number;
+  totalVotes: number;
+  meanVotesPerTake: number;
+  skipCount: number;
+  // skips / (skips + votes); null when the cohort has no interactions yet
+  skipRate: number | null;
+  // Vote-weighted mean of 1 - 2*|hotShare - 0.5| over takes with >= 5 votes.
+  // Same divisiveness idea as the server's seed score: higher = more divisive
+  // = better take. Null when no takes qualify.
+  splitQuality: number | null;
+  ratedTakeCount: number;
+  favoriteCount: number;
+  favoritesPer100Votes: number | null;
 }
 
 interface DuplicateCluster {
@@ -85,6 +107,7 @@ interface CorpusAuditReport {
   };
   structure: StructuralSummary;
   volumeByCategory: Array<{ category: string; count: number }>;
+  scoreboard: CohortScoreboardEntry[];
 }
 
 const DEFAULT_DUPLICATE_THRESHOLD = 0.7;
@@ -394,7 +417,19 @@ const fetchApprovedTakes = async (projectId?: string): Promise<CorpusTake[]> => 
   const snapshot = await db
     .collection('takes')
     .where('isApproved', '==', true)
-    .select('text', 'category', 'totalVotes', 'isAIGenerated', 'createdAt', 'approvedAt')
+    .select(
+      'text',
+      'category',
+      'totalVotes',
+      'hotVotes',
+      'notVotes',
+      'isAIGenerated',
+      'contentSource',
+      'promptVersion',
+      'voiceRegister',
+      'createdAt',
+      'approvedAt'
+    )
     .get();
 
   return snapshot.docs
@@ -405,12 +440,157 @@ const fetchApprovedTakes = async (projectId?: string): Promise<CorpusTake[]> => 
         text: typeof data.text === 'string' ? data.text : '',
         category: typeof data.category === 'string' ? data.category : 'unknown',
         totalVotes: typeof data.totalVotes === 'number' ? data.totalVotes : 0,
+        hotVotes: typeof data.hotVotes === 'number' ? data.hotVotes : 0,
+        notVotes: typeof data.notVotes === 'number' ? data.notVotes : 0,
         isAIGenerated: data.isAIGenerated === true,
+        contentSource: typeof data.contentSource === 'string' ? data.contentSource : undefined,
+        promptVersion: typeof data.promptVersion === 'string' ? data.promptVersion : undefined,
+        voiceRegister: typeof data.voiceRegister === 'string' ? data.voiceRegister : undefined,
         createdAt: readFirestoreDate(data.createdAt),
         approvedAt: readFirestoreDate(data.approvedAt),
       };
     })
     .filter((take) => take.text.length > 0);
+};
+
+const fetchSkipCountsByTake = async (): Promise<Map<string, number>> => {
+  const db = getFirestore();
+  const snapshot = await db.collection('skips').select('takeId').get();
+  const counts = new Map<string, number>();
+
+  snapshot.docs.forEach((doc) => {
+    const takeId = doc.get('takeId');
+    if (typeof takeId === 'string' && takeId.length > 0) {
+      counts.set(takeId, (counts.get(takeId) ?? 0) + 1);
+    }
+  });
+
+  return counts;
+};
+
+const fetchFavoriteCountsByTake = async (): Promise<Map<string, number>> => {
+  const db = getFirestore();
+
+  try {
+    // Favorites live at users/{userId}/favorites/{takeId}, so the doc ID is
+    // the take ID.
+    const snapshot = await db.collectionGroup('favorites').get();
+    const counts = new Map<string, number>();
+
+    snapshot.docs.forEach((doc) => {
+      counts.set(doc.id, (counts.get(doc.id) ?? 0) + 1);
+    });
+
+    return counts;
+  } catch (error) {
+    console.warn('Favorites unavailable for scoreboard; continuing without them:', error);
+    return new Map();
+  }
+};
+
+const SCOREBOARD_MIN_VOTES_FOR_SPLIT = 5;
+
+const getScoreboardCohorts = (take: CorpusTake): string[] => {
+  const cohorts: string[] = [];
+
+  if (!take.isAIGenerated) {
+    cohorts.push('user');
+  } else if (take.contentSource === 'ai_seeded_user') {
+    cohorts.push('ai_seeded_user');
+  } else if (take.contentSource === 'ai_blank') {
+    cohorts.push('ai_blank');
+  } else {
+    cohorts.push('ai_untagged');
+  }
+
+  if (take.promptVersion) {
+    cohorts.push(`prompt:${take.promptVersion}`);
+  }
+  if (take.voiceRegister) {
+    cohorts.push(`register:${take.voiceRegister}`);
+  }
+
+  return cohorts;
+};
+
+const round3 = (value: number): number => Math.round(value * 1000) / 1000;
+
+const buildScoreboard = (
+  takes: CorpusTake[],
+  skipCounts: Map<string, number>,
+  favoriteCounts: Map<string, number>
+): CohortScoreboardEntry[] => {
+  interface CohortAccumulator {
+    takeCount: number;
+    totalVotes: number;
+    skipCount: number;
+    favoriteCount: number;
+    splitWeightedSum: number;
+    splitWeight: number;
+    ratedTakeCount: number;
+  }
+
+  const accumulators = new Map<string, CohortAccumulator>();
+
+  takes.forEach((take) => {
+    const skips = skipCounts.get(take.id) ?? 0;
+    const favorites = favoriteCounts.get(take.id) ?? 0;
+    const rated = take.totalVotes >= SCOREBOARD_MIN_VOTES_FOR_SPLIT;
+    const hotShare = take.totalVotes > 0 ? take.hotVotes / take.totalVotes : 0.5;
+    const splitQuality = 1 - 2 * Math.abs(hotShare - 0.5);
+
+    getScoreboardCohorts(take).forEach((cohort) => {
+      const acc = accumulators.get(cohort) ?? {
+        takeCount: 0,
+        totalVotes: 0,
+        skipCount: 0,
+        favoriteCount: 0,
+        splitWeightedSum: 0,
+        splitWeight: 0,
+        ratedTakeCount: 0,
+      };
+
+      acc.takeCount += 1;
+      acc.totalVotes += take.totalVotes;
+      acc.skipCount += skips;
+      acc.favoriteCount += favorites;
+      if (rated) {
+        acc.ratedTakeCount += 1;
+        acc.splitWeightedSum += splitQuality * take.totalVotes;
+        acc.splitWeight += take.totalVotes;
+      }
+
+      accumulators.set(cohort, acc);
+    });
+  });
+
+  const fixedOrder = ['user', 'ai_seeded_user', 'ai_blank', 'ai_untagged'];
+  const cohortRank = (cohort: string): number => {
+    const index = fixedOrder.indexOf(cohort);
+    return index === -1 ? fixedOrder.length : index;
+  };
+
+  return Array.from(accumulators.entries())
+    .map(([cohort, acc]): CohortScoreboardEntry => ({
+      cohort,
+      takeCount: acc.takeCount,
+      totalVotes: acc.totalVotes,
+      meanVotesPerTake: acc.takeCount > 0 ? round3(acc.totalVotes / acc.takeCount) : 0,
+      skipCount: acc.skipCount,
+      skipRate: acc.skipCount + acc.totalVotes > 0
+        ? round3(acc.skipCount / (acc.skipCount + acc.totalVotes))
+        : null,
+      splitQuality: acc.splitWeight > 0 ? round3(acc.splitWeightedSum / acc.splitWeight) : null,
+      ratedTakeCount: acc.ratedTakeCount,
+      favoriteCount: acc.favoriteCount,
+      favoritesPer100Votes: acc.totalVotes > 0
+        ? round3((acc.favoriteCount * 100) / acc.totalVotes)
+        : null,
+    }))
+    .sort((first, second) =>
+      cohortRank(first.cohort) - cohortRank(second.cohort) ||
+      first.cohort.localeCompare(second.cohort)
+    );
 };
 
 const findDuplicateClusters = (takes: CorpusTake[], threshold: number): DuplicateCluster[] => {
@@ -772,7 +952,12 @@ const summarizeStructure = (takes: CorpusTake[]): StructuralSummary => {
   };
 };
 
-const buildReport = (takes: CorpusTake[], threshold: number): CorpusAuditReport => {
+const buildReport = (
+  takes: CorpusTake[],
+  threshold: number,
+  skipCounts: Map<string, number>,
+  favoriteCounts: Map<string, number>
+): CorpusAuditReport => {
   const semicolonTakes = takes.filter((take) => take.text.includes(';'));
   const volumeCounts = new Map<string, number>();
 
@@ -803,6 +988,7 @@ const buildReport = (takes: CorpusTake[], threshold: number): CorpusAuditReport 
     volumeByCategory: Array.from(volumeCounts.entries())
       .map(([category, count]) => ({ category, count }))
       .sort((first, second) => second.count - first.count || first.category.localeCompare(second.category)),
+    scoreboard: buildScoreboard(takes, skipCounts, favoriteCounts),
   };
 };
 
@@ -817,6 +1003,38 @@ const printReport = (report: CorpusAuditReport) => {
   console.log(`Approved takes: ${report.totalApprovedTakes}`);
   console.log(`AI generated: ${report.aiGeneratedTakes}`);
   console.log(`User generated: ${report.userGeneratedTakes}`);
+
+  printSection('Cohort scoreboard');
+  console.log(
+    'cohort'.padEnd(22) +
+    'takes'.padStart(7) +
+    'votes'.padStart(8) +
+    'v/take'.padStart(8) +
+    'skips'.padStart(7) +
+    'skipRate'.padStart(10) +
+    'split'.padStart(7) +
+    'rated'.padStart(7) +
+    'favs'.padStart(6) +
+    'f/100v'.padStart(8)
+  );
+  report.scoreboard.forEach((entry) => {
+    console.log(
+      entry.cohort.padEnd(22) +
+      String(entry.takeCount).padStart(7) +
+      String(entry.totalVotes).padStart(8) +
+      String(entry.meanVotesPerTake).padStart(8) +
+      String(entry.skipCount).padStart(7) +
+      String(entry.skipRate ?? '—').padStart(10) +
+      String(entry.splitQuality ?? '—').padStart(7) +
+      String(entry.ratedTakeCount).padStart(7) +
+      String(entry.favoriteCount).padStart(6) +
+      String(entry.favoritesPer100Votes ?? '—').padStart(8)
+    );
+  });
+  console.log(
+    'split = vote-weighted 1 - 2|hotShare - 0.5| over takes with >= 5 votes ' +
+    '(higher = more divisive = better). skipRate = skips / (skips + votes).'
+  );
 
   printSection('Volume by category');
   report.volumeByCategory.forEach(({ category, count }) => {
@@ -903,7 +1121,11 @@ const printReport = (report: CorpusAuditReport) => {
 const main = async () => {
   const { threshold, jsonPath, projectId: argProjectId } = parseArgs();
   const takes = await fetchApprovedTakes(resolveProjectId(argProjectId));
-  const report = buildReport(takes, threshold);
+  const [skipCounts, favoriteCounts] = await Promise.all([
+    fetchSkipCountsByTake(),
+    fetchFavoriteCountsByTake(),
+  ]);
+  const report = buildReport(takes, threshold, skipCounts, favoriteCounts);
 
   printReport(report);
 
