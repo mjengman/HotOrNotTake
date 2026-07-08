@@ -13,7 +13,8 @@ const ADMIN_DELETE_PIN = defineSecret('ADMIN_DELETE_PIN');
 const OPENAI_MODERATION_URL = 'https://api.openai.com/v1/moderations';
 const OPENAI_MODERATION_MODEL = 'omni-moderation-latest';
 const OPENAI_CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_GENERATION_MODEL = 'gpt-4o-mini';
+const OPENAI_GENERATION_MODEL = 'gpt-4.1-mini';
+const GENERATION_PROMPT_VERSION = 'v2';
 const AI_SYSTEM_USER_ID = 'ai-system';
 const MIN_TAKE_LENGTH = 10;
 const MAX_TAKE_LENGTH = 150;
@@ -116,11 +117,16 @@ interface GeneratedTakeBatch {
   takes?: unknown;
 }
 
+type VoiceRegister = 'texter' | 'ranter' | 'deadpan' | 'oversharer' | 'numbers';
+type NamedEntityRisk = 'none' | 'green' | 'yellow' | 'red';
+
 interface GeneratedTakeCandidate {
   text: string;
   categoryFit: 'yes' | 'no';
   qualityScore: 1 | 2 | 3 | 4 | 5;
   rejectionReason: string | null;
+  voiceRegister: VoiceRegister;
+  namedEntityRisk: NamedEntityRisk;
 }
 
 interface GeneratedTakeCandidateOutput {
@@ -128,6 +134,8 @@ interface GeneratedTakeCandidateOutput {
   categoryFit: 'yes' | 'no';
   qualityScore: 1 | 2 | 3 | 4 | 5;
   rejectionReason: string | null;
+  voiceRegister: VoiceRegister;
+  namedEntityRisk: NamedEntityRisk;
 }
 
 type GenerationAttempt = 'initial' | 'retry';
@@ -281,6 +289,56 @@ const categoryVoiceExamples: Record<Category, string[]> = {
     'A clean breakup is kinder than a slow fade.',
   ],
 };
+
+const VOICE_REGISTERS: readonly VoiceRegister[] = [
+  'texter',
+  'ranter',
+  'deadpan',
+  'oversharer',
+  'numbers',
+];
+const VOICE_REGISTER_SET = new Set<string>(VOICE_REGISTERS);
+
+// Slot assignment per batch of 8: 2 texter, 2 ranter, 2 deadpan,
+// 1 oversharer, 1 numbers — interleaved so adjacent takes vary in voice.
+const VOICE_REGISTER_BATCH: readonly VoiceRegister[] = [
+  'texter',
+  'ranter',
+  'deadpan',
+  'oversharer',
+  'texter',
+  'ranter',
+  'deadpan',
+  'numbers',
+];
+
+const voiceRegisterInstructions: Record<VoiceRegister, string> = {
+  texter:
+    'group-chat texter — short and casual, like a message to friends. Lowercase openings and sentence fragments are allowed here and only here. At most one emoji. Aim for under 60 characters.',
+  ranter:
+    'mild ranter — momentum and one emphatic beat. At most one ALL-CAPS word. May end with a single trailing rhetorical tag, but at most one ranter take per batch may do that.',
+  deadpan:
+    'deadpan observer — dry, precise, understated. Fragments allowed. No exclamation points.',
+  oversharer:
+    'over-sharer — anchored in a first-person anecdote (my roommate, my office, my sister) that lands on a clear verdict. Observation plus stance, never story-only.',
+  numbers:
+    'numbers person — anchored on a specific price, count, or duration. The number is the argument.',
+};
+
+const NAMED_ENTITY_RISK_SET = new Set<string>(['none', 'green', 'yellow', 'red']);
+// Green-ring only at launch; flip after a clean stretch of moderation logs to
+// allow yellow (living celebrities, public-work opinions only).
+const ALLOW_YELLOW_ENTITY_RISK = false;
+
+// Frame scaffolds the prompt bans but the model still leaks. The 2026-07-08
+// corpus baseline found the "X is great, but Y" pivot four+ times per topic
+// and "we need to" in approved AI content despite the prompt-level ban, so
+// these are now enforced server-side on generated text before write.
+const bannedGeneratedTextPatterns: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\bwe need to\b/i, label: 'we-need-to' },
+  { pattern: /\b(?:is|are)\s+(?:great|nice|fine|good|okay)\s*,?\s*but\b/i, label: 'great-but-pivot' },
+  { pattern: /\bdon'?t get me wrong\b/i, label: 'dont-get-me-wrong' },
+];
 
 const bannedGenerationFrames = [
   'is overrated and way too',
@@ -1640,7 +1698,11 @@ const isGeneratedTakeCandidateOutput = (value: unknown): value is GeneratedTakeC
       qualityScore === 3 ||
       qualityScore === 4 ||
       qualityScore === 5) &&
-    (candidate.rejectionReason === null || typeof candidate.rejectionReason === 'string')
+    (candidate.rejectionReason === null || typeof candidate.rejectionReason === 'string') &&
+    typeof candidate.voiceRegister === 'string' &&
+    VOICE_REGISTER_SET.has(candidate.voiceRegister) &&
+    typeof candidate.namedEntityRisk === 'string' &&
+    NAMED_ENTITY_RISK_SET.has(candidate.namedEntityRisk)
   );
 };
 
@@ -1681,6 +1743,8 @@ const parseGeneratedTakes = (data: OpenAIChatCompletionResponse): GeneratedTakeC
         categoryFit: rawTake.categoryFit,
         qualityScore: rawTake.qualityScore,
         rejectionReason: rawTake.rejectionReason,
+        voiceRegister: rawTake.voiceRegister,
+        namedEntityRisk: rawTake.namedEntityRisk,
       });
     } catch {
       // Skip malformed model output instead of failing the whole batch.
@@ -1719,28 +1783,45 @@ const generationPromptForAttempt = (
   const gravityWellGuidance = categoryGravityWellGuidance[category];
   const seededGenerationExamples = formatSeededGenerationExamples(category, seeds);
 
+  const registerAssignments = VOICE_REGISTER_BATCH
+    .map((register, index) => `Take ${index + 1}: ${register}`)
+    .join(', ');
+  const registerDefinitions = VOICE_REGISTERS
+    .map((register) => `${register}: ${voiceRegisterInstructions[register]}`)
+    .join(' || ');
+
   return (
     retryInstruction +
     `Generate ${GENERATED_TAKE_COUNT} fresh hot-or-not takes for the "${category}" category. ` +
     `Category scope: ${categoryGenerationGuidance[category]} ` +
     seededGenerationExamples +
+    'Write like five different real people posting, not one columnist. ' +
+    `Assign each take a voice register using exactly this distribution: ${registerAssignments}. ` +
+    `Register definitions: ${registerDefinitions}. ` +
+    'Report the register you used for each take in its voiceRegister field. ' +
+    'Texture rules: deliberate typos are never allowed — human texture, not cosplay. Whole-take questions are never allowed. ' +
+    'At most one take in the batch may open with a reluctant confession like "I know this is wrong but" or "I\'ll die on this hill". ' +
+    'Length distribution: at least two takes under 60 characters and at least one over 110 characters. Do not use the same sentence structure twice in a row. ' +
+    'Specific anchors: at least 2 and at most 3 takes must contain a specific anchor — a price, brand, app, chain, show, team, city, device, menu item, or duration. A "$14 dessert" is as good an anchor as a named chain. ' +
+    'Named-entity policy: brands, products, apps, chains, foods, shows, games, music, sports teams, historical figures, places, prices, and durations are encouraged — mark namedEntityRisk "green" when used, "none" when the take names nothing specific. ' +
+    'Living celebrities or athletes may only be referenced for their public work or persona — never appearance, health, relationships, or allegations — and must be marked namedEntityRisk "yellow". ' +
+    'Named politicians, anyone primarily famous through an ongoing legal case or scandal, private individuals, minors, and medical claims about any person are banned — that is namedEntityRisk "red" and you must not produce it. ' +
     `Voice examples for tone and range only: ${categoryVoiceExamples[category].map(example => `"${example}"`).join(' / ')} ` +
     `Known repeated topics to avoid for this category: ${gravityWellGuidance.avoidTopics.join(' | ')}. ` +
     `Known repeated rhetorical frames to avoid for this category: ${gravityWellGuidance.avoidFrames.join(' | ')}. ` +
     `Fresh lanes to explore for this category: ${gravityWellGuidance.freshLanes.join(' | ')}. ` +
     'Quality target: A good take should make two normal people disagree at brunch without becoming toxic. It is specific, social, and rooted in real lived behavior, not generic advice, virtue signaling, or recycled internet debates. ' +
     'Each take must be opinionated, specific, debatable, and feel like something a real person would post. ' +
-    'Mix short punchy takes with longer argumentative takes. Do not use the same sentence structure twice in a row. ' +
-    'Stake a clear position. Do not write observations, questions, vague culture commentary, or hedged takes. ' +
+    'Stake a clear position. Do not write observations, vague culture commentary, or hedged takes. ' +
     'Do not use hedging language like might, could arguably, or some would say. Vary sentence openers. ' +
-    'First person is allowed, but not required. ' +
     `Never use these reusable frames: ${bannedGenerationFrames.join(' | ')}. ` +
+    'Never use the "X is great, but Y" pivot scaffold in any wording — takes built on that pivot are rejected automatically. ' +
     `Avoid these repeated topics entirely: ${avoidedGenerationTopics.join(' | ')}. ` +
     'Do not use semicolons. Not one. Use periods, commas, or dashes instead. ' +
-    'Avoid generic filler, slurs, explicit sexual content, threats, medical advice, legal advice, hashtags, links, questions, and "hot take" prefixes. ' +
+    'Avoid generic filler, slurs, explicit sexual content, threats, medical advice, legal advice, hashtags, links, and "hot take" prefixes. ' +
     `Keep every take between ${MIN_TAKE_LENGTH} and ${MAX_TAKE_LENGTH} characters. ` +
     'For each candidate, self-evaluate honestly. categoryFit must be "no" if the take could fit any generic category. ' +
-    'Reject candidates that are generic advice, obvious virtue statements, safe consensus opinions, recycled category tropes, common internet arguments, "X is nice, but Y is the real issue" scaffolding, "we need to" framing, or "X should be mandatory" framing. ' +
+    'Reject candidates that are generic advice, obvious virtue statements, safe consensus opinions, recycled category tropes, or common internet arguments. ' +
     formatGenerationExamples(
       'Examples of takes that MUST be rejected. Do not generate takes like these',
       failedBrunchTestExamples
@@ -1749,9 +1830,10 @@ const generationPromptForAttempt = (
       'Examples of takes that PASS. Aim for this quality',
       passedBrunchTestExamples
     ) +
-    'Use qualityScore 5 only for specific, opinionated takes rooted in real social friction that would genuinely split a room. ' +
+    'Use qualityScore 5 only for specific, opinionated takes rooted in real social friction that would genuinely split a room roughly 50/50. ' +
     'Use qualityScore 4 only for a clear opinion with recognizable conflict that is not a trope or cliche. ' +
-    'Use qualityScore 3 for plausible but generic, safe, or weakly opinionated takes. Use 2 for virtue statements, advice, or obvious consensus. Use 1 for harmful, off-category, or incoherent takes. ' +
+    'Use qualityScore 3 for plausible but generic, safe, or weakly opinionated takes — a take most people would simply agree with scores 3 at most, no matter how well written. ' +
+    'Use 2 for virtue statements, advice, or obvious consensus. Use 1 for harmful, off-category, or incoherent takes. ' +
     'Set rejectionReason to null only when categoryFit is "yes" and qualityScore is 4 or 5. Otherwise provide a short rejectionReason. ' +
     'Return raw JSON only. No markdown fences, no prose, no explanation.'
   );
@@ -1797,7 +1879,7 @@ const generateTakeCandidates = async (
                 items: {
                   type: 'object',
                   additionalProperties: false,
-                  required: ['take', 'categoryFit', 'qualityScore', 'rejectionReason'],
+                  required: ['take', 'categoryFit', 'qualityScore', 'rejectionReason', 'voiceRegister', 'namedEntityRisk'],
                   properties: {
                     take: {
                       type: 'string',
@@ -1815,6 +1897,14 @@ const generateTakeCandidates = async (
                         { type: 'string' },
                         { type: 'null' },
                       ],
+                    },
+                    voiceRegister: {
+                      type: 'string',
+                      enum: ['texter', 'ranter', 'deadpan', 'oversharer', 'numbers'],
+                    },
+                    namedEntityRisk: {
+                      type: 'string',
+                      enum: ['none', 'green', 'yellow', 'red'],
                     },
                   },
                 },
@@ -1868,6 +1958,8 @@ const createTake = async ({
   isAIGenerated = false,
   contentSource,
   sourceTakeIds,
+  promptVersion,
+  voiceRegister,
 }: {
   text: string;
   category: Category;
@@ -1876,6 +1968,8 @@ const createTake = async ({
   isAIGenerated?: boolean;
   contentSource: ContentSource;
   sourceTakeIds?: string[];
+  promptVersion?: string;
+  voiceRegister?: VoiceRegister;
 }): Promise<string> => {
   const isApproved = status === 'approved';
   const takeData: FirebaseFirestore.DocumentData = {
@@ -1897,6 +1991,14 @@ const createTake = async ({
 
   if (sourceTakeIds && sourceTakeIds.length > 0) {
     takeData.sourceTakeIds = sourceTakeIds;
+  }
+
+  if (promptVersion) {
+    takeData.promptVersion = promptVersion;
+  }
+
+  if (voiceRegister) {
+    takeData.voiceRegister = voiceRegister;
   }
 
   if (isApproved) {
@@ -2294,9 +2396,13 @@ export const generateTakes = onRequest(
         categoryMismatch: 0,
         lowQuality: 0,
         punctuation: 0,
+        bannedFrame: 0,
+        entityRisk: 0,
         localPolicy: 0,
         moderation: 0,
       };
+      const sumSkipped = (counts: typeof skipped): number =>
+        Object.values(counts).reduce((total, count) => total + count, 0);
       const takeIds: string[] = [];
 
       const processCandidateBatch = async (
@@ -2359,6 +2465,32 @@ export const generateTakes = onRequest(
             continue;
           }
 
+          const bannedPattern = bannedGeneratedTextPatterns.find(({ pattern }) => pattern.test(text));
+          if (bannedPattern) {
+            skipped.bannedFrame += 1;
+            logger.info('Skipped generated take using a banned frame scaffold.', {
+              category,
+              attempt,
+              frame: bannedPattern.label,
+              candidate: text,
+            });
+            continue;
+          }
+
+          if (
+            candidate.namedEntityRisk === 'red' ||
+            (!ALLOW_YELLOW_ENTITY_RISK && candidate.namedEntityRisk === 'yellow')
+          ) {
+            skipped.entityRisk += 1;
+            logger.info('Skipped generated take over named-entity risk.', {
+              category,
+              attempt,
+              namedEntityRisk: candidate.namedEntityRisk,
+              candidate: text,
+            });
+            continue;
+          }
+
           const similarTake = findSimilarTake(text, comparisonTexts);
           if (similarTake) {
             skipped.duplicate += 1;
@@ -2401,6 +2533,8 @@ export const generateTakes = onRequest(
             isAIGenerated: true,
             contentSource: generationMode === 'seeded' ? 'ai_seeded_user' : 'ai_blank',
             sourceTakeIds: generationMode === 'seeded' ? sourceTakeIds : undefined,
+            promptVersion: GENERATION_PROMPT_VERSION,
+            voiceRegister: candidate.voiceRegister,
           });
           takeIds.push(takeId);
           comparisonTexts.push(text);
@@ -2410,14 +2544,7 @@ export const generateTakes = onRequest(
 
       await processCandidateBatch(firstBatchCandidates, 'initial');
 
-      const firstAttemptSkipped =
-        skipped.generation +
-        skipped.categoryMismatch +
-        skipped.lowQuality +
-        skipped.punctuation +
-        skipped.duplicate +
-        skipped.localPolicy +
-        skipped.moderation;
+      const firstAttemptSkipped = sumSkipped(skipped);
       const shouldRegenerate =
         firstAttemptSkipped > 0 &&
         addedCount < GENERATED_TAKE_WRITE_CAP;
@@ -2432,14 +2559,7 @@ export const generateTakes = onRequest(
         generatedCandidateCount += retryCandidates.length;
         await processCandidateBatch(retryCandidates, 'retry');
 
-        const retrySkippedCount =
-          skipped.generation - skippedBeforeRetry.generation +
-          skipped.categoryMismatch - skippedBeforeRetry.categoryMismatch +
-          skipped.lowQuality - skippedBeforeRetry.lowQuality +
-          skipped.punctuation - skippedBeforeRetry.punctuation +
-          skipped.duplicate - skippedBeforeRetry.duplicate +
-          skipped.localPolicy - skippedBeforeRetry.localPolicy +
-          skipped.moderation - skippedBeforeRetry.moderation;
+        const retrySkippedCount = sumSkipped(skipped) - sumSkipped(skippedBeforeRetry);
 
         if (retrySkippedCount > 0) {
           logger.info('Retry generation still produced rejected candidates; remaining failures were skipped.', {
@@ -2449,14 +2569,7 @@ export const generateTakes = onRequest(
         }
       }
 
-      const rejectedCount =
-        skipped.generation +
-        skipped.categoryMismatch +
-        skipped.lowQuality +
-        skipped.punctuation +
-        skipped.duplicate +
-        skipped.localPolicy +
-        skipped.moderation;
+      const rejectedCount = sumSkipped(skipped);
 
       logger.info(
         `[generateTakes] category=${category} mode=${generationMode} seedsFetched=${seedSelection.seedsFetched} seedsQualified=${seedSelection.seedsQualified} seedsUsed=${seedSelection.seedsUsed.length} approved=${addedCount} rejected=${rejectedCount}`,

@@ -24,20 +24,38 @@ ID token in `X-Firebase-Auth`.
    inventory.
 5. Generation seeds come from recent, approved, human-authored takes in the
    target category when enough qualified seeds exist.
-6. The model returns structured candidates with category fit, quality score, and
-   self-rejection reason.
+6. The model returns structured candidates with category fit, quality score,
+   self-rejection reason, `voiceRegister`, and `namedEntityRisk`.
 7. Candidates pass local gates:
    - category fit is `yes`
    - quality score is at least 4
    - no self-rejection reason
    - no semicolon
+   - no banned frame scaffold (`we need to`, the `X is great, but Y` pivot,
+     `don't get me wrong`) — enforced on text server-side because the
+     prompt-level ban demonstrably leaks (2026-07-08 corpus baseline)
+   - `namedEntityRisk` is not `red`; `yellow` is also rejected while the
+     launch posture is green-ring only (`ALLOW_YELLOW_ENTITY_RISK = false`)
    - duplicate similarity below the generation threshold
    - local policy passes
 8. Candidates then pass OpenAI moderation. Moderation failures skip the
    candidate.
 9. Approved candidates are written as approved AI content with
-   `isAIGenerated: true`, `userId: ai-system`, and `contentSource` of
-   `ai_blank` or `ai_seeded_user`.
+   `isAIGenerated: true`, `userId: ai-system`, `contentSource` of `ai_blank`
+   or `ai_seeded_user`, plus `promptVersion` and `voiceRegister` tags for
+   cohort measurement.
+
+## Generation v2
+
+Model: `gpt-4.1-mini`. Prompt version tag: `v2`.
+
+Each batch of 8 is assigned voice registers (2 texter, 2 ranter, 2 deadpan,
+1 oversharer, 1 numbers) with per-register texture rules, a batch length
+distribution (≥2 takes under 60 chars, ≥1 over 110), a specific-anchor
+requirement (2–3 takes must contain a price, brand, app, chain, show, team,
+city, device, menu item, or duration), and the three-ring named-entity policy
+(green encouraged / yellow constrained / red banned). Full rationale and
+policy detail live in `docs/AI_CONTENT_V2_DESIGN.md`.
 
 Generation may retry once when the first candidate batch produces skipped
 candidates and fewer than the write cap are approved. Seeded retries keep using

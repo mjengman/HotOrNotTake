@@ -151,6 +151,13 @@ and 4 weeks. Success criteria: v2 skip rate within 10% of human-submitted
 content; split quality ≥ `ai_seeded_user`; no increase in moderation
 rejections; register breakdown identifies voices to double down on.
 
+Baseline captured 2026-07-08 (`corpus-baseline-v1.json`): user 0.225 skip /
+0.603 split / 1.16 favs per 100 votes; legacy AI ≈ 0.16 skip / 0.437 split /
+0.56 favs. Caveat: nearly all votes to date come from the developer, so
+these numbers are pipeline validation and a directional target (AI content
+is *agreeable and forgettable*, not skip-prone), not market truth. Numeric
+KPI thresholds get recalibrated after real-user acquisition.
+
 ## Rollout
 
 1. **PR 1 — scoreboard first.** `auditCorpus` extensions + v1 baseline run.
