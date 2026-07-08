@@ -209,6 +209,54 @@ const agreementHeadlines: Record<VoteChoice, readonly string[]> = {
   ],
 };
 
+// Subtext punchlines. Templates take the numbers so every tone gets a
+// personal, stat-anchored second line — not just the contrarian ones.
+type SubtextTemplate = (context: {
+  winningPercentage: number;
+  losingPercentage: number;
+  hotPercentage: number;
+  notPercentage: number;
+  totalVotes: number;
+}) => string;
+
+const lowSignalSubtexts: readonly SubtextTemplate[] = [
+  ({ totalVotes }) => `Only ${totalVotes} votes in — you're early`,
+  ({ totalVotes }) => `${totalVotes} votes so far. You're setting the tone.`,
+  ({ totalVotes }) => `First ${totalVotes} in the room. History will judge.`,
+] as const;
+
+const splitSubtexts: readonly SubtextTemplate[] = [
+  ({ hotPercentage, notPercentage }) => `${hotPercentage}–${notPercentage}. Someone at brunch is wrong.`,
+  ({ hotPercentage, notPercentage }) => `${hotPercentage}% HOT, ${notPercentage}% NOT — no mercy either way`,
+  ({ totalVotes }) => `${totalVotes.toLocaleString()} votes and still no verdict`,
+  ({ hotPercentage, notPercentage }) => `${hotPercentage} vs ${notPercentage}. This friendship is over.`,
+] as const;
+
+const consensusSubtexts: readonly SubtextTemplate[] = [
+  ({ winningPercentage }) => `${winningPercentage}% of the room said the same thing`,
+  ({ winningPercentage }) => `${winningPercentage}% agreement. Practically a law now.`,
+  ({ losingPercentage }) => `The other ${losingPercentage}% are on their own`,
+] as const;
+
+const agreementSubtexts: readonly SubtextTemplate[] = [
+  ({ winningPercentage }) => `You're with the ${winningPercentage}%`,
+  ({ winningPercentage }) => `${winningPercentage}% of the room backs you up`,
+  ({ losingPercentage }) => `The other ${losingPercentage}% will come around`,
+] as const;
+
+const agreementLandslideSubtexts: readonly SubtextTemplate[] = [
+  ({ winningPercentage }) => `You and ${winningPercentage}% of the room called it`,
+  ({ losingPercentage }) => `Only ${losingPercentage}% dared to disagree`,
+  ({ winningPercentage }) => `${winningPercentage}% strong. This one's settled.`,
+] as const;
+
+const pickSubtext = (
+  templates: readonly SubtextTemplate[],
+  seed: string | undefined,
+  salt: string,
+  context: Parameters<SubtextTemplate>[0],
+): string => pickVariant(templates, seed, salt)(context);
+
 export const getResultReaction = ({
   userVote,
   hotPercentage,
@@ -222,9 +270,20 @@ export const getResultReaction = ({
   const losingPercentage = hotWins ? notPercentage : hotPercentage;
   const margin = Math.abs(hotPercentage - notPercentage);
 
+  const subtextContext = {
+    winningPercentage,
+    losingPercentage,
+    hotPercentage,
+    notPercentage,
+    totalVotes,
+  };
+
   if (totalVotes < 10) {
     return {
       headline: pickVariant(lowSignalHeadlines, seed, 'low-signal'),
+      subtext: totalVotes > 0
+        ? pickSubtext(lowSignalSubtexts, seed, 'low-signal-sub', subtextContext)
+        : undefined,
       tone: 'low-signal',
     };
   }
@@ -232,6 +291,7 @@ export const getResultReaction = ({
   if (margin <= 8) {
     return {
       headline: pickVariant(splitHeadlines, seed, 'split'),
+      subtext: pickSubtext(splitSubtexts, seed, 'split-sub', subtextContext),
       tone: 'split',
     };
   }
@@ -247,6 +307,7 @@ export const getResultReaction = ({
 
     return {
       headline: pickVariant(consensusHeadlines, seed, 'consensus'),
+      subtext: pickSubtext(consensusSubtexts, seed, 'consensus-sub', subtextContext),
       tone: 'consensus',
     };
   }
@@ -269,14 +330,17 @@ export const getResultReaction = ({
   const userAgreementPercentage = userAgreedWithCrowd ? winningPercentage : losingPercentage;
 
   if (!userAgreedWithCrowd) {
+    const isStrongContrarian = userAgreementPercentage <= 15;
     return {
       headline: pickVariant(
-        userAgreementPercentage <= 15 ? strongContrarianHeadlines : contrarianHeadlines,
+        isStrongContrarian ? strongContrarianHeadlines : contrarianHeadlines,
         seed,
-        userAgreementPercentage <= 15 ? 'strong-contrarian' : 'contrarian',
+        isStrongContrarian ? 'strong-contrarian' : 'contrarian',
       ),
       subtext: `Only ${userAgreementPercentage}% agreed with you`,
-      tone: 'contrarian',
+      // Strong dissent gets the rare-contrarian presentation (highlight box)
+      // so the best identity moment in the app doesn't render as plain text.
+      tone: isStrongContrarian ? 'rare-contrarian' : 'contrarian',
     };
   }
 
@@ -287,12 +351,14 @@ export const getResultReaction = ({
         seed,
         `${winningVote}-agreement-landslide`,
       ),
+      subtext: pickSubtext(agreementLandslideSubtexts, seed, 'agreement-landslide-sub', subtextContext),
       tone: winningVote,
     };
   }
 
   return {
     headline: pickVariant(agreementHeadlines[winningVote], seed, `${winningVote}-agreement`),
+    subtext: pickSubtext(agreementSubtexts, seed, 'agreement-sub', subtextContext),
     tone: winningVote,
   };
 };

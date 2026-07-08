@@ -65,7 +65,7 @@ const getReactionToneColor = (tone: ResultReactionTone, theme: Colors) => {
   }
 };
 
-export const TakeCard: React.FC<TakeCardProps> = ({
+const TakeCardComponent: React.FC<TakeCardProps> = ({
   take,
   isDarkMode = false,
   onNotPress,
@@ -165,11 +165,21 @@ export const TakeCard: React.FC<TakeCardProps> = ({
     userAgreementPercentage !== null &&
     userAgreementPercentage <= 30 &&
     (resultReaction.tone === 'contrarian' || resultReaction.tone === 'rare-contrarian');
-  const shareVerdict = isContrarianShareMoment
-    ? `Only ${userAgreementPercentage}% agreed with me on this one 🧭`
-    : resultReaction.subtext
-    ? `${resultReaction.headline}\n${resultReaction.subtext}`
-    : resultReaction.headline;
+  // Share copy is written in first person: the reader of a share is not the
+  // voter, so the on-card "you" subtexts don't translate.
+  const shareVerdict = (() => {
+    if (resultReaction.tone === 'split') {
+      return `This one split the room ${notPercentage}/${hotPercentage} ⚔️`;
+    }
+
+    if (userVote && userAgreementPercentage !== null) {
+      return userAgreementPercentage < 50
+        ? `Only ${userAgreementPercentage}% agreed with me on this one 🧭`
+        : `I'm with the ${userAgreementPercentage}% on this one ${userVote === 'hot' ? '🔥' : '❄️'}`;
+    }
+
+    return resultReaction.headline;
+  })();
   const reactionColor = getReactionToneColor(resultReaction.tone, theme);
   const isRareContrarian = resultReaction.tone === 'rare-contrarian';
   const splitIsClose = resultReaction.tone === 'split';
@@ -514,6 +524,10 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               onPress={onNotPress}
               disabled={!onNotPress}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Vote NOT"
+              accessibilityHint="Marks this take as not hot and reveals the results"
+              accessibilityState={{ disabled: !onNotPress }}
             >
               <Text style={[
                 styles.statNumber,
@@ -547,6 +561,10 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               onPress={onHotPress}
               disabled={!onHotPress}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Vote HOT"
+              accessibilityHint="Marks this take as hot and reveals the results"
+              accessibilityState={{ disabled: !onHotPress }}
             >
               <Text style={[
                 styles.statNumber,
@@ -603,7 +621,10 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               ]}>
                 {resultReaction.headline}
               </Text>
-              {resultReaction.subtext && (
+              {/* When a teaser/hint chip is showing it acts as the second line;
+                  skipping the subtext keeps tight cards from overflowing into
+                  the pinned action area. */}
+              {resultReaction.subtext && !identityTeaser && !firstVoteHint && (
                 <Text style={[
                   styles.reactionSubtext,
                   {
@@ -784,6 +805,7 @@ export const TakeCard: React.FC<TakeCardProps> = ({
                         style={styles.changeVoteUtility}
                         onPress={() => onChangeVote(take, userVote)}
                         activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
                       >
                         <Text style={[
                           styles.changeVoteText,
@@ -910,6 +932,8 @@ export const TakeCard: React.FC<TakeCardProps> = ({
               take={take}
               userVote={userVote}
               isDarkMode={isDarkMode}
+              reactionHeadline={resultReaction.headline}
+              accentColor={reactionColor}
             />
           </ViewShot>
         </View>
@@ -1177,7 +1201,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   changeVoteUtility: {
-    minHeight: motion.touchTarget.minimum,
+    // Visual height stays slim; hitSlop restores the 44pt effective touch
+    // target so tight result cards don't overflow into the pinned actions.
+    minHeight: 28,
     justifyContent: 'center',
     paddingHorizontal: dimensions.spacing.md,
     marginTop: 2,
@@ -1196,3 +1222,8 @@ const styles = StyleSheet.create({
     height: 600,
   },
 });
+
+// Memoized: the deck renders up to six TakeCard instances (ghost, front, back,
+// next, third) and re-renders mid-gesture; cards whose props are stable
+// (background/next/third) should not re-render on every threshold crossing.
+export const TakeCard = React.memo(TakeCardComponent);

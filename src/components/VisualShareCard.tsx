@@ -12,14 +12,19 @@ interface VisualShareCardProps {
   take: Take;
   userVote?: 'hot' | 'not' | null;
   isDarkMode?: boolean;
+  reactionHeadline?: string | null;
+  accentColor?: string;
 }
 
 export const VisualShareCard: React.FC<VisualShareCardProps> = ({
   take,
   userVote = null,
   isDarkMode = false,
+  reactionHeadline = null,
+  accentColor,
 }) => {
   const theme = isDarkMode ? colors.dark : colors.light;
+  const verdictColor = accentColor || theme.accent;
   
   // Calculate percentages exactly like TakeCard
   const totalVotes = take.totalVotes || (take.hotVotes + take.notVotes) || 0;
@@ -36,7 +41,7 @@ export const VisualShareCard: React.FC<VisualShareCardProps> = ({
     <View style={[styles.container, { backgroundColor: theme.card }]}>
       {/* Subtle background gradient */}
       <LinearGradient
-        colors={[theme.card, theme.surface]}
+        colors={[theme.card, accentColor ? accentColor + '24' : theme.surface]}
         style={styles.backgroundGradient}
         start={[0, 0]}
         end={[1, 1]}
@@ -58,12 +63,44 @@ export const VisualShareCard: React.FC<VisualShareCardProps> = ({
       
       {/* Take Content */}
       <View style={styles.takeSection}>
-        <Text style={[styles.takeText, { color: theme.text }]}>
+        <Text
+          style={[styles.takeText, { color: theme.text }]}
+          numberOfLines={6}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+        >
           "{getDisplayText(take.text)}"
         </Text>
       </View>
       
       
+      {/* Verdict banner - the room's reaction, styled by tone */}
+      {(reactionHeadline || userVote) && (
+        <View style={styles.voteStatusSection}>
+          {reactionHeadline && (
+            <Text style={[styles.voteStatus, { color: verdictColor }]}>
+              {reactionHeadline}
+            </Text>
+          )}
+          {userVote && (
+            <View style={[
+              styles.userVoteChip,
+              {
+                backgroundColor: (userVote === 'hot' ? theme.hot : theme.not) + '22',
+                borderColor: (userVote === 'hot' ? theme.hot : theme.not) + '55',
+              },
+            ]}>
+              <Text style={[
+                styles.userVoteChipText,
+                { color: userVote === 'hot' ? theme.hot : theme.not },
+              ]}>
+                I voted {userVote === 'hot' ? '🔥 HOT' : '❄️ NOT'}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Main Stats - Exactly like TakeCard percentages */}
       <View style={styles.percentageContainer}>
         {/* NOT Section */}
@@ -173,8 +210,20 @@ const styles = StyleSheet.create({
   },
   voteStatus: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '800',
     textAlign: 'center',
+  },
+  userVoteChip: {
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  userVoteChipText: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
   percentageContainer: {
     flexDirection: 'row',
