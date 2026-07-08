@@ -16,6 +16,7 @@ import Animated, {
   useAnimatedStyle,
   useAnimatedGestureHandler,
   runOnJS,
+  withDelay,
   withSpring,
   withTiming,
   interpolate,
@@ -129,6 +130,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     takeId: string;
     completed: boolean;
   } | null>(null);
+  const skipResetPendingRef = React.useRef(false);
   const resultDismissRef = React.useRef<{
     token: number;
     completed: boolean;
@@ -253,6 +255,30 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     };
   }, [clearTransitionWatchdog]);
 
+  // If the deck unmounts mid-transition (error/refresh swaps in another view),
+  // the watchdogs are gone too, so commit any pending vote/skip immediately.
+  // The card was already visually voted/skipped; losing the write would
+  // silently drop the interaction.
+  const onVoteRef = React.useRef(onVote);
+  const onSkipRef = React.useRef(onSkip);
+  useEffect(() => {
+    onVoteRef.current = onVote;
+    onSkipRef.current = onSkip;
+  });
+  useEffect(() => () => {
+    const pendingVote = voteRevealRef.current;
+    if (pendingVote && !pendingVote.completed) {
+      pendingVote.completed = true;
+      onVoteRef.current(pendingVote.takeId, pendingVote.vote);
+    }
+
+    const pendingSkip = skipCommitRef.current;
+    if (pendingSkip && !pendingSkip.completed) {
+      pendingSkip.completed = true;
+      onSkipRef.current(pendingSkip.takeId);
+    }
+  }, []);
+
   useEffect(() => {
     if (autoAdvanceResults || !autoDismissTimeout) return;
 
@@ -327,6 +353,22 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       ? frozenCurrent.current ?? renderCurrent
       : renderCurrent;
 
+  // For external stats cards, don't add optimistic votes since they're historical.
+  // For regular votes, add an optimistic single-vote bump so stats include the
+  // user's vote. Memoized so the (memoized) back-face card keeps a stable prop.
+  const statsTakeWithOptimisticVote = React.useMemo(() => {
+    if (!statsTake) {
+      return statsTake;
+    }
+
+    return {
+      ...statsTake,
+      hotVotes: statsTake.hotVotes + (!externalStatsCard && lastVote === 'hot' ? 1 : 0),
+      notVotes: statsTake.notVotes + (!externalStatsCard && lastVote === 'not' ? 1 : 0),
+      totalVotes: statsTake.totalVotes + (!externalStatsCard && lastVote ? 1 : 0),
+    };
+  }, [statsTake, lastVote, externalStatsCard]);
+
   useEffect(() => {
     resultBaseSV.value = promotedBaseTake ? 1 : 0;
   }, [promotedBaseTake?.id, resultBaseSV]);
@@ -379,6 +421,19 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     loadMore(20).catch(console.error);
   }, [safeTakes.length, hasMore, loading, loadMore]);
   
+  // After a skip commits, transforms are still parked offscreen. Reset them
+  // only after React has committed the new deck (useFrozen flips false and/or
+  // the current take changes), so the outgoing card never flashes back at
+  // center during the gap between the worklet finishing and the commit.
+  useEffect(() => {
+    if (!skipResetPendingRef.current || useFrozen) {
+      return;
+    }
+
+    skipResetPendingRef.current = false;
+    resetTransitionVisuals();
+  }, [useFrozen, currentTake?.id, resetTransitionVisuals]);
+
   // Safe cleanup effect - if frozen but nothing to render, unfreeze
   useEffect(() => {
     if (!renderCurrent && useFrozen) {
@@ -443,11 +498,14 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
     activeSkip.completed = true;
     clearTransitionWatchdog();
+    // Do NOT reset transforms here: React has not committed the feed removal
+    // yet, so zeroing translateY now flashes the skipped card back at center
+    // for a frame. The post-commit effect below performs the reset.
+    skipResetPendingRef.current = true;
     onSkip(takeId);
     jsSetVote(null);
     setUseFrozen(false);
-    resetTransitionVisuals();
-  }, [clearTransitionWatchdog, onSkip, resetTransitionVisuals]);
+  }, [clearTransitionWatchdog, onSkip]);
 
   const finishCardDismiss = React.useCallback(() => {
     const shouldEnd = endAfterDismissRef.current;
@@ -486,7 +544,7 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
   }, [clearTransitionWatchdog, finishCardDismiss, resetTransitionVisuals]);
   
   // Flip the card to reveal stats
-  const flipCard = (vote: 'hot' | 'not') => {
+  const flipCard = (vote: 'hot' | 'not', options?: { fromSwipe?: boolean }) => {
     if (!renderCurrent) return; // Safety check
     const voteKey = `${renderCurrent.id}:${vote}`;
     const activeVote = voteRevealRef.current;
@@ -496,9 +554,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
 
     isAnimating.value = true;
     animatingSV.value = 1;
-    translateX.value = 0;
-    translateY.value = 0;
-    scale.value = 1;
+    if (!options?.fromSwipe) {
+      translateX.value = 0;
+      translateY.value = 0;
+      scale.value = 1;
+    }
+    // fromSwipe: the return glide is already running on the UI thread —
+    // restarting or snapping it here would cause a visible velocity break.
     
     setLastVote(vote);
     setIsCardFlipped(true);
@@ -520,8 +582,11 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
     }
     // MUST set frozen BEFORE the animation to lock in the card. Keep the
     // background card settled so it does not snap backward after a swipe.
+    // frozenSV is set synchronously too — waiting for the setState → effect
+    // round trip left frames where the next card popped between styles.
     promoteSV.value = 1;
     resultBaseSV.value = frozenNext.current ? 1 : 0;
+    frozenSV.value = 1;
     setUseFrozen(true);
     
     // Store the vote details but DON'T submit yet
@@ -543,18 +608,31 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       completeVoteReveal(voteToSubmit.id, voteToSubmit.vote);
     });
     
-    // Set animating flag and bounce micro-scale then flip
-    scale.value = withSpring(0.96, {}, () => {
-      'worklet';
-      flipSV.value = withTiming(1, { duration: motion.duration.cardFlip, easing: Easing.out(Easing.cubic) }, (finished) => {
-        if (finished) {
-          runOnJS(completeVoteReveal)(voteToSubmit.id, voteToSubmit.vote);
-        }
-        isAnimating.value = false;
-        animatingSV.value = 0; // Clear animation flag
+    // The flip starts immediately instead of waiting on a settle-gated
+    // spring (~300ms of dead air — the long-standing "card catches" feel).
+    // The scale dip only runs for button votes; swipe votes already have
+    // return motion, and stacking a scale pulse on top reads as twitchy.
+    if (!options?.fromSwipe) {
+      scale.value = withTiming(0.96, { duration: 90, easing: Easing.out(Easing.quad) }, () => {
+        'worklet';
+        scale.value = withSpring(1);
       });
-      scale.value = withSpring(1);
+    }
+    flipSV.value = withTiming(1, { duration: motion.duration.cardFlip, easing: Easing.out(Easing.cubic) }, (finished) => {
+      if (finished) {
+        runOnJS(completeVoteReveal)(voteToSubmit.id, voteToSubmit.vote);
+      }
+      isAnimating.value = false;
+      animatingSV.value = 0; // Clear animation flag
     });
+  };
+
+  // Swipe-release votes: the return glide is already running on the UI
+  // thread. Give it a ~50ms head start so the freeze/flip React commit lands
+  // after the card is mostly home, instead of janking the first frames of
+  // visible motion — then start the flip.
+  const flipCardFromSwipe = (vote: 'hot' | 'not') => {
+    setTimeout(() => flipCard(vote, { fromSwipe: true }), 50);
   };
 
   const startVoteNudgeWatchdog = React.useCallback((vote: 'hot' | 'not', takeId: string) => {
@@ -732,6 +810,9 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       }
       // MUST set frozen before the animation to prevent end screen flash.
       // The actual skip write waits until the card finishes leaving.
+      // frozenSV syncs immediately so the next card's style doesn't pop a
+      // frame later when the setState → effect round trip lands.
+      frozenSV.value = 1;
       setUseFrozen(true);
     }
     
@@ -743,25 +824,27 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       completeSkip(skippedTakeId);
     });
     
-    // Animate up or down based on direction
-    const targetY = direction === 'up' ? -screenHeight * 0.8 : screenHeight * 0.8;
-    
-    translateY.value = withSpring(
+    // Exit leaves fast at release (ease-out matches finger velocity) and
+    // overshoots to 1.2×screen height so the decelerating tail happens fully
+    // offscreen — distance solves sliver-crawl, not hard acceleration. The
+    // next card promotes in near-parallel with a 40ms lead so the outgoing
+    // card reads as revealing it rather than the two layers racing.
+    const targetY = direction === 'up' ? -screenHeight * 1.2 : screenHeight * 1.2;
+
+    promoteSV.value = withDelay(
+      40,
+      withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) })
+    );
+    translateY.value = withTiming(
       targetY,
-      motion.spring.cardSkip,
+      { duration: motion.duration.cardSkipExit, easing: Easing.out(Easing.cubic) },
       () => {
         'worklet';
-        // Start promoting next card during return animation
-        promoteSV.value = withTiming(1, { duration: motion.duration.cardPromote }, () => {
-          'worklet';
-          // Reset everything for next card
-          translateX.value = 0;
-          translateY.value = 0;
-          scale.value = 1;
-          runOnJS(completeSkip)(skippedTakeId);
-          animatingSV.value = 0;
-          isAnimating.value = false;
-        });
+        // Transforms stay parked offscreen; the post-commit effect resets
+        // them so the outgoing card never flashes back at center.
+        animatingSV.value = 0;
+        isAnimating.value = false;
+        runOnJS(completeSkip)(skippedTakeId);
       }
     );
   };
@@ -885,60 +968,30 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
       }
 
       if (shouldSwipeRight && id && !flippedSV.value) {
-        // Front side: Bounce back and flip to reveal
+        // Front side: the return glide starts on the UI thread this frame —
+        // zero-latency response to the release — and the flip joins ~50ms
+        // later via flipCardFromSwipe once the card is mostly home.
         isAnimating.value = true;
         animatingSV.value = 1;
+        translateX.value = withTiming(0, { duration: 140, easing: Easing.out(Easing.cubic) });
+        translateY.value = withTiming(0, { duration: 140, easing: Easing.out(Easing.cubic) });
+        scale.value = withTiming(1, { duration: 140, easing: Easing.out(Easing.cubic) });
         runOnJS(startVoteNudgeWatchdog)('hot', id);
         runOnJS(vibrate)(motion.haptic.vote);
-        translateX.value = withTiming(0, {
-          duration: 80,
-          easing: Easing.out(Easing.quad),
-        }, (finished) => {
-          'worklet';
-          if (finished) {
-            runOnJS(flipCard)('hot');
-          } else {
-            isAnimating.value = false;
-            animatingSV.value = 0;
-          }
-        });
-        translateY.value = withTiming(-VOTE_COMMIT_ARC_Y, {
-          duration: motion.duration.cardNudge,
-          easing: Easing.out(Easing.quad),
-        }, () => {
-          'worklet';
-          translateY.value = withSpring(0);
-        });
-        scale.value = withTiming(1, { duration: 80, easing: Easing.out(Easing.quad) });
+        runOnJS(flipCardFromSwipe)('hot');
         return;
       }
 
       if (shouldSwipeLeft && id && !flippedSV.value) {
-        // Front side: Bounce back and flip to reveal
+        // Front side: same choreography as the HOT branch above.
         isAnimating.value = true;
         animatingSV.value = 1;
+        translateX.value = withTiming(0, { duration: 140, easing: Easing.out(Easing.cubic) });
+        translateY.value = withTiming(0, { duration: 140, easing: Easing.out(Easing.cubic) });
+        scale.value = withTiming(1, { duration: 140, easing: Easing.out(Easing.cubic) });
         runOnJS(startVoteNudgeWatchdog)('not', id);
         runOnJS(vibrate)(motion.haptic.vote);
-        translateX.value = withTiming(0, {
-          duration: 80,
-          easing: Easing.out(Easing.quad),
-        }, (finished) => {
-          'worklet';
-          if (finished) {
-            runOnJS(flipCard)('not');
-          } else {
-            isAnimating.value = false;
-            animatingSV.value = 0;
-          }
-        });
-        translateY.value = withTiming(VOTE_COMMIT_ARC_Y, {
-          duration: motion.duration.cardNudge,
-          easing: Easing.out(Easing.quad),
-        }, () => {
-          'worklet';
-          translateY.value = withSpring(0);
-        });
-        scale.value = withTiming(1, { duration: 80, easing: Easing.out(Easing.quad) });
+        runOnJS(flipCardFromSwipe)('not');
         return;
       }
 
@@ -1356,20 +1409,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
           )}
 
           {/* BACK (stats) */}
-          {!!statsTake && (
+          {!!statsTakeWithOptimisticVote && (
             <Animated.View
               style={[backFaceStyle]}
               pointerEvents={isCardFlipped ? 'auto' : 'none'}
             >
               <TakeCard
-                take={{
-                  ...statsTake,
-                  // For external stats cards, don't add optimistic votes since they're historical
-                  // For regular votes, add optimistic single-vote bump so stats include user's vote
-                  hotVotes: statsTake.hotVotes + (!externalStatsCard && lastVote === 'hot' ? 1 : 0),
-                  notVotes: statsTake.notVotes + (!externalStatsCard && lastVote === 'not' ? 1 : 0),
-                  totalVotes: statsTake.totalVotes + (!externalStatsCard && lastVote ? 1 : 0),
-                }}
+                take={statsTakeWithOptimisticVote}
                 isDarkMode={isDarkMode}
                 showStats={true}
                 userVote={lastVote}
@@ -1379,13 +1425,13 @@ export const CustomSwipeableCardDeck: React.FC<CustomSwipeableCardDeckProps> = (
                 onChangeVote={onChangeVote ? handleChangeVote : undefined}
                 onVoteNow={onVoteNow}
                 identityTeaser={
-                  !externalStatsCard && identityTeaser?.takeId === statsTake.id
+                  !externalStatsCard && identityTeaser?.takeId === statsTakeWithOptimisticVote.id
                     ? identityTeaser.text
                     : null
                 }
                 onIdentityTeaserPress={onIdentityTeaserPress}
                 firstVoteHint={
-                  !externalStatsCard && firstVoteHintTakeId === statsTake.id
+                  !externalStatsCard && firstVoteHintTakeId === statsTakeWithOptimisticVote.id
                     ? 'This is how the room voted. Every take has a story.'
                     : null
                 }

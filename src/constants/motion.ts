@@ -9,6 +9,7 @@ export const motion = {
     cardNudge: 140,
     cardFlip: 360,
     cardPromote: 220,
+    cardSkipExit: 340,
     cardResultExit: 230,
     cardEntrance: 200,
     resultReveal: 250,

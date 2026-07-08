@@ -20,6 +20,8 @@ interface VoteIndicatorProps {
   isDarkMode?: boolean;
 }
 
+const VIBRATION_DEBOUNCE_MS = 450;
+
 export const VoteIndicator: React.FC<VoteIndicatorProps> = ({ 
   vote, 
   isDarkMode = false 
@@ -29,6 +31,7 @@ export const VoteIndicator: React.FC<VoteIndicatorProps> = ({
   const opacity = useSharedValue(0);
   const rotation = useSharedValue(0);
   const glowScale = useSharedValue(0);
+  const lastVibrationTsRef = React.useRef(0);
 
   React.useEffect(() => {
     if (vote) {
@@ -56,10 +59,15 @@ export const VoteIndicator: React.FC<VoteIndicatorProps> = ({
         withSpring(1.0, { damping: 12 })
       );
       
-      // Enhanced haptic feedback based on vote type
+      // Enhanced haptic feedback based on vote type. Debounced so dragging
+      // back and forth across the swipe threshold doesn't buzz repeatedly.
       if (vote !== 'skip') {
-        const vibrationPattern = vote === 'hot' ? [0, 20, 40, 20] : [0, 15, 30, 15];
-        vibrate(vibrationPattern);
+        const now = Date.now();
+        if (now - lastVibrationTsRef.current >= VIBRATION_DEBOUNCE_MS) {
+          lastVibrationTsRef.current = now;
+          const vibrationPattern = vote === 'hot' ? [0, 20, 40, 20] : [0, 15, 30, 15];
+          vibrate(vibrationPattern);
+        }
       }
       
       // Auto-hide after a longer delay to let user appreciate the animation
